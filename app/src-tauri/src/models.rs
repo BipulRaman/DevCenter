@@ -97,6 +97,14 @@ pub struct ChangeSet {
     pub author: Option<String>,
     pub when: Option<String>,
     pub files: Vec<FileChange>,
+    /// Working-tree sync state vs the upstream branch (0 for commit views).
+    #[serde(default)]
+    pub ahead: u32,
+    #[serde(default)]
+    pub behind: u32,
+    /// Whether the current branch has a configured upstream (push/pull target).
+    #[serde(default)]
+    pub has_upstream: bool,
 }
 
 /// One line within a diff hunk.

@@ -2229,6 +2229,7 @@ const ChangesPage = (() => {
       files = cs.files || [];
       selected = new Set(files.map((f) => f.path)); // select all (GitHub Desktop)
       collapsedChanges = new Set();
+      renderSync(cs);
       renderChanges();
     } catch (e) {
       console.error("gitChanges failed", e);
@@ -2271,6 +2272,56 @@ const ChangesPage = (() => {
     return list.filter((f) => f.path === dirPath || f.path.startsWith(pref)).map((f) => f.path);
   }
 
+  // ---- sync bar (pull / push / fetch) ----
+  function renderSync(cs) {
+    const ahead = cs.ahead || 0;
+    const behind = cs.behind || 0;
+    const hasUpstream = !!cs.hasUpstream;
+    const pushBtn = $("pushBtn"), pullBtn = $("pullBtn");
+    const pushCount = $("pushCount"), pullCount = $("pullCount");
+
+    pushCount.hidden = ahead === 0;
+    pushCount.textContent = ahead;
+    pullCount.hidden = behind === 0;
+    pullCount.textContent = behind;
+
+    // Push is enabled when there are local commits to publish (or no upstream
+    // yet → first publish). Pull is enabled when the remote is ahead.
+    const canPush = !busy && (ahead > 0 || !hasUpstream);
+    const canPull = !busy && hasUpstream && behind > 0;
+    pushBtn.disabled = !canPush;
+    pullBtn.disabled = !canPull;
+    pushBtn.classList.toggle("primed", ahead > 0 || !hasUpstream);
+    pullBtn.classList.toggle("primed", behind > 0);
+    pushBtn.querySelector("span").textContent = hasUpstream ? "Push" : "Publish";
+    $("fetchSyncBtn").disabled = busy;
+  }
+
+  async function doSync(kind) {
+    if (busy || !repoId) return;
+    const btn = kind === "push" ? $("pushBtn") : kind === "pull" ? $("pullBtn") : $("fetchSyncBtn");
+    busy = true; btn.classList.add("busy");
+    [$("pushBtn"), $("pullBtn"), $("fetchSyncBtn")].forEach((b) => (b.disabled = true));
+    try {
+      let cs;
+      if (kind === "push") cs = await DC.gitPush(repoId);
+      else if (kind === "pull") cs = await DC.gitPull(repoId);
+      else { await DC.fetchRepo(repoId); cs = await DC.gitChanges(repoId, null); }
+      branch = cs.branch || branch;
+      $("commitBranch").textContent = branch;
+      files = cs.files || [];
+      selected = new Set(files.map((f) => f.path));
+      renderSync(cs);
+      renderChanges();
+    } catch (e) {
+      console.error(kind + " failed", e);
+      await Modal.alert({ title: `${kind[0].toUpperCase() + kind.slice(1)} failed`, message: String(e) });
+    } finally {
+      busy = false; btn.classList.remove("busy");
+      updateCommitBtn();
+    }
+  }
+
   function updateCommitBtn() {
     const summary = ($("commitSummary").value || "").trim();
     $("commitBtn").disabled = busy || !summary || selected.size === 0;
@@ -2294,6 +2345,7 @@ const ChangesPage = (() => {
       selected = new Set(files.map((f) => f.path));
       activeFile = null;
       showDiffEmpty("Commit created. Select a file to view its diff.");
+      renderSync(cs);
       renderChanges();
     } catch (e) {
       console.error("gitCommit failed", e);
@@ -2584,6 +2636,9 @@ const ChangesPage = (() => {
     $("detailCollapseBtn").addEventListener("click", () => collapseAll(collapsedDetail, commitFiles, renderDetail));
     $("commitSummary").addEventListener("input", updateCommitBtn);
     $("commitBtn").addEventListener("click", doCommit);
+    $("pushBtn").addEventListener("click", () => doSync("push"));
+    $("pullBtn").addEventListener("click", () => doSync("pull"));
+    $("fetchSyncBtn").addEventListener("click", () => doSync("fetch"));
     $("changesList").addEventListener("keydown", onTreeKey);
     $("detailFiles").addEventListener("keydown", onTreeKey);
     initResizers();

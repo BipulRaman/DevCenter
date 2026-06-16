@@ -38,6 +38,8 @@
     gitDiff: (id, path, sha) => invoke("git_diff", { id, path, sha: sha || null }),
     gitCommit: (id, summary, description, files) =>
       invoke("git_commit", { id, summary, description, files }),
+    gitPush: (id) => invoke("git_push", { id }),
+    gitPull: (id) => invoke("git_pull", { id }),
     gitLog: (id, limit) => invoke("git_log", { id, limit: limit ?? null }),
 
     // --- Pull Requests (Phase 3) ---

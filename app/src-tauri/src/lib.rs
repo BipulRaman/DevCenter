@@ -44,6 +44,8 @@ pub fn run() {
             commands::git::git_changes,
             commands::git::git_diff,
             commands::git::git_commit,
+            commands::git::git_push,
+            commands::git::git_pull,
             commands::git::git_log,
             commands::accounts::list_accounts,
             commands::accounts::add_account,

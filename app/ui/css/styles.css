@@ -1119,6 +1119,29 @@ body.col-resizing * { cursor: col-resize !important; }
 
 /* commit message box pinned to the bottom of the side panel */
 .commit-box { border-top: 1px solid var(--border); padding: 12px; display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
+
+/* sync bar (Pull / Push / Fetch) at the top of the commit box */
+.sync-bar { display: flex; gap: 6px; }
+.sync-btn {
+  flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: 32px; padding: 0 10px;
+  background: var(--bg-elev-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  color: var(--text); font-family: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+  transition: background .14s, border-color .14s, color .14s, opacity .14s;
+}
+.sync-btn:hover:not(:disabled) { background: var(--bg-hover); border-color: color-mix(in srgb, var(--text-faint) 45%, var(--border)); }
+.sync-btn:disabled { opacity: .45; cursor: not-allowed; }
+#fetchSyncBtn { flex: 0 0 auto; width: 36px; padding: 0; color: var(--text-dim); }
+.sync-btn svg { opacity: .9; }
+.sync-btn.busy svg { animation: spin .8s linear infinite; }
+.sync-count {
+  display: inline-grid; place-items: center; min-width: 17px; height: 16px; padding: 0 4px;
+  border-radius: 8px; background: var(--accent); color: #fff;
+  font-size: 10.5px; font-weight: 800; font-variant-numeric: tabular-nums;
+}
+.sync-btn#pullBtn .sync-count { background: var(--amber); }
+.sync-btn.primed { border-color: color-mix(in srgb, var(--accent) 50%, var(--border)); color: var(--accent-hover); }
+.sync-btn#pullBtn.primed { border-color: color-mix(in srgb, var(--amber) 50%, var(--border)); color: var(--amber); }
 .commit-input, .commit-textarea {
   width: 100%; background: var(--bg-elev-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
   color: var(--text); font-family: inherit; outline: none; transition: border-color .14s, box-shadow .14s;

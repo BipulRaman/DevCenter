@@ -286,6 +286,56 @@ pub fn fetch(path: &Path) -> AppResult<()> {
     Ok(())
 }
 
+/// Push the current branch to its upstream. When the branch has no upstream
+/// yet, publish it to `origin` and set tracking (`-u origin <branch>`).
+pub fn push(path: &Path) -> AppResult<()> {
+    let repo = Repository::open(path)?;
+    let head = repo.head()?;
+    if !head.is_branch() {
+        return Err(AppError::msg("Not on a branch — cannot push a detached HEAD."));
+    }
+    let branch = head.shorthand().unwrap_or("HEAD").to_string();
+    let has_upstream = head
+        .name()
+        .and_then(|n| repo.branch_upstream_name(n).ok())
+        .is_some();
+
+    let mut cmd = git_cmd();
+    cmd.arg("-C").arg(path).arg("push");
+    if !has_upstream {
+        cmd.args(["-u", "origin", &branch]);
+    }
+    let output = cmd.output()?;
+    if !output.status.success() {
+        return Err(AppError::msg(
+            String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        ));
+    }
+    Ok(())
+}
+
+/// Pull (fetch + merge with `--ff-only` to avoid surprise merge commits) the
+/// current branch from its upstream.
+pub fn pull(path: &Path) -> AppResult<()> {
+    let output = git_cmd()
+        .arg("-C")
+        .arg(path)
+        .args(["pull", "--ff-only"])
+        .output()?;
+    if !output.status.success() {
+        let err = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        let msg = if err.contains("not possible to fast-forward") || err.contains("diverging") {
+            "Local and remote have diverged. Pull is fast-forward only — commit or stash, then merge/rebase manually.".to_string()
+        } else if err.is_empty() {
+            "Pull failed.".to_string()
+        } else {
+            err
+        };
+        return Err(AppError::msg(msg));
+    }
+    Ok(())
+}
+
 fn repo_name_from_url(url: &str) -> String {
     url.trim_end_matches('/')
         .rsplit('/')
@@ -569,12 +619,24 @@ pub fn working_changes(path: &Path) -> AppResult<ChangeSet> {
     }
     files.sort_by(|a, b| a.path.to_lowercase().cmp(&b.path.to_lowercase()));
 
+    // Sync state vs upstream (for the Push/Pull controls on the Changes page).
+    let has_upstream = repo
+        .head()
+        .ok()
+        .and_then(|h| h.name().map(|n| n.to_string()))
+        .and_then(|n| repo.branch_upstream_name(&n).ok())
+        .is_some();
+    let (ahead, behind) = ahead_behind(&repo).unwrap_or((0, 0));
+
     Ok(ChangeSet {
         branch: Some(branch),
         summary: None,
         author: None,
         when: None,
         files,
+        ahead,
+        behind,
+        has_upstream,
     })
 }
 
@@ -785,6 +847,9 @@ pub fn commit_changes(path: &Path, sha: &str) -> AppResult<ChangeSet> {
         author: Some(author),
         when: Some(when),
         files,
+        ahead: 0,
+        behind: 0,
+        has_upstream: false,
     })
 }
 

@@ -287,6 +287,56 @@ pub async fn git_commit(
     Ok(changes)
 }
 
+/// Push the current branch to its upstream, then return refreshed working
+/// changes (with updated ahead/behind). Emits `repos_updated`.
+#[tauri::command]
+pub async fn git_push(
+    id: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> AppResult<ChangeSet> {
+    let st = state.inner().clone();
+    let (changes, repos) = tauri::async_runtime::spawn_blocking(
+        move || -> AppResult<(ChangeSet, Vec<Repo>)> {
+            let p = Path::new(&id);
+            git::push(p)?;
+            let changes = git::working_changes(p)?;
+            let repos = collect_repos(&st)?;
+            Ok((changes, repos))
+        },
+    )
+    .await
+    .map_err(|e| AppError::msg(e.to_string()))??;
+
+    let _ = app.emit("repos_updated", &repos);
+    Ok(changes)
+}
+
+/// Pull (fast-forward) the current branch from its upstream, then return
+/// refreshed working changes. Emits `repos_updated`.
+#[tauri::command]
+pub async fn git_pull(
+    id: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> AppResult<ChangeSet> {
+    let st = state.inner().clone();
+    let (changes, repos) = tauri::async_runtime::spawn_blocking(
+        move || -> AppResult<(ChangeSet, Vec<Repo>)> {
+            let p = Path::new(&id);
+            git::pull(p)?;
+            let changes = git::working_changes(p)?;
+            let repos = collect_repos(&st)?;
+            Ok((changes, repos))
+        },
+    )
+    .await
+    .map_err(|e| AppError::msg(e.to_string()))??;
+
+    let _ = app.emit("repos_updated", &repos);
+    Ok(changes)
+}
+
 /// Recent commit history for a repo (newest first).
 #[tauri::command]
 pub async fn git_log(id: String, limit: Option<u32>) -> AppResult<Vec<CommitInfo>> {
