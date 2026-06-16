@@ -1357,13 +1357,14 @@ const Dropdown = (() => {
     return !!active && active.anchor === anchor;
   }
 
-  function open(anchor, { header, options, current, emptyText, onSelect, search, searchPlaceholder }) {
+  function open(anchor, { header, options, current, emptyText, onSelect, search, searchPlaceholder, minWidth }) {
     close();
     const showSearch = search !== undefined ? search : options.length > 7;
     const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
     const menu = document.createElement("div");
     menu.className = "dropdown-menu";
+    if (minWidth) menu.style.minWidth = minWidth + "px";
 
     if (header) {
       const h = document.createElement("div");
@@ -2008,7 +2009,8 @@ const ChangesPage = (() => {
   let repoId = null;        // selected repo path (== id)
   let branch = "main";
   let tab = "changes";      // "changes" | "history"
-  let viewMode = "list";    // "tree" | "list"
+  let changesView = "list"; // left panel (Changes): "tree" | "list" — default flat list
+  let detailView = "tree";  // middle panel (History detail): "tree" | "list" — default tree
 
   // Changes tab state.
   let files = [];           // working-tree changes [{path, oldPath, status}]
@@ -2122,7 +2124,7 @@ const ChangesPage = (() => {
       for (const f of fs) rows.push(fileRow(f, depth));
     };
 
-    if (viewMode === "list") {
+    if (opts.viewMode === "list") {
       opts.files.slice()
         .sort((a, b) => a.path.toLowerCase().localeCompare(b.path.toLowerCase()))
         .forEach((f) => {
@@ -2199,6 +2201,7 @@ const ChangesPage = (() => {
       search: labels.length > 7,
       searchPlaceholder: "Filter repositories…",
       emptyText: "No repositories.",
+      minWidth: Math.max(320, $("chgRepoBtn").offsetWidth),
       onSelect: (label) => { const r = map.get(label); if (r) selectRepo(r); },
     });
   }
@@ -2206,6 +2209,7 @@ const ChangesPage = (() => {
   function selectRepo(r) {
     repoId = r.id;
     branch = r.branch || "main";
+    try { localStorage.setItem("dc.changes.repoId", r.id); } catch (e) {}
     $("chgRepoLabel").textContent = r.name;
     $("commitBranch").textContent = branch; // reset branch label immediately
     activeSha = null; activeFile = null; navOrder = [];
@@ -2241,14 +2245,14 @@ const ChangesPage = (() => {
     const all = $("changeSelectAll");
     all.checked = files.length > 0 && selected.size === files.length;
     all.indeterminate = selected.size > 0 && selected.size < files.length;
-    $("collapseAllBtn").hidden = viewMode !== "tree" || !shown.some((f) => f.path.includes("/"));
+    $("collapseAllBtn").hidden = changesView !== "tree" || !shown.some((f) => f.path.includes("/"));
 
     if (!shown.length) {
       $("changesList").innerHTML = `<div class="changes-empty">${files.length ? "No files match the filter." : "No uncommitted changes."}</div>`;
       navOrder = []; updateCommitBtn(); return;
     }
     navOrder = renderFileTree($("changesList"), {
-      files: shown, checkboxes: true, collapsed: collapsedChanges,
+      files: shown, checkboxes: true, collapsed: collapsedChanges, viewMode: changesView,
       rerender: renderChanges,
       onToggleFolder: (dirPath) => {
         const tree = buildTree(files);
@@ -2365,13 +2369,13 @@ const ChangesPage = (() => {
   function renderDetail() {
     $("detailFileCount").textContent =
       `${commitFiles.length} file${commitFiles.length === 1 ? "" : "s"} changed`;
-    $("detailCollapseBtn").hidden = viewMode !== "tree" || !commitFiles.some((f) => f.path.includes("/"));
+    $("detailCollapseBtn").hidden = detailView !== "tree" || !commitFiles.some((f) => f.path.includes("/"));
     if (!commitFiles.length) {
       $("detailFiles").innerHTML = `<div class="changes-empty">No file changes.</div>`;
       navOrder = []; return;
     }
     navOrder = renderFileTree($("detailFiles"), {
-      files: commitFiles, checkboxes: false, collapsed: collapsedDetail, rerender: renderDetail,
+      files: commitFiles, checkboxes: false, collapsed: collapsedDetail, viewMode: detailView, rerender: renderDetail,
       onToggleFolder: () => {},
     });
   }
@@ -2474,12 +2478,13 @@ const ChangesPage = (() => {
     }
   }
 
+  // The view toggle lives in the Changes panel and controls ONLY the left
+  // (Changes) file list. The History detail (middle) panel stays in tree view.
   function setView(mode) {
-    if (viewMode === mode) return;
-    viewMode = mode;
+    if (changesView === mode) return;
+    changesView = mode;
     document.querySelectorAll("#chgViewToggle .seg-btn").forEach((b) => b.classList.toggle("active", b.dataset.view === mode));
-    if (tab === "history") { if (commitFiles.length) renderDetail(); }
-    else renderChanges();
+    renderChanges();
   }
 
   function collapseAll(set, list, rerender) {
@@ -2509,8 +2514,11 @@ const ChangesPage = (() => {
   function onShow() {
     if (!DC || !DC.hasBackend) return;
     if (!repoId) {
-      const first = repos[0];
-      if (first) selectRepo(first);
+      // Restore the last-used repo across app restarts; fall back to the first.
+      let saved = null;
+      try { saved = localStorage.getItem("dc.changes.repoId"); } catch (e) {}
+      const target = (saved && repos.find((r) => r.id === saved)) || repos[0];
+      if (target) selectRepo(target);
       return;
     }
     // A repo is already selected — refresh the active tab so changes made since

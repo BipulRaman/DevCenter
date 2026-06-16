@@ -1067,6 +1067,12 @@ body.col-resizing * { cursor: col-resize !important; }
 }
 .icon-mini:hover { background: var(--bg-hover); color: var(--text); }
 
+/* view toggle + collapse-all live in the Changes panel header (compact) */
+.changes-head-actions { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
+.changes-head .view-toggle { padding: 2px; }
+.changes-head .view-toggle .seg-btn { width: 26px; height: 22px; }
+.changes-head .view-toggle .seg-btn svg { width: 14px; height: 14px; }
+
 /* ---- file tree / list (VS Code explorer look-and-feel) ---- */
 .file-tree { flex: 1; overflow: auto; padding: 2px 0 8px; min-height: 0; outline: none; }
 .file-tree:focus-visible { box-shadow: inset 0 0 0 1px var(--accent-soft); }
@@ -1209,6 +1215,8 @@ body.col-resizing * { cursor: col-resize !important; }
 .app-status-dot, .stat-dot, .avatar { border-radius: 50% !important; }
 .diff-line, .diff-gutter, .diff-text, .diff-hunk-head, .diff-body,
 .tree-row, .file-tree { border-radius: 0 !important; }
+/* Dropdown / action-menu option rows are square (the popover card stays rounded). */
+.dropdown-opt, .menu-item, .multiselect-opt { border-radius: 0 !important; }
 /* Changes page: inner card/pane SURFACES, containers and list rows are square;
    only the outer card keeps rounded edges. Real controls (buttons, inputs,
    tabs, filter, icon buttons, chips) keep their normal rounding. */

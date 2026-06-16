@@ -136,14 +136,6 @@
               <span id="chgRepoLabel">Select repository</span>
               <svg class="caret" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
             </button>
-            <div class="seg view-toggle" id="chgViewToggle" title="Toggle file tree / flat list">
-              <button class="seg-btn" data-view="tree" type="button" title="Tree view">
-                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h8"/><path d="M3 12h6"/><path d="M3 19h10"/><path d="M15 5h6"/><path d="M18 5v14"/><path d="M15 19h6"/></svg>
-              </button>
-              <button class="seg-btn active" data-view="list" type="button" title="Flat list">
-                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-              </button>
-            </div>
             <button class="btn btn-ghost" id="chgRefreshBtn" title="Refresh">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
               Refresh
@@ -170,9 +162,19 @@
                   <input type="checkbox" id="changeSelectAll" />
                   <span id="changeCount">No changed files</span>
                 </label>
-                <button class="icon-mini" id="collapseAllBtn" type="button" title="Collapse all folders" hidden>
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
-                </button>
+                <div class="changes-head-actions">
+                  <div class="seg view-toggle" id="chgViewToggle" title="Toggle file tree / flat list">
+                    <button class="seg-btn" data-view="tree" type="button" title="Tree view">
+                      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h8"/><path d="M3 12h6"/><path d="M3 19h10"/><path d="M15 5h6"/><path d="M18 5v14"/><path d="M15 19h6"/></svg>
+                    </button>
+                    <button class="seg-btn active" data-view="list" type="button" title="Flat list">
+                      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                    </button>
+                  </div>
+                  <button class="icon-mini" id="collapseAllBtn" type="button" title="Collapse all folders" hidden>
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+                  </button>
+                </div>
               </div>
               <div class="file-tree" id="changesList" tabindex="0"></div>
               <div class="commit-box">
