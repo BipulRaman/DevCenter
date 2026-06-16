@@ -1,11 +1,11 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::SystemTime;
+use std::time::{SystemTime, UNIX_EPOCH};
 
-use git2::{Repository, StatusOptions};
+use git2::{Delta, DiffOptions, Patch, Repository, Sort, StatusEntry, StatusOptions};
 
 use crate::error::{AppError, AppResult};
-use crate::models::Repo;
+use crate::models::{ChangeSet, CommitInfo, DiffHunk, DiffLine, FileChange, FileDiff, Repo};
 
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -471,4 +471,331 @@ pub fn credential_fill(url: &str) -> AppResult<(String, String)> {
         return Err(AppError::msg(format!("Git returned no token for {host}.")));
     }
     Ok((username, password))
+}
+
+// ---------- Changes page: status, diff, commit, history ----------
+
+/// Humanize a Unix timestamp (seconds) as a relative time.
+fn humanize_epoch(secs: i64) -> String {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    let diff = (now - secs).max(0) as u64;
+    if diff < 60 {
+        "just now".into()
+    } else if diff < 3_600 {
+        format!("{} min ago", diff / 60)
+    } else if diff < 86_400 {
+        format!("{} h ago", diff / 3_600)
+    } else if diff < 172_800 {
+        "yesterday".into()
+    } else if diff < 604_800 {
+        format!("{} d ago", diff / 86_400)
+    } else if diff < 2_592_000 {
+        format!("{} w ago", diff / 604_800)
+    } else {
+        format!("{} mo ago", diff / 2_592_000)
+    }
+}
+
+/// Collapse git2's per-file status flags into a single label + rename source.
+fn classify_status(s: git2::Status, entry: &StatusEntry) -> (String, Option<String>) {
+    use git2::Status as St;
+    let mut old_path = None;
+    if s.intersects(St::INDEX_RENAMED | St::WT_RENAMED) {
+        if let Some(delta) = entry.head_to_index().or_else(|| entry.index_to_workdir()) {
+            old_path = delta
+                .old_file()
+                .path()
+                .map(|p| p.to_string_lossy().replace('\\', "/"));
+        }
+    }
+    let status = if s.contains(St::CONFLICTED) {
+        "conflicted"
+    } else if s.contains(St::WT_NEW) && !s.contains(St::INDEX_NEW) {
+        "untracked"
+    } else if s.contains(St::INDEX_NEW) {
+        "new"
+    } else if s.intersects(St::WT_DELETED | St::INDEX_DELETED) {
+        "deleted"
+    } else if s.intersects(St::INDEX_RENAMED | St::WT_RENAMED) {
+        "renamed"
+    } else if s.intersects(St::WT_MODIFIED | St::INDEX_MODIFIED) {
+        "modified"
+    } else if s.intersects(St::WT_TYPECHANGE | St::INDEX_TYPECHANGE) {
+        "typechange"
+    } else {
+        "modified"
+    };
+    (status.to_string(), old_path)
+}
+
+/// List the working-tree changes for a repo (everything that would be committed
+/// if all files were selected), GitHub-Desktop style.
+pub fn working_changes(path: &Path) -> AppResult<ChangeSet> {
+    let repo = Repository::open(path)?;
+    let branch = match repo.head() {
+        Ok(h) if h.is_branch() => h.shorthand().unwrap_or("HEAD").to_string(),
+        Ok(h) => h.target().map(short_oid).unwrap_or_else(|| "HEAD".into()),
+        Err(_) => "main".to_string(),
+    };
+
+    let mut opts = StatusOptions::new();
+    opts.include_untracked(true)
+        .recurse_untracked_dirs(true)
+        .renames_head_to_index(true)
+        .renames_index_to_workdir(true)
+        .include_ignored(false)
+        .exclude_submodules(true);
+
+    let statuses = repo.statuses(Some(&mut opts))?;
+    let mut files = Vec::new();
+    for entry in statuses.iter() {
+        let s = entry.status();
+        if s.is_ignored() {
+            continue;
+        }
+        let path_str = match entry.path() {
+            Some(p) => p.replace('\\', "/"),
+            None => continue,
+        };
+        let (status, old_path) = classify_status(s, &entry);
+        files.push(FileChange {
+            path: path_str,
+            old_path,
+            status,
+        });
+    }
+    files.sort_by(|a, b| a.path.to_lowercase().cmp(&b.path.to_lowercase()));
+
+    Ok(ChangeSet {
+        branch: Some(branch),
+        summary: None,
+        author: None,
+        when: None,
+        files,
+    })
+}
+
+/// Convert a git2 `Diff` into our serializable `FileDiff` for one file.
+fn build_file_diff(diff: &git2::Diff, file: &str) -> AppResult<FileDiff> {
+    let want = file.replace('\\', "/");
+    let mut result = FileDiff {
+        path: want.clone(),
+        binary: false,
+        additions: 0,
+        deletions: 0,
+        hunks: Vec::new(),
+    };
+    for (idx, delta) in diff.deltas().enumerate() {
+        let dpath = delta
+            .new_file()
+            .path()
+            .or_else(|| delta.old_file().path())
+            .map(|p| p.to_string_lossy().replace('\\', "/"));
+        if dpath.as_deref() != Some(want.as_str()) {
+            continue;
+        }
+        if delta.flags().is_binary() {
+            result.binary = true;
+            return Ok(result);
+        }
+        match Patch::from_diff(diff, idx)? {
+            Some(patch) => {
+                for h in 0..patch.num_hunks() {
+                    let (hunk, nlines) = patch.hunk(h)?;
+                    let header = String::from_utf8_lossy(hunk.header())
+                        .trim_end_matches(['\n', '\r'])
+                        .to_string();
+                    let mut lines = Vec::with_capacity(nlines);
+                    for l in 0..nlines {
+                        let line = patch.line_in_hunk(h, l)?;
+                        let kind = match line.origin() {
+                            '+' => {
+                                result.additions += 1;
+                                "add"
+                            }
+                            '-' => {
+                                result.deletions += 1;
+                                "del"
+                            }
+                            _ => "ctx",
+                        };
+                        let content = String::from_utf8_lossy(line.content())
+                            .trim_end_matches(['\n', '\r'])
+                            .to_string();
+                        lines.push(DiffLine {
+                            kind: kind.to_string(),
+                            content,
+                            old_lineno: line.old_lineno(),
+                            new_lineno: line.new_lineno(),
+                        });
+                    }
+                    result.hunks.push(DiffHunk { header, lines });
+                }
+            }
+            None => result.binary = true,
+        }
+    }
+    Ok(result)
+}
+
+/// Diff a single file in the working tree against HEAD (includes staged,
+/// unstaged and untracked content — i.e. what a full commit would record).
+pub fn file_diff(path: &Path, file: &str) -> AppResult<FileDiff> {
+    let repo = Repository::open(path)?;
+    let mut opts = DiffOptions::new();
+    opts.include_untracked(true)
+        .recurse_untracked_dirs(true)
+        .show_untracked_content(true)
+        .context_lines(3)
+        .pathspec(file);
+    let head_tree = repo.head().ok().and_then(|h| h.peel_to_tree().ok());
+    let diff = repo.diff_tree_to_workdir_with_index(head_tree.as_ref(), Some(&mut opts))?;
+    build_file_diff(&diff, file)
+}
+
+/// Commit the selected files with `summary` (+ optional `description`) using the
+/// system `git` (so the user's configured identity and hooks apply). Returns the
+/// new short hash. With a pathspec, git commits *only* those files — matching
+/// GitHub Desktop — except for the very first (unborn) commit.
+pub fn commit(path: &Path, summary: &str, description: &str, files: &[String]) -> AppResult<String> {
+    let summary = summary.trim();
+    if summary.is_empty() {
+        return Err(AppError::msg("Enter a commit summary."));
+    }
+    if files.is_empty() {
+        return Err(AppError::msg("Select at least one file to commit."));
+    }
+    let repo = Repository::open(path)?;
+    let unborn = repo.head().is_err();
+
+    // Stage exactly the selected paths (covers new, modified and deleted files).
+    let mut add = git_cmd();
+    add.arg("-C").arg(path).args(["add", "-A", "--"]);
+    for f in files {
+        add.arg(f);
+    }
+    let out = add.output()?;
+    if !out.status.success() {
+        return Err(AppError::msg(
+            String::from_utf8_lossy(&out.stderr).trim().to_string(),
+        ));
+    }
+
+    // Commit. A pathspec makes git use "commit only" mode so unrelated staged
+    // entries are excluded; the first commit can't do partial, so commit staged.
+    let mut c = git_cmd();
+    c.arg("-C").arg(path).arg("commit").arg("-m").arg(summary);
+    if !description.trim().is_empty() {
+        c.arg("-m").arg(description.trim());
+    }
+    if !unborn {
+        c.arg("--");
+        for f in files {
+            c.arg(f);
+        }
+    }
+    let out = c.output()?;
+    if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        let msg = if stderr.is_empty() { stdout } else { stderr };
+        return Err(AppError::msg(if msg.is_empty() {
+            "Commit failed.".to_string()
+        } else {
+            msg
+        }));
+    }
+
+    Ok(repo.head().ok().and_then(|h| h.target()).map(short_oid).unwrap_or_default())
+}
+
+/// Recent commit history (newest first), up to `limit` entries.
+pub fn log(path: &Path, limit: usize) -> AppResult<Vec<CommitInfo>> {
+    let repo = Repository::open(path)?;
+    if repo.head().is_err() {
+        return Ok(Vec::new());
+    }
+    let mut walk = repo.revwalk()?;
+    walk.push_head()?;
+    walk.set_sorting(Sort::TIME)?;
+    let mut out = Vec::new();
+    for oid in walk.take(limit) {
+        let oid = oid?;
+        let c = repo.find_commit(oid)?;
+        out.push(CommitInfo {
+            id: short_oid(oid),
+            hash: oid.to_string(),
+            summary: c.summary().unwrap_or("(no message)").to_string(),
+            author: c.author().name().unwrap_or("unknown").to_string(),
+            when: humanize_epoch(c.time().seconds()),
+        });
+    }
+    Ok(out)
+}
+
+/// The files changed in a single commit (vs its first parent) plus its metadata.
+pub fn commit_changes(path: &Path, sha: &str) -> AppResult<ChangeSet> {
+    let repo = Repository::open(path)?;
+    let commit = repo.revparse_single(sha)?.peel_to_commit()?;
+    let tree = commit.tree()?;
+    let parent_tree = commit.parent(0).ok().and_then(|p| p.tree().ok());
+    let mut opts = DiffOptions::new();
+    let diff = repo.diff_tree_to_tree(parent_tree.as_ref(), Some(&tree), Some(&mut opts))?;
+
+    let mut files = Vec::new();
+    for delta in diff.deltas() {
+        let status = match delta.status() {
+            Delta::Added | Delta::Copied => "new",
+            Delta::Deleted => "deleted",
+            Delta::Renamed => "renamed",
+            Delta::Typechange => "typechange",
+            _ => "modified",
+        };
+        let p = delta
+            .new_file()
+            .path()
+            .or_else(|| delta.old_file().path())
+            .map(|x| x.to_string_lossy().replace('\\', "/"))
+            .unwrap_or_default();
+        let old_path = if delta.status() == Delta::Renamed {
+            delta
+                .old_file()
+                .path()
+                .map(|x| x.to_string_lossy().replace('\\', "/"))
+        } else {
+            None
+        };
+        files.push(FileChange {
+            path: p,
+            old_path,
+            status: status.to_string(),
+        });
+    }
+    files.sort_by(|a, b| a.path.to_lowercase().cmp(&b.path.to_lowercase()));
+
+    let summary = commit.summary().unwrap_or("").to_string();
+    let author = commit.author().name().unwrap_or("unknown").to_string();
+    let when = humanize_epoch(commit.time().seconds());
+    Ok(ChangeSet {
+        branch: None,
+        summary: Some(summary),
+        author: Some(author),
+        when: Some(when),
+        files,
+    })
+}
+
+/// Diff a single file within a commit (vs its first parent).
+pub fn commit_file_diff(path: &Path, sha: &str, file: &str) -> AppResult<FileDiff> {
+    let repo = Repository::open(path)?;
+    let commit = repo.revparse_single(sha)?.peel_to_commit()?;
+    let tree = commit.tree()?;
+    let parent_tree = commit.parent(0).ok().and_then(|p| p.tree().ok());
+    let mut opts = DiffOptions::new();
+    opts.context_lines(3).pathspec(file);
+    let diff = repo.diff_tree_to_tree(parent_tree.as_ref(), Some(&tree), Some(&mut opts))?;
+    build_file_diff(&diff, file)
 }

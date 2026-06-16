@@ -4,7 +4,7 @@ use tauri::{AppHandle, Emitter, State};
 
 use crate::error::{AppError, AppResult};
 use crate::git;
-use crate::models::Repo;
+use crate::models::{ChangeSet, CommitInfo, FileDiff, Repo};
 use crate::state::AppState;
 use crate::store;
 
@@ -224,6 +224,74 @@ pub async fn list_tags(state: State<'_, AppState>) -> AppResult<Vec<String>> {
     tauri::async_runtime::spawn_blocking(move || -> AppResult<Vec<String>> {
         let conn = st.db.lock().unwrap();
         store::all_tags(&conn)
+    })
+    .await
+    .map_err(|e| AppError::msg(e.to_string()))?
+}
+
+/// Working-tree changes for a repo (by id == path), or the files of a specific
+/// commit when `sha` is provided (History tab).
+#[tauri::command]
+pub async fn git_changes(id: String, sha: Option<String>) -> AppResult<ChangeSet> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let p = Path::new(&id);
+        match sha {
+            Some(s) => git::commit_changes(p, &s),
+            None => git::working_changes(p),
+        }
+    })
+    .await
+    .map_err(|e| AppError::msg(e.to_string()))?
+}
+
+/// Unified diff for one file — working tree vs HEAD, or within a commit (`sha`).
+#[tauri::command]
+pub async fn git_diff(id: String, path: String, sha: Option<String>) -> AppResult<FileDiff> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let p = Path::new(&id);
+        match sha {
+            Some(s) => git::commit_file_diff(p, &s, &path),
+            None => git::file_diff(p, &path),
+        }
+    })
+    .await
+    .map_err(|e| AppError::msg(e.to_string()))?
+}
+
+/// Commit the selected files with a summary + optional description, then return
+/// the refreshed working changes. Emits `repos_updated` so the Git Board
+/// reflects the new clean/ahead state.
+#[tauri::command]
+pub async fn git_commit(
+    id: String,
+    summary: String,
+    description: String,
+    files: Vec<String>,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> AppResult<ChangeSet> {
+    let st = state.inner().clone();
+    let (changes, repos) = tauri::async_runtime::spawn_blocking(
+        move || -> AppResult<(ChangeSet, Vec<Repo>)> {
+            let p = Path::new(&id);
+            git::commit(p, &summary, &description, &files)?;
+            let changes = git::working_changes(p)?;
+            let repos = collect_repos(&st)?;
+            Ok((changes, repos))
+        },
+    )
+    .await
+    .map_err(|e| AppError::msg(e.to_string()))??;
+
+    let _ = app.emit("repos_updated", &repos);
+    Ok(changes)
+}
+
+/// Recent commit history for a repo (newest first).
+#[tauri::command]
+pub async fn git_log(id: String, limit: Option<u32>) -> AppResult<Vec<CommitInfo>> {
+    tauri::async_runtime::spawn_blocking(move || {
+        git::log(Path::new(&id), limit.unwrap_or(100) as usize)
     })
     .await
     .map_err(|e| AppError::msg(e.to_string()))?

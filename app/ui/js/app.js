@@ -52,6 +52,7 @@ navItems.forEach((item) => {
     const page = item.dataset.page;
     navItems.forEach((n) => n.classList.toggle("active", n === item));
     pages.forEach((p) => p.classList.toggle("active", p.id === `page-${page}`));
+    if (page === "changes" && window.ChangesPage) window.ChangesPage.onShow();
   });
 });
 
@@ -1940,3 +1941,534 @@ if (DC && DC.hasBackend) {
     });
   }
 }
+
+// ============ CHANGES / COMMIT PAGE (GitHub Desktop / VS Code–style) ============
+// Efficient handling of many files: collapsible file TREE (with single-child
+// folder compaction, VS Code style) or flat LIST; tri-state folder checkboxes;
+// keyboard navigation; and a 3-pane History view (commits | commit files | diff)
+// so multi-file commits are fully navigable.
+const ChangesPage = (() => {
+  let repoId = null;        // selected repo path (== id)
+  let branch = "main";
+  let tab = "changes";      // "changes" | "history"
+  let viewMode = "tree";    // "tree" | "list"
+
+  // Changes tab state.
+  let files = [];           // working-tree changes [{path, oldPath, status}]
+  let selected = new Set(); // file paths checked for commit
+  let collapsedChanges = new Set();
+
+  // History tab state.
+  let history = [];
+  let activeSha = null;     // selected commit hash (null = working tree)
+  let commitFiles = [];     // files in the selected commit
+  let collapsedDetail = new Set();
+
+  // Diff/navigation state.
+  let activeFile = null;
+  let navOrder = [];        // visible file paths, in render order (for prev/next + keys)
+  let busy = false;
+
+  const $ = (id) => document.getElementById(id);
+  const esc = escapeHtml;
+
+  const CARET = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
+  const CHEV_UP = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>';
+  const CHEV_DOWN = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
+  const FOLDER_ICO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>';
+
+  const statBadge = (s) =>
+    ({ new: "A", untracked: "U", modified: "M", deleted: "D", renamed: "R", conflicted: "C", typechange: "T" }[s] || "M");
+
+  // ---- tree helpers ----
+  function buildTree(list) {
+    const root = { name: "", path: "", dirs: new Map(), files: [] };
+    for (const f of list) {
+      const parts = f.path.split("/");
+      const fname = parts.pop();
+      let node = root, prefix = "";
+      for (const part of parts) {
+        prefix = prefix ? prefix + "/" + part : part;
+        let child = node.dirs.get(part);
+        if (!child) { child = { name: part, path: prefix, dirs: new Map(), files: [] }; node.dirs.set(part, child); }
+        node = child;
+      }
+      node.files.push({ ...f, name: fname });
+    }
+    return root;
+  }
+  function collectFiles(node) {
+    let out = node.files.slice();
+    for (const d of node.dirs.values()) out = out.concat(collectFiles(d));
+    return out;
+  }
+  function allDirPaths(list) {
+    const s = new Set();
+    for (const f of list) {
+      const parts = f.path.split("/"); parts.pop();
+      let p = "";
+      for (const part of parts) { p = p ? p + "/" + part : part; s.add(p); }
+    }
+    return s;
+  }
+
+  /**
+   * Render a file tree/list into `container`.
+   * opts: { files, checkboxes, collapsed, onToggleFolder, onToggleFile }
+   * Returns the ordered list of visible file paths (for keyboard nav).
+   */
+  function renderFileTree(container, opts) {
+    const order = [];
+    const rows = [];
+    const indeterminate = [];
+
+    const fileRow = (f, depth) => {
+      const pad = 8 + depth * 14;
+      const sel = activeFile === f.path ? " selected" : "";
+      const cb = opts.checkboxes
+        ? `<input type="checkbox" data-check="${esc(f.path)}" ${selected.has(f.path) ? "checked" : ""} />`
+        : "";
+      order.push(f.path);
+      return `<div class="tree-row tree-file${sel}" data-file="${esc(f.path)}" style="padding-left:${pad}px" title="${esc(f.path)}">
+        ${cb}<span class="tree-twisty" style="visibility:hidden">${CARET}</span>
+        <span class="tree-name">${esc(f.name)}</span>
+        <span class="change-stat ${f.status}" title="${f.status}">${statBadge(f.status)}</span>
+      </div>`;
+    };
+
+    const walk = (node, depth) => {
+      const dirs = [...node.dirs.values()].sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+      for (const dir of dirs) {
+        // Compact single-child folder chains (a/b/c) like VS Code.
+        let label = dir.name, eff = dir;
+        while (eff.files.length === 0 && eff.dirs.size === 1) {
+          const only = [...eff.dirs.values()][0];
+          label += "/" + only.name; eff = only;
+        }
+        const isCollapsed = opts.collapsed.has(eff.path);
+        const desc = collectFiles(eff);
+        const pad = 8 + depth * 14;
+        let cb = "";
+        if (opts.checkboxes) {
+          const selCount = desc.filter((f) => selected.has(f.path)).length;
+          const checked = selCount === desc.length ? "checked" : "";
+          if (selCount > 0 && selCount < desc.length) indeterminate.push(eff.path);
+          cb = `<input type="checkbox" data-folder="${esc(eff.path)}" ${checked} />`;
+        }
+        rows.push(`<div class="tree-row tree-folder" data-folder-row="${esc(eff.path)}" style="padding-left:${pad}px">
+          ${cb}<span class="tree-twisty ${isCollapsed ? "collapsed" : ""}" data-twisty="${esc(eff.path)}">${CARET}</span>
+          <span class="tree-ico">${FOLDER_ICO}</span>
+          <span class="tree-name" title="${esc(eff.path)}">${esc(label)}</span>
+          <span class="tree-count">${desc.length}</span>
+        </div>`);
+        if (!isCollapsed) walk(eff, depth + 1);
+      }
+      const fs = node.files.slice().sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+      for (const f of fs) rows.push(fileRow(f, depth));
+    };
+
+    if (viewMode === "list") {
+      opts.files.slice()
+        .sort((a, b) => a.path.toLowerCase().localeCompare(b.path.toLowerCase()))
+        .forEach((f) => {
+          const i = f.path.lastIndexOf("/");
+          const dir = i < 0 ? "" : f.path.slice(0, i + 1);
+          const name = i < 0 ? f.path : f.path.slice(i + 1);
+          const sel = activeFile === f.path ? " selected" : "";
+          const cb = opts.checkboxes ? `<input type="checkbox" data-check="${esc(f.path)}" ${selected.has(f.path) ? "checked" : ""} />` : "";
+          order.push(f.path);
+          rows.push(`<div class="tree-row tree-file${sel}" data-file="${esc(f.path)}" title="${esc(f.path)}" style="padding-left:8px">
+            ${cb}<span class="tree-name"><span class="change-dir">${esc(dir)}</span>${esc(name)}</span>
+            <span class="change-stat ${f.status}" title="${f.status}">${statBadge(f.status)}</span>
+          </div>`);
+        });
+    } else {
+      walk(buildTree(opts.files), 0);
+    }
+
+    container.innerHTML = rows.join("") || `<div class="changes-empty">No files.</div>`;
+    indeterminate.forEach((p) => {
+      const cb = container.querySelector(`[data-folder="${CSS.escape(p)}"]`);
+      if (cb) cb.indeterminate = true;
+    });
+
+    // Listeners (direct, re-attached each render — reliable in WebView2).
+    container.querySelectorAll("[data-twisty], .tree-folder").forEach((el) => {
+      const key = el.dataset.twisty || el.dataset.folderRow;
+      if (!key) return;
+      el.addEventListener("click", (e) => {
+        if (e.target.closest("input")) return;
+        e.stopPropagation();
+        if (opts.collapsed.has(key)) opts.collapsed.delete(key); else opts.collapsed.add(key);
+        opts.rerender();
+      });
+    });
+    container.querySelectorAll("[data-folder]").forEach((cb) =>
+      cb.addEventListener("click", (e) => {
+        e.stopPropagation();
+        opts.onToggleFolder(cb.dataset.folder);
+      }));
+    container.querySelectorAll("[data-check]").forEach((cb) =>
+      cb.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const p = cb.dataset.check;
+        if (cb.checked) selected.add(p); else selected.delete(p);
+        opts.rerender();
+      }));
+    container.querySelectorAll(".tree-file").forEach((row) =>
+      row.addEventListener("click", (e) => {
+        if (e.target.closest("input")) return;
+        selectFile(row.dataset.file);
+      }));
+
+    return order;
+  }
+
+  // ---- repo picker ----
+  function openRepoPicker() {
+    if (!repos.length) {
+      Modal.alert({ title: "No repositories", message: "Add or clone a repository on the Git Board first." });
+      return;
+    }
+    const labels = [];
+    const map = new Map();
+    repos.forEach((r) => {
+      let label = r.name, n = 2;
+      while (map.has(label)) label = `${r.name} (${n++})`;
+      map.set(label, r); labels.push(label);
+    });
+    Dropdown.open($("chgRepoBtn"), {
+      header: "Select repository",
+      options: labels,
+      current: [...map.entries()].find(([, r]) => r.id === repoId)?.[0],
+      search: labels.length > 7,
+      searchPlaceholder: "Filter repositories…",
+      emptyText: "No repositories.",
+      onSelect: (label) => { const r = map.get(label); if (r) selectRepo(r); },
+    });
+  }
+
+  function selectRepo(r) {
+    repoId = r.id;
+    branch = r.branch || "main";
+    $("chgRepoLabel").textContent = r.name;
+    activeSha = null; activeFile = null; navOrder = [];
+    showDiffEmpty("Select a file to view its diff.");
+    if (tab === "history") loadHistory(); else loadChanges();
+  }
+
+  // ---- changes tab ----
+  async function loadChanges() {
+    if (!repoId) return;
+    $("changesList").innerHTML = `<div class="changes-empty">Loading…</div>`;
+    try {
+      const cs = await DC.gitChanges(repoId, null);
+      branch = cs.branch || branch;
+      $("commitBranch").textContent = branch;
+      files = cs.files || [];
+      selected = new Set(files.map((f) => f.path)); // select all (GitHub Desktop)
+      collapsedChanges = new Set();
+      renderChanges();
+    } catch (e) {
+      console.error("gitChanges failed", e);
+      $("changesList").innerHTML = `<div class="changes-empty">${esc(String(e))}</div>`;
+    }
+  }
+
+  function renderChanges() {
+    const filter = ($("changeFilter").value || "").toLowerCase();
+    const shown = filter ? files.filter((f) => f.path.toLowerCase().includes(filter)) : files;
+
+    $("changeCount").textContent =
+      files.length === 0 ? "No changed files" : `${files.length} changed file${files.length === 1 ? "" : "s"}`;
+    const all = $("changeSelectAll");
+    all.checked = files.length > 0 && selected.size === files.length;
+    all.indeterminate = selected.size > 0 && selected.size < files.length;
+    $("collapseAllBtn").hidden = viewMode !== "tree" || !shown.some((f) => f.path.includes("/"));
+
+    if (!shown.length) {
+      $("changesList").innerHTML = `<div class="changes-empty">${files.length ? "No files match the filter." : "No uncommitted changes."}</div>`;
+      navOrder = []; updateCommitBtn(); return;
+    }
+    navOrder = renderFileTree($("changesList"), {
+      files: shown, checkboxes: true, collapsed: collapsedChanges,
+      rerender: renderChanges,
+      onToggleFolder: (dirPath) => {
+        const tree = buildTree(files);
+        // find the dir node by path → its descendant files
+        const desc = descFilesForPath(files, dirPath);
+        const allSel = desc.every((p) => selected.has(p));
+        desc.forEach((p) => { if (allSel) selected.delete(p); else selected.add(p); });
+        renderChanges();
+      },
+    });
+    updateCommitBtn();
+  }
+
+  function descFilesForPath(list, dirPath) {
+    const pref = dirPath + "/";
+    return list.filter((f) => f.path === dirPath || f.path.startsWith(pref)).map((f) => f.path);
+  }
+
+  function updateCommitBtn() {
+    const summary = ($("commitSummary").value || "").trim();
+    $("commitBtn").disabled = busy || !summary || selected.size === 0;
+  }
+
+  async function doCommit() {
+    if (busy) return;
+    const summary = ($("commitSummary").value || "").trim();
+    const desc = $("commitDesc").value || "";
+    const picked = files.filter((f) => selected.has(f.path)).map((f) => f.path);
+    if (!summary || !picked.length) return;
+    busy = true; updateCommitBtn();
+    const btn = $("commitBtn");
+    const prev = btn.innerHTML;
+    btn.innerHTML = `<span class="spin">${ICON.sync}</span>Committing…`;
+    try {
+      const cs = await DC.gitCommit(repoId, summary, desc, picked);
+      $("commitSummary").value = ""; $("commitDesc").value = "";
+      branch = cs.branch || branch;
+      $("commitBranch").textContent = branch;
+      files = cs.files || [];
+      selected = new Set(files.map((f) => f.path));
+      activeFile = null;
+      showDiffEmpty("Commit created. Select a file to view its diff.");
+      renderChanges();
+    } catch (e) {
+      console.error("gitCommit failed", e);
+      await Modal.alert({ title: "Commit failed", message: String(e) });
+    } finally {
+      busy = false; btn.innerHTML = prev; updateCommitBtn();
+    }
+  }
+
+  // ---- history tab ----
+  async function loadHistory() {
+    if (!repoId) return;
+    $("historyList").innerHTML = `<div class="changes-empty">Loading…</div>`;
+    try {
+      history = await DC.gitLog(repoId, 200);
+      renderHistory();
+    } catch (e) {
+      console.error("gitLog failed", e);
+      $("historyList").innerHTML = `<div class="changes-empty">${esc(String(e))}</div>`;
+    }
+  }
+
+  function renderHistory() {
+    const filter = ($("historyFilter").value || "").toLowerCase();
+    const shown = filter
+      ? history.filter((c) => c.summary.toLowerCase().includes(filter) || c.author.toLowerCase().includes(filter) || c.id.includes(filter))
+      : history;
+    if (!shown.length) {
+      $("historyList").innerHTML = `<div class="changes-empty">${history.length ? "No commits match." : "No commits yet."}</div>`;
+      return;
+    }
+    $("historyList").innerHTML = shown
+      .map((c) => `<div class="history-row${c.hash === activeSha ? " selected" : ""}" data-sha="${c.hash}">
+        <div class="history-summary" title="${esc(c.summary)}">${esc(c.summary)}</div>
+        <div class="history-meta"><span class="history-hash">${c.id}</span><span>${esc(c.author)}</span><span>·</span><span>${esc(c.when)}</span></div>
+      </div>`)
+      .join("");
+    $("historyList").querySelectorAll(".history-row").forEach((row) =>
+      row.addEventListener("click", () => selectCommit(row.dataset.sha)));
+  }
+
+  async function selectCommit(sha) {
+    activeSha = sha; activeFile = null; navOrder = [];
+    $("historyList").querySelectorAll(".history-row").forEach((r) =>
+      r.classList.toggle("selected", r.dataset.sha === sha));
+    const c = history.find((x) => x.hash === sha);
+    $("detailHead").innerHTML = `<div class="detail-msg">${esc(c ? c.summary : "")}</div>
+      <div class="detail-meta"><span class="avatar">${esc((c && c.author ? c.author : "?").slice(0, 2).toUpperCase())}</span><span>${esc(c ? c.author : "")}</span><span>·</span><span>${esc(c ? c.when : "")}</span><span class="history-hash">${esc(c ? c.id : sha.slice(0, 7))}</span></div>`;
+    $("detailFiles").innerHTML = `<div class="changes-empty">Loading…</div>`;
+    showDiffEmpty("Loading commit…");
+    collapsedDetail = new Set();
+    try {
+      const cs = await DC.gitChanges(repoId, sha);
+      commitFiles = cs.files || [];
+      renderDetail();
+      if (commitFiles.length) selectFile(commitFiles[0].path);
+      else showDiffEmpty("This commit has no file changes.");
+    } catch (e) {
+      console.error("commit changes failed", e);
+      $("detailFiles").innerHTML = `<div class="changes-empty">${esc(String(e))}</div>`;
+      showDiffEmpty(String(e));
+    }
+  }
+
+  function renderDetail() {
+    $("detailFileCount").textContent =
+      `${commitFiles.length} file${commitFiles.length === 1 ? "" : "s"} changed`;
+    $("detailCollapseBtn").hidden = viewMode !== "tree" || !commitFiles.some((f) => f.path.includes("/"));
+    if (!commitFiles.length) {
+      $("detailFiles").innerHTML = `<div class="changes-empty">No file changes.</div>`;
+      navOrder = []; return;
+    }
+    navOrder = renderFileTree($("detailFiles"), {
+      files: commitFiles, checkboxes: false, collapsed: collapsedDetail, rerender: renderDetail,
+      onToggleFolder: () => {},
+    });
+  }
+
+  // ---- diff pane ----
+  function showDiffEmpty(msg) {
+    $("diffEmpty").textContent = msg;
+    $("diffEmpty").hidden = false;
+    $("diffContent").hidden = true;
+  }
+
+  function diffHeadHtml(path, addsStr, delsStr) {
+    const idx = navOrder.indexOf(path);
+    const nav = navOrder.length > 1
+      ? `<div class="diff-nav">
+          <button class="icon-mini" id="diffPrev" title="Previous file (↑)" ${idx <= 0 ? "disabled" : ""}>${CHEV_UP}</button>
+          <span class="diff-pos">${idx + 1} / ${navOrder.length}</span>
+          <button class="icon-mini" id="diffNext" title="Next file (↓)" ${idx >= navOrder.length - 1 ? "disabled" : ""}>${CHEV_DOWN}</button>
+        </div>` : "";
+    return `<span class="diff-path" title="${esc(path)}">${esc(path)}</span>${nav}<span class="diff-adds">${addsStr}</span><span class="diff-dels">${delsStr}</span>`;
+  }
+
+  function wireDiffNav() {
+    const prev = $("diffPrev"), next = $("diffNext");
+    if (prev) prev.addEventListener("click", () => step(-1));
+    if (next) next.addEventListener("click", () => step(1));
+  }
+
+  function step(dir) {
+    if (!navOrder.length) return;
+    const idx = navOrder.indexOf(activeFile);
+    const ni = idx < 0 ? 0 : idx + dir;
+    if (ni < 0 || ni >= navOrder.length) return;
+    selectFile(navOrder[ni]);
+  }
+
+  async function selectFile(path) {
+    activeFile = path;
+    // Highlight the row + scroll into view in whichever list is active.
+    const listId = tab === "history" ? "detailFiles" : "changesList";
+    const list = $(listId);
+    list.querySelectorAll(".tree-file").forEach((r) => {
+      const on = r.dataset.file === path;
+      r.classList.toggle("selected", on);
+      if (on) r.scrollIntoView({ block: "nearest" });
+    });
+    $("diffEmpty").hidden = true;
+    $("diffContent").hidden = false;
+    $("diffHead").innerHTML = diffHeadHtml(path, "…", "");
+    wireDiffNav();
+    $("diffBody").innerHTML = `<div class="diff-binary">Loading diff…</div>`;
+    try {
+      const d = await DC.gitDiff(repoId, path, activeSha);
+      if (activeFile !== path) return; // a newer selection won
+      renderDiff(d);
+    } catch (e) {
+      console.error("gitDiff failed", e);
+      $("diffBody").innerHTML = `<div class="diff-binary">${esc(String(e))}</div>`;
+    }
+  }
+
+  function renderDiff(d) {
+    $("diffHead").innerHTML = diffHeadHtml(d.path, `+${d.additions}`, `−${d.deletions}`);
+    wireDiffNav();
+    if (d.binary) { $("diffBody").innerHTML = `<div class="diff-binary">Binary file — no text diff to display.</div>`; return; }
+    if (!d.hunks.length) { $("diffBody").innerHTML = `<div class="diff-binary">No textual changes to display.</div>`; return; }
+    const rows = [];
+    d.hunks.forEach((h) => {
+      rows.push(`<div class="diff-hunk-head">${esc(h.header)}</div>`);
+      h.lines.forEach((l) => {
+        const cls = l.kind === "add" ? "add" : l.kind === "del" ? "del" : "";
+        const oldN = l.oldLineno != null ? l.oldLineno : "";
+        const newN = l.newLineno != null ? l.newLineno : "";
+        rows.push(`<div class="diff-line ${cls}"><span class="diff-gutter"><span>${oldN}</span><span>${newN}</span></span><span class="diff-text">${esc(l.content) || "&nbsp;"}</span></div>`);
+      });
+    });
+    $("diffBody").innerHTML = rows.join("");
+  }
+
+  // ---- tabs / view mode ----
+  function switchTab(next) {
+    tab = next;
+    $("cpane-changes").hidden = next !== "changes";
+    $("cpane-history").hidden = next !== "history";
+    $("commitDetail").hidden = next !== "history";
+    $("commitLayout").classList.toggle("mode-history", next === "history");
+    document.querySelectorAll(".commit-tab").forEach((t) => t.classList.toggle("active", t.dataset.ctab === next));
+    activeFile = null; navOrder = [];
+    if (next === "history") {
+      activeSha = null;
+      $("detailHead").innerHTML = "";
+      $("detailFiles").innerHTML = `<div class="detail-empty">Select a commit to see its files.</div>`;
+      $("detailFileCount").textContent = "Files";
+      showDiffEmpty("Select a commit, then a file to view its diff.");
+      loadHistory();
+    } else {
+      activeSha = null;
+      showDiffEmpty("Select a file to view its diff.");
+      renderChanges();
+    }
+  }
+
+  function setView(mode) {
+    if (viewMode === mode) return;
+    viewMode = mode;
+    document.querySelectorAll("#chgViewToggle .seg-btn").forEach((b) => b.classList.toggle("active", b.dataset.view === mode));
+    if (tab === "history") { if (commitFiles.length) renderDetail(); }
+    else renderChanges();
+  }
+
+  function collapseAll(set, list, rerender) {
+    const dirs = allDirPaths(list);
+    const allCollapsed = [...dirs].every((d) => set.has(d));
+    set.clear();
+    if (!allCollapsed) dirs.forEach((d) => set.add(d));
+    rerender();
+  }
+
+  // Arrow-key navigation between files when a tree has focus.
+  function onTreeKey(e) {
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp" && !(e.key === " " && tab === "changes")) return;
+    if (!navOrder.length) return;
+    if (e.key === " ") {
+      // Space toggles the active file's commit selection (Changes tab).
+      if (!activeFile) return;
+      e.preventDefault();
+      if (selected.has(activeFile)) selected.delete(activeFile); else selected.add(activeFile);
+      renderChanges();
+      return;
+    }
+    e.preventDefault();
+    step(e.key === "ArrowDown" ? 1 : -1);
+  }
+
+  function onShow() {
+    if (!DC || !DC.hasBackend) return;
+    if (!repoId) { const first = repos[0]; if (first) selectRepo(first); }
+  }
+
+  function init() {
+    const repoBtn = $("chgRepoBtn");
+    if (!repoBtn) return;
+    repoBtn.addEventListener("click", openRepoPicker);
+    $("chgRefreshBtn").addEventListener("click", () => (tab === "history" ? loadHistory() : loadChanges()));
+    document.querySelectorAll(".commit-tab").forEach((t) => t.addEventListener("click", () => switchTab(t.dataset.ctab)));
+    document.querySelectorAll("#chgViewToggle .seg-btn").forEach((b) => b.addEventListener("click", () => setView(b.dataset.view)));
+    $("changeFilter").addEventListener("input", renderChanges);
+    $("historyFilter").addEventListener("input", renderHistory);
+    $("changeSelectAll").addEventListener("click", () => {
+      selected = $("changeSelectAll").checked ? new Set(files.map((f) => f.path)) : new Set();
+      renderChanges();
+    });
+    $("collapseAllBtn").addEventListener("click", () => collapseAll(collapsedChanges, files, renderChanges));
+    $("detailCollapseBtn").addEventListener("click", () => collapseAll(collapsedDetail, commitFiles, renderDetail));
+    $("commitSummary").addEventListener("input", updateCommitBtn);
+    $("commitBtn").addEventListener("click", doCommit);
+    $("changesList").addEventListener("keydown", onTreeKey);
+    $("detailFiles").addEventListener("keydown", onTreeKey);
+  }
+
+  init();
+  return { onShow };
+})();
+window.ChangesPage = ChangesPage;

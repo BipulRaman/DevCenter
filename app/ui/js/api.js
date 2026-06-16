@@ -33,6 +33,13 @@
     setRepoTags: (id, tags) => invoke("set_repo_tags", { id, tags }),
     listTags: () => (hasBackend ? invoke("list_tags") : Promise.resolve(null)),
 
+    // --- Changes / commit (GitHub Desktop–style) ---
+    gitChanges: (id, sha) => invoke("git_changes", { id, sha: sha || null }),
+    gitDiff: (id, path, sha) => invoke("git_diff", { id, path, sha: sha || null }),
+    gitCommit: (id, summary, description, files) =>
+      invoke("git_commit", { id, summary, description, files }),
+    gitLog: (id, limit) => invoke("git_log", { id, limit: limit ?? null }),
+
     // --- Pull Requests (Phase 3) ---
     listPullRequests: (repoIds) =>
       hasBackend ? invoke("list_pull_requests", { repoIds }) : Promise.resolve(null),

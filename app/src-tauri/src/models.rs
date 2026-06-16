@@ -74,3 +74,70 @@ pub struct PullRequest {
     /// Deep link to the PR in the provider's web UI.
     pub url: String,
 }
+
+/// A single changed file — in the working tree (Changes tab) or within a commit
+/// (History tab). Paths use forward slashes regardless of OS.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct FileChange {
+    pub path: String,
+    /// Previous path when the file was renamed.
+    pub old_path: Option<String>,
+    /// "new" | "modified" | "deleted" | "renamed" | "untracked" | "conflicted" | "typechange".
+    pub status: String,
+}
+
+/// The set of changes shown on the Changes page — either the working tree
+/// (`branch` set) or a single commit (`summary`/`author`/`when` set).
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ChangeSet {
+    pub branch: Option<String>,
+    pub summary: Option<String>,
+    pub author: Option<String>,
+    pub when: Option<String>,
+    pub files: Vec<FileChange>,
+}
+
+/// One line within a diff hunk.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct DiffLine {
+    /// "add" | "del" | "ctx".
+    pub kind: String,
+    pub content: String,
+    pub old_lineno: Option<u32>,
+    pub new_lineno: Option<u32>,
+}
+
+/// A contiguous block of changes within a file diff.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct DiffHunk {
+    pub header: String,
+    pub lines: Vec<DiffLine>,
+}
+
+/// A parsed unified diff for a single file.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct FileDiff {
+    pub path: String,
+    pub binary: bool,
+    pub additions: u32,
+    pub deletions: u32,
+    pub hunks: Vec<DiffHunk>,
+}
+
+/// One entry in a repository's commit history.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct CommitInfo {
+    /// Short hash (7 chars).
+    pub id: String,
+    /// Full hash (used for diff lookups).
+    pub hash: String,
+    pub summary: String,
+    pub author: String,
+    pub when: String,
+}
