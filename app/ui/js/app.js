@@ -56,12 +56,64 @@ navItems.forEach((item) => {
   });
 });
 
-// ---------- Theme toggle ----------
-document.getElementById("themeToggle").addEventListener("click", () => {
-  const root = document.documentElement;
-  const next = root.getAttribute("data-theme") === "light" ? "dark" : "light";
-  root.setAttribute("data-theme", next);
-});
+// Elevate the sticky page header once content scrolls beneath it.
+const mainScroll = document.querySelector(".main");
+if (mainScroll) {
+  mainScroll.addEventListener(
+    "scroll",
+    () => {
+      const stuck = mainScroll.scrollTop > 4;
+      document.querySelectorAll(".page-head").forEach((h) => h.classList.toggle("stuck", stuck));
+    },
+    { passive: true }
+  );
+}
+
+// ---------- Settings popover + theme toggle ----------
+(function () {
+  const SUN =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>';
+  const MOON =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"/></svg>';
+  const btn = document.getElementById("settingsBtn");
+  const menu = document.getElementById("settingsMenu");
+  const themeBtn = document.getElementById("themeToggle");
+  const themeIco = document.getElementById("themeIco");
+  const themeLabel = document.getElementById("themeLabel");
+  if (!btn || !menu) return;
+
+  function syncThemeUI() {
+    const dark = document.documentElement.getAttribute("data-theme") !== "light";
+    if (themeIco) themeIco.innerHTML = dark ? SUN : MOON;
+    if (themeLabel) themeLabel.textContent = dark ? "Switch to light theme" : "Switch to dark theme";
+  }
+  function close() {
+    menu.hidden = true;
+    btn.classList.remove("settings-open");
+    btn.setAttribute("aria-expanded", "false");
+  }
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const open = menu.hidden;
+    menu.hidden = !open;
+    btn.classList.toggle("settings-open", open);
+    btn.setAttribute("aria-expanded", String(open));
+  });
+  document.addEventListener("click", (e) => {
+    if (!menu.hidden && !menu.contains(e.target) && !btn.contains(e.target)) close();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") close();
+  });
+  if (themeBtn) {
+    themeBtn.addEventListener("click", () => {
+      const root = document.documentElement;
+      root.setAttribute("data-theme", root.getAttribute("data-theme") === "light" ? "dark" : "light");
+      syncThemeUI();
+    });
+  }
+  syncThemeUI();
+})();
 
 // ---------- Git Board render ----------
 
@@ -180,14 +232,19 @@ function renderRepos(filter = "") {
   document.getElementById("repoGrid").innerHTML = list
     .map((r) => {
       const i = repos.indexOf(r);
-      const statusFlag =
+      const dirtyChip =
         r.status === "dirty"
-          ? `<span class="repo-flag dirty" title="Uncommitted changes">${ICON.dot}</span>`
-          : `<span class="repo-flag clean" title="Clean">${ICON.check}</span>`;
-      const ahead = r.ahead ? `<span class="chip">${ICON.up}${r.ahead} ahead</span>` : "";
-      const behind = r.behind ? `<span class="chip">${ICON.down}${r.behind} behind</span>` : "";
+          ? `<span class="chip dirty-chip" title="Uncommitted changes">${ICON.dot}Uncommitted</span>`
+          : "";
+      const aheadN = r.ahead || 0;
+      const behindN = r.behind || 0;
+      const syncChip =
+        aheadN || behindN
+          ? `<span class="chip sync-chip" title="${aheadN} ahead, ${behindN} behind">${
+              aheadN ? `<span>${ICON.up}${aheadN}</span>` : ""
+            }${behindN ? `<span>${ICON.down}${behindN}</span>` : ""}</span>`
+          : "";
       const dotClass = r.status === "dirty" ? "error" : "running";
-      const watchedFlag = r.watched ? `<span class="repo-flag watching" title="Watching PRs">${ICON.eye}</span>` : "";
       const tagChips = (r.tags || [])
         .map((t) => `<span class="chip tag-chip">${ICON.tag}${escapeHtml(t)}</span>`)
         .join("");
@@ -205,7 +262,7 @@ function renderRepos(filter = "") {
           <div class="repo-title-row">
             <span class="repo-name">${r.name}</span>
             ${branchChip}
-            ${ahead}${behind}${statusFlag}${watchedFlag}${tagChips}
+            ${syncChip}${dirtyChip}${tagChips}
           </div>
           <div class="repo-sub">
             <span class="repo-path">${r.path}</span>
@@ -771,8 +828,8 @@ function stat(label, value, color) {
     <div class="stat-value">${value}</div>
   </div>`;
 }
-function empty(msg) {
-  return `<div style="grid-column:1/-1;text-align:center;color:var(--text-faint);padding:40px 0;">${msg}</div>`;
+function empty(msg, icon) {
+  return `<div class="empty-state"><div class="empty-ico">${icon || ICON.folder}</div><p>${msg}</p></div>`;
 }
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -2023,13 +2080,12 @@ const ChangesPage = (() => {
     const indeterminate = [];
 
     const fileRow = (f, depth) => {
-      const pad = 8 + depth * 14;
       const sel = activeFile === f.path ? " selected" : "";
       const cb = opts.checkboxes
         ? `<input type="checkbox" data-check="${esc(f.path)}" ${selected.has(f.path) ? "checked" : ""} />`
         : "";
       order.push(f.path);
-      return `<div class="tree-row tree-file${sel}" data-file="${esc(f.path)}" style="padding-left:${pad}px" title="${esc(f.path)}">
+      return `<div class="tree-row tree-file${sel}" data-file="${esc(f.path)}" style="--d:${depth}" title="${esc(f.path)}">
         ${cb}<span class="tree-twisty" style="visibility:hidden">${CARET}</span>
         <span class="tree-name">${esc(f.name)}</span>
         <span class="change-stat ${f.status}" title="${f.status}">${statBadge(f.status)}</span>
@@ -2047,7 +2103,6 @@ const ChangesPage = (() => {
         }
         const isCollapsed = opts.collapsed.has(eff.path);
         const desc = collectFiles(eff);
-        const pad = 8 + depth * 14;
         let cb = "";
         if (opts.checkboxes) {
           const selCount = desc.filter((f) => selected.has(f.path)).length;
@@ -2055,7 +2110,7 @@ const ChangesPage = (() => {
           if (selCount > 0 && selCount < desc.length) indeterminate.push(eff.path);
           cb = `<input type="checkbox" data-folder="${esc(eff.path)}" ${checked} />`;
         }
-        rows.push(`<div class="tree-row tree-folder" data-folder-row="${esc(eff.path)}" style="padding-left:${pad}px">
+        rows.push(`<div class="tree-row tree-folder" data-folder-row="${esc(eff.path)}" style="--d:${depth}">
           ${cb}<span class="tree-twisty ${isCollapsed ? "collapsed" : ""}" data-twisty="${esc(eff.path)}">${CARET}</span>
           <span class="tree-ico">${FOLDER_ICO}</span>
           <span class="tree-name" title="${esc(eff.path)}">${esc(label)}</span>
@@ -2077,7 +2132,7 @@ const ChangesPage = (() => {
           const sel = activeFile === f.path ? " selected" : "";
           const cb = opts.checkboxes ? `<input type="checkbox" data-check="${esc(f.path)}" ${selected.has(f.path) ? "checked" : ""} />` : "";
           order.push(f.path);
-          rows.push(`<div class="tree-row tree-file${sel}" data-file="${esc(f.path)}" title="${esc(f.path)}" style="padding-left:8px">
+          rows.push(`<div class="tree-row tree-file${sel}" data-file="${esc(f.path)}" title="${esc(f.path)}" style="--d:0">
             ${cb}<span class="tree-name"><span class="change-dir">${esc(dir)}</span>${esc(name)}</span>
             <span class="change-stat ${f.status}" title="${f.status}">${statBadge(f.status)}</span>
           </div>`);
@@ -2152,7 +2207,9 @@ const ChangesPage = (() => {
     repoId = r.id;
     branch = r.branch || "main";
     $("chgRepoLabel").textContent = r.name;
+    $("commitBranch").textContent = branch; // reset branch label immediately
     activeSha = null; activeFile = null; navOrder = [];
+    files = []; selected = new Set(); history = []; commitFiles = [];
     showDiffEmpty("Select a file to view its diff.");
     if (tab === "history") loadHistory(); else loadChanges();
   }
@@ -2250,6 +2307,9 @@ const ChangesPage = (() => {
     try {
       history = await DC.gitLog(repoId, 200);
       renderHistory();
+      // Auto-select the newest commit so the detail + diff panes aren't left
+      // empty (fills the space and matches GitHub Desktop behaviour).
+      if (history.length && !activeSha) selectCommit(history[0].hash);
     } catch (e) {
       console.error("gitLog failed", e);
       $("historyList").innerHTML = `<div class="changes-empty">${esc(String(e))}</div>`;
@@ -2268,7 +2328,7 @@ const ChangesPage = (() => {
     $("historyList").innerHTML = shown
       .map((c) => `<div class="history-row${c.hash === activeSha ? " selected" : ""}" data-sha="${c.hash}">
         <div class="history-summary" title="${esc(c.summary)}">${esc(c.summary)}</div>
-        <div class="history-meta"><span class="history-hash">${c.id}</span><span>${esc(c.author)}</span><span>·</span><span>${esc(c.when)}</span></div>
+        <div class="history-meta"><span class="history-hash">${c.id}</span><span class="history-author" title="${esc(c.author)}">${esc(c.author)}</span><span class="hm-dot">·</span><span class="history-when">${esc(c.when)}</span></div>
       </div>`)
       .join("");
     $("historyList").querySelectorAll(".history-row").forEach((row) =>
@@ -2281,7 +2341,7 @@ const ChangesPage = (() => {
       r.classList.toggle("selected", r.dataset.sha === sha));
     const c = history.find((x) => x.hash === sha);
     $("detailHead").innerHTML = `<div class="detail-msg">${esc(c ? c.summary : "")}</div>
-      <div class="detail-meta"><span class="avatar">${esc((c && c.author ? c.author : "?").slice(0, 2).toUpperCase())}</span><span>${esc(c ? c.author : "")}</span><span>·</span><span>${esc(c ? c.when : "")}</span><span class="history-hash">${esc(c ? c.id : sha.slice(0, 7))}</span></div>`;
+      <div class="detail-meta"><span class="avatar">${esc((c && c.author ? c.author : "?").slice(0, 2).toUpperCase())}</span><span class="detail-author" title="${esc(c ? c.author : "")}">${esc(c ? c.author : "")}</span><span class="hm-dot">·</span><span class="history-when">${esc(c ? c.when : "")}</span><span class="history-hash">${esc(c ? c.id : sha.slice(0, 7))}</span></div>`;
     $("detailFiles").innerHTML = `<div class="changes-empty">Loading…</div>`;
     showDiffEmpty("Loading commit…");
     collapsedDetail = new Set();
@@ -2406,7 +2466,7 @@ const ChangesPage = (() => {
     } else {
       activeSha = null;
       showDiffEmpty("Select a file to view its diff.");
-      renderChanges();
+      if (repoId && !files.length) loadChanges(); else renderChanges();
     }
   }
 
@@ -2444,7 +2504,55 @@ const ChangesPage = (() => {
 
   function onShow() {
     if (!DC || !DC.hasBackend) return;
-    if (!repoId) { const first = repos[0]; if (first) selectRepo(first); }
+    if (!repoId) {
+      const first = repos[0];
+      if (first) selectRepo(first);
+      return;
+    }
+    // A repo is already selected — refresh the active tab so changes made since
+    // the last visit (or on another tab) are always shown.
+    if (tab === "history") loadHistory(); else loadChanges();
+  }
+
+  // Drag-to-resize the commit/diff columns; widths persist in localStorage.
+  // Double-click a divider to reset that column to its default width.
+  function initResizers() {
+    const layout = $("commitLayout");
+    if (!layout) return;
+    const LIMITS = { side: [240, 560], detail: [200, 520] };
+    ["--w-side", "--w-detail"].forEach((v) => {
+      try { const s = localStorage.getItem("dc.commit" + v); if (s) layout.style.setProperty(v, s); } catch (e) {}
+    });
+    layout.querySelectorAll(".pane-resizer").forEach((rz) => {
+      const which = rz.dataset.resize;
+      const varName = which === "side" ? "--w-side" : "--w-detail";
+      rz.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        const [min, max] = LIMITS[which];
+        const startX = e.clientX;
+        const startW = parseFloat(getComputedStyle(layout).getPropertyValue(varName)) || (which === "side" ? 320 : 264);
+        rz.setPointerCapture(e.pointerId);
+        rz.classList.add("dragging");
+        document.body.classList.add("col-resizing");
+        const move = (ev) => {
+          const w = Math.max(min, Math.min(Math.round(startW + (ev.clientX - startX)), max));
+          layout.style.setProperty(varName, w + "px");
+        };
+        const up = () => {
+          rz.classList.remove("dragging");
+          document.body.classList.remove("col-resizing");
+          window.removeEventListener("pointermove", move);
+          window.removeEventListener("pointerup", up);
+          try { localStorage.setItem("dc.commit" + varName, layout.style.getPropertyValue(varName)); } catch (e) {}
+        };
+        window.addEventListener("pointermove", move);
+        window.addEventListener("pointerup", up);
+      });
+      rz.addEventListener("dblclick", () => {
+        layout.style.removeProperty(varName);
+        try { localStorage.removeItem("dc.commit" + varName); } catch (e) {}
+      });
+    });
   }
 
   function init() {
@@ -2466,6 +2574,7 @@ const ChangesPage = (() => {
     $("commitBtn").addEventListener("click", doCommit);
     $("changesList").addEventListener("keydown", onTreeKey);
     $("detailFiles").addEventListener("keydown", onTreeKey);
+    initResizers();
   }
 
   init();
