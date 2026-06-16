@@ -1,0 +1,66 @@
+name: Release
+
+# Build the Windows installer when a GitHub Release is created, and attach the
+# installer to that release. The release tag drives the app/installer version.
+on:
+  release:
+    types: [created]
+
+# Needed so the built installer can be uploaded back onto the release.
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build installer & attach to release
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Use the release tag (e.g. v1.2.3 -> 1.2.3) as the app version so the
+      # produced binary and NSIS installer carry the released version. The files
+      # are patched in-place for this build only (not committed back).
+      - name: Set version from release tag
+        shell: pwsh
+        run: |
+          $tag = "${{ github.event.release.tag_name }}"
+          $version = $tag -replace '^[vV]', ''
+          if ($version -notmatch '^\d+\.\d+\.\d+(\.\d+)?$') {
+            throw "Release tag '$tag' is not a valid version (expected like v1.2.3)."
+          }
+          Write-Host "Building DevCenter version $version (from tag $tag)"
+
+          $conf = "app/src-tauri/tauri.conf.json"
+          (Get-Content $conf -Raw) `
+            -replace '"version"\s*:\s*"[^"]*"', ('"version": "' + $version + '"') `
+            | Set-Content $conf -NoNewline -Encoding utf8
+
+          $cargo = "app/src-tauri/Cargo.toml"
+          (Get-Content $cargo -Raw) `
+            -replace '(?m)^version\s*=\s*"[^"]*"', ('version = "' + $version + '"') `
+            | Set-Content $cargo -NoNewline -Encoding utf8
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app/src-tauri
+
+      # tauri-action builds the app and uploads the bundle to the release
+      # identified by releaseId. projectPath points at the folder containing
+      # src-tauri; args mirror the local build (`cargo tauri build --bundles nsis`).
+      - name: Build & upload installer
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: app
+          releaseId: ${{ github.event.release.id }}
+          args: --bundles nsis

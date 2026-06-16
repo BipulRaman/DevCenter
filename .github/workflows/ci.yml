@@ -1,0 +1,37 @@
+name: CI
+
+# Verify the app compiles on every commit and pull request.
+on:
+  push:
+  pull_request:
+
+# Cancel an in-progress run when new commits are pushed to the same ref.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build (Windows / MSVC)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      # Caches the cargo registry, git deps and the target/ dir so subsequent
+      # runs only recompile what changed.
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app/src-tauri
+
+      # A plain `cargo build` runs the tauri-build script and the
+      # `generate_context!` macro, which embed the frontend from ../ui — so this
+      # verifies the whole desktop app compiles (frontend + backend). No Tauri
+      # CLI or npm step is needed because the UI is static (vanilla JS).
+      - name: Build (verify it compiles)
+        working-directory: app/src-tauri
+        run: cargo build --locked
