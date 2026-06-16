@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DevCenter</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;750;800&display=swap" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <div class="app">
+    <!-- ============ LEFT NAV ============ -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-logo">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <span class="brand-name">DevCenter</span>
+          <span class="brand-sub">Desktop</span>
+        </div>
+      </div>
+
+      <nav class="nav" id="nav">
+        <span class="nav-section">Workspace</span>
+        <button class="nav-item active" data-page="git-board">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/><line x1="3" y1="12" x2="9" y2="12"/><line x1="15" y1="12" x2="21" y2="12"/><circle cx="18" cy="6" r="3"/><path d="M18 9v6a6 6 0 0 1-6 6"/>
+          </svg>
+          <span>Git Board</span>
+        </button>
+        <button class="nav-item" data-page="pull-requests">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="18" r="3"/><path d="M6 9v6"/><path d="M18 15v-2a3 3 0 0 0-3-3H9"/><path d="M12 7l-3 3 3 3"/>
+          </svg>
+          <span>Pull Requests</span>
+        </button>
+        <button class="nav-item" data-page="app-center">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+          </svg>
+          <span>App Center</span>
+        </button>
+
+        <span class="nav-section">Settings</span>
+        <button class="nav-item" data-page="accounts">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+          </svg>
+          <span>Accounts</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <button class="nav-item" id="themeToggle">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
+          </svg>
+          <span>Toggle theme</span>
+        </button>
+        <div class="user">
+          <div class="avatar">DV</div>
+          <div class="user-meta">
+            <span class="user-name">Developer</span>
+            <span class="user-mail">dev@local</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ============ MAIN ============ -->
+    <main class="main">
+      <!-- ===== GIT BOARD PAGE ===== -->
+      <section class="page active" id="page-git-board">
+        <header class="page-head">
+          <div>
+            <h1>Git Board</h1>
+            <p class="page-desc">Clone, track and manage Git repositories on this machine.</p>
+          </div>
+          <div class="page-actions">
+            <div class="search">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+              <input type="text" placeholder="Search repositories…" id="repoSearch" />
+            </div>
+            <div class="multiselect" id="repoAccountSelect" hidden>
+              <button class="multiselect-btn" id="repoAccountBtn" type="button" aria-haspopup="true" aria-expanded="false">
+                <span class="ms-ico" id="repoAccountIcon"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M3 10h18"/></svg></span>
+                <span id="repoAccountLabel">All accounts</span>
+                <svg class="caret" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+              <div class="multiselect-menu" id="repoAccountMenu" role="menu"></div>
+            </div>
+            <div class="multiselect" id="repoTagSelect" hidden>
+              <button class="multiselect-btn" id="repoTagBtn" type="button" aria-haspopup="true" aria-expanded="false">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4l8.2 8.2a2 2 0 0 0 2.8 0l6.8-6.8a2 2 0 0 0 0-2.8Z"/><circle cx="7" cy="7" r="1.2" fill="currentColor"/></svg>
+                <span id="repoTagLabel">All tags</span>
+                <svg class="caret" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+              <div class="multiselect-menu" id="repoTagMenu" role="menu"></div>
+            </div>
+            <button class="btn btn-ghost" id="addRepoBtn">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/><line x1="12" y1="10" x2="12" y2="16"/><line x1="9" y1="13" x2="15" y2="13"/></svg>
+              Add existing
+            </button>
+            <button class="btn btn-primary" id="cloneBtn">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+              Clone repository
+            </button>
+          </div>
+        </header>
+
+        <div class="repo-list" id="repoGrid"></div>
+      </section>
+
+      <!-- ===== PULL REQUESTS PAGE ===== -->
+      <section class="page" id="page-pull-requests">
+        <header class="page-head">
+          <div>
+            <h1>Pull Requests</h1>
+            <p class="page-desc">Track open and draft pull requests across your repositories.</p>
+          </div>
+          <div class="page-actions">
+            <div class="search">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+              <input type="text" placeholder="Search pull requests…" id="prSearch" />
+            </div>
+            <div class="multiselect" id="prRepoSelect">
+              <button class="multiselect-btn" id="prRepoBtn" type="button" aria-haspopup="true" aria-expanded="false">
+                <span class="ms-ico" id="prRepoIcon"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6a2 2 0 0 1 2-2h14v16H5a2 2 0 0 1-2-2Z"/><path d="M19 16H5a2 2 0 0 0-2 2"/></svg></span>
+                <span id="prRepoLabel">All watched repos</span>
+                <svg class="caret" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+              <div class="multiselect-menu" id="prRepoMenu" role="menu"></div>
+            </div>
+            <div class="seg" id="prFilter">
+              <button class="seg-btn active" data-filter="all">All</button>
+              <button class="seg-btn" data-filter="open">Open</button>
+              <button class="seg-btn" data-filter="draft">Draft</button>
+            </div>
+          </div>
+        </header>
+
+        <div class="pr-list" id="prList"></div>
+      </section>
+
+      <!-- ===== APP CENTER PAGE ===== -->
+      <section class="page" id="page-app-center">
+        <header class="page-head">
+          <div>
+            <h1>App Center</h1>
+            <p class="page-desc">Build, run and monitor local applications from one place.</p>
+          </div>
+          <div class="page-actions">
+            <div class="search">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+              <input type="text" placeholder="Search applications…" id="appSearch" />
+            </div>
+            <div class="seg" id="appFilter">
+              <button class="seg-btn active" data-appfilter="all">All</button>
+              <button class="seg-btn" data-appfilter="running">Running</button>
+              <button class="seg-btn" data-appfilter="stopped">Stopped</button>
+            </div>
+            <button class="btn btn-primary" id="newAppBtn">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+              New application
+            </button>
+          </div>
+        </header>
+
+        <div class="app-list" id="appList"></div>
+      </section>
+
+      <!-- ===== ACCOUNTS PAGE ===== -->
+      <section class="page" id="page-accounts">
+        <header class="page-head">
+          <div>
+            <h1>Accounts</h1>
+            <p class="page-desc">Connect GitHub and Azure DevOps so pull requests can load for your watched repositories.</p>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-primary" id="addAccountBtn">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+              Add account
+            </button>
+          </div>
+        </header>
+
+        <div class="account-list" id="accountList"></div>
+      </section>
+    </main>
+  </div>
+
+  <!-- ============ MODAL ============ -->
+  <div class="modal-overlay" id="modalOverlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-head">
+        <h2 class="modal-title" id="modalTitle"></h2>
+        <button class="btn btn-icon modal-close" id="modalClose" type="button" title="Close" aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="modal-body" id="modalBody"></div>
+      <div class="modal-foot" id="modalFoot"></div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

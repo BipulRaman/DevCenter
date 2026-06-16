@@ -1,0 +1,38 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "DevCenter: Dev (hot reload)",
+      "type": "shell",
+      "command": "cargo tauri dev",
+      "options": { "cwd": "${workspaceFolder}/app" },
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "rust",
+        "fileLocation": ["relative", "${workspaceFolder}/app/src-tauri"],
+        "pattern": {
+          "regexp": "^(error|warning)(?:\\[(.*?)\\])?: (.*)$",
+          "severity": 1,
+          "code": 2,
+          "message": 3
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "Compiling|Running BeforeDevCommand",
+          "endsPattern": "Running `target|Finished|app listening|Built application"
+        }
+      },
+      "group": { "kind": "build", "isDefault": true },
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
+    },
+    {
+      "label": "DevCenter: Build installer (NSIS)",
+      "type": "shell",
+      "command": "cargo tauri build --bundles nsis",
+      "options": { "cwd": "${workspaceFolder}/app" },
+      "problemMatcher": ["$rustc"],
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    }
+  ]
+}

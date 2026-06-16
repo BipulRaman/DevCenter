@@ -1,0 +1,1942 @@
+// ============ DevCenter — desktop UI ============
+
+// Bridge to the Rust backend (window.DevCenter, from js/api.js).
+// In a plain browser hasBackend === false; data simply stays empty.
+const DC = window.DevCenter;
+
+// ---------- Live data (populated by the backend in the desktop app) ----------
+let repos = [];
+let apps = [];
+let pulls = [];
+
+// ---------- Icons ----------
+const ICON = {
+  branch: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>',
+  folder: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>',
+  repo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6a2 2 0 0 1 2-2h14v16H5a2 2 0 0 1-2-2Z"/><path d="M19 16H5a2 2 0 0 0-2 2"/></svg>',
+  sync: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>',
+  terminal: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>',
+  play: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>',
+  stop: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>',
+  logs: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 2.5 2L7 13"/><line x1="12.5" y1="13" x2="16" y2="13"/></svg>',
+  up: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>',
+  down: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>',
+  pr: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="18" r="3"/><path d="M6 9v6"/><path d="M18 15v-2a3 3 0 0 0-3-3H9"/><path d="M12 7l-3 3 3 3"/></svg>',
+  merge: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/></svg>',
+  comment: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"/></svg>',
+  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
+  clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>',
+  changes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>',
+  eye: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>',
+  eyeOff: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.9 4.2A9.1 9.1 0 0 1 12 4c6.5 0 10 7 10 7a13.3 13.3 0 0 1-2.2 3M6.6 6.6A13.3 13.3 0 0 0 2 11s3.5 7 10 7a9 9 0 0 0 4-1M3 3l18 18"/></svg>',
+  caret: '<svg class="chip-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>',
+  dot: '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="12" r="5"/></svg>',
+  github: '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.3.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.7 1.3 3.4 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.8 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11.4 11.4 0 0 1 6 0C17 4.7 18 5 18 5c.6 1.7.2 2.9.1 3.2.8.8 1.2 1.8 1.2 3.1 0 4.5-2.7 5.5-5.3 5.8.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6 4.6-1.5 7.9-5.8 7.9-10.9C23.5 5.7 18.3.5 12 .5z"/></svg>',
+  azure: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.2 8c-2 0-3.2 1.5-4.2 3s-2 3-3.8 3a3 3 0 0 1 0-6c1.8 0 2.8 1.5 3.8 3s2.2 3 4.2 3a3 3 0 0 0 0-6Z"/></svg>',
+  key: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>',
+  trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
+  external: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>',
+  tag: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4l8.2 8.2a2 2 0 0 0 2.8 0l6.8-6.8a2 2 0 0 0 0-2.8Z"/><circle cx="7" cy="7" r="1.2" fill="currentColor"/></svg>',
+  x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>',
+  pencil: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
+  more: '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>',
+  grip: '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>',
+};
+
+// ---------- Navigation ----------
+const navItems = document.querySelectorAll(".nav-item[data-page]");
+const pages = document.querySelectorAll(".page");
+
+navItems.forEach((item) => {
+  item.addEventListener("click", () => {
+    const page = item.dataset.page;
+    navItems.forEach((n) => n.classList.toggle("active", n === item));
+    pages.forEach((p) => p.classList.toggle("active", p.id === `page-${page}`));
+  });
+});
+
+// ---------- Theme toggle ----------
+document.getElementById("themeToggle").addEventListener("click", () => {
+  const root = document.documentElement;
+  const next = root.getAttribute("data-theme") === "light" ? "dark" : "light";
+  root.setAttribute("data-theme", next);
+});
+
+// ---------- Git Board render ----------
+
+// Derive the "account" a repo belongs to from its remote: the GitHub owner or
+// the Azure DevOps organization. Returns null for repos with no usable remote.
+function repoAccount(r) {
+  const segs = (r.remote || "").split("/").filter(Boolean);
+  if (r.provider === "github") {
+    const owner = segs[1] || "";
+    return owner ? { key: "github:" + owner.toLowerCase(), label: owner, provider: "github" } : null;
+  }
+  if (r.provider === "azure") {
+    const host = segs[0] || "";
+    const org = host.includes(".visualstudio.com") ? host.replace(".visualstudio.com", "") : segs[1] || "";
+    return org ? { key: "azure:" + org.toLowerCase(), label: org, provider: "azure" } : null;
+  }
+  const host = segs[0] || "";
+  return host ? { key: "other:" + host.toLowerCase(), label: host, provider: "other" } : null;
+}
+
+let repoAccountFilter = new Set(); // selected account keys; empty = all
+
+function renderAccountFilter() {
+  const select = document.getElementById("repoAccountSelect");
+  const menu = document.getElementById("repoAccountMenu");
+  const label = document.getElementById("repoAccountLabel");
+  if (!select || !menu) return;
+  const map = new Map(); // key -> { label, provider, count }
+  repos.forEach((r) => {
+    const a = repoAccount(r);
+    if (!a) return;
+    const e = map.get(a.key) || { label: a.label, provider: a.provider, count: 0 };
+    e.count++;
+    map.set(a.key, e);
+  });
+  if (map.size === 0) {
+    select.hidden = true;
+    repoAccountFilter.clear();
+    return;
+  }
+  select.hidden = false;
+  // Drop any selected accounts that no longer exist.
+  repoAccountFilter = new Set([...repoAccountFilter].filter((k) => map.has(k)));
+  const keys = [...map.keys()].sort((x, y) => map.get(x).label.localeCompare(map.get(y).label));
+  const icon = (p) => (p === "github" ? ICON.github : p === "azure" ? ICON.azure : ICON.repo);
+
+  menu.innerHTML =
+    `<label class="multiselect-opt all">
+       <input type="checkbox" id="repoAccountAll" ${repoAccountFilter.size === 0 ? "checked" : ""} />
+       <span>All accounts</span>
+     </label>
+     <div class="multiselect-sep"></div>` +
+    keys
+      .map((k) => {
+        const e = map.get(k);
+        return `<label class="multiselect-opt">
+          <input type="checkbox" value="${escapeHtml(k)}" ${repoAccountFilter.has(k) ? "checked" : ""} />
+          <span class="multiselect-ico">${icon(e.provider)}</span>
+          <span>${escapeHtml(e.label)}</span>
+          <span class="multiselect-count">${e.count}</span>
+        </label>`;
+      })
+      .join("");
+
+  if (repoAccountFilter.size === 0) label.textContent = "All accounts";
+  else if (repoAccountFilter.size === 1) label.textContent = map.get([...repoAccountFilter][0])?.label || "1 account";
+  else label.textContent = `${repoAccountFilter.size} accounts`;
+
+  // Show the provider icon on the button when exactly one account is selected,
+  // otherwise the default "accounts" glyph.
+  const iconHost = document.getElementById("repoAccountIcon");
+  if (iconHost) {
+    const DEFAULT_ACCT_ICON =
+      '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M3 10h18"/></svg>';
+    if (repoAccountFilter.size === 1) {
+      iconHost.innerHTML = icon(map.get([...repoAccountFilter][0])?.provider);
+    } else {
+      iconHost.innerHTML = DEFAULT_ACCT_ICON;
+    }
+  }
+
+  const allBox = document.getElementById("repoAccountAll");
+  if (allBox) {
+    allBox.addEventListener("change", () => {
+      repoAccountFilter.clear();
+      renderRepos(document.getElementById("repoSearch").value || "");
+    });
+  }
+  menu.querySelectorAll('input[type="checkbox"][value]').forEach((box) => {
+    box.addEventListener("change", () => {
+      if (box.checked) repoAccountFilter.add(box.value);
+      else repoAccountFilter.delete(box.value);
+      renderRepos(document.getElementById("repoSearch").value || "");
+    });
+  });
+}
+
+let repoTagFilter = new Set(); // selected tags; empty = all
+
+function renderRepos(filter = "") {
+  if (typeof Dropdown !== "undefined") Dropdown.close();
+  const f = filter.toLowerCase();
+  const list = repos.filter((r) => {
+    const tags = r.tags || [];
+    const matchText =
+      r.name.toLowerCase().includes(f) ||
+      r.remote.toLowerCase().includes(f) ||
+      tags.some((t) => t.toLowerCase().includes(f));
+    const matchTag = repoTagFilter.size === 0 || tags.some((t) => repoTagFilter.has(t));
+    const acct = repoAccount(r);
+    const matchAcct = repoAccountFilter.size === 0 || (acct && repoAccountFilter.has(acct.key));
+    return matchText && matchTag && matchAcct;
+  });
+  renderAccountFilter();
+  renderTagFilter();
+  document.getElementById("repoGrid").innerHTML = list
+    .map((r) => {
+      const i = repos.indexOf(r);
+      const statusFlag =
+        r.status === "dirty"
+          ? `<span class="repo-flag dirty" title="Uncommitted changes">${ICON.dot}</span>`
+          : `<span class="repo-flag clean" title="Clean">${ICON.check}</span>`;
+      const ahead = r.ahead ? `<span class="chip">${ICON.up}${r.ahead} ahead</span>` : "";
+      const behind = r.behind ? `<span class="chip">${ICON.down}${r.behind} behind</span>` : "";
+      const dotClass = r.status === "dirty" ? "error" : "running";
+      const watchedFlag = r.watched ? `<span class="repo-flag watching" title="Watching PRs">${ICON.eye}</span>` : "";
+      const tagChips = (r.tags || [])
+        .map((t) => `<span class="chip tag-chip">${ICON.tag}${escapeHtml(t)}</span>`)
+        .join("");
+      const watchBtn = r.watched
+        ? `<button class="btn btn-ghost btn-sm watching" data-watch="${i}" title="Stop watching PRs">${ICON.eye}Watching</button>`
+        : `<button class="btn btn-ghost btn-sm" data-watch="${i}" title="Watch this repo's PRs">${ICON.eyeOff}Watch PRs</button>`;
+      const branchChip =
+        DC && DC.hasBackend
+          ? `<button class="chip branch switchable" data-branch="${i}" title="Switch branch">${ICON.branch}${r.branch}${ICON.caret}</button>`
+          : `<span class="chip branch">${ICON.branch}${r.branch}</span>`;
+      return `
+      <div class="repo-row ${dotClass}">
+        <div class="repo-icon">${ICON.repo}</div>
+        <div class="repo-main">
+          <div class="repo-title-row">
+            <span class="repo-name">${r.name}</span>
+            ${branchChip}
+            ${ahead}${behind}${statusFlag}${watchedFlag}${tagChips}
+          </div>
+          <div class="repo-sub">
+            <span class="repo-path">${r.path}</span>
+            <span class="repo-dot">·</span>
+            <span>${ICON.sync}Fetched ${r.lastFetch}</span>
+          </div>
+        </div>
+        <div class="repo-actions">
+          ${watchBtn}
+          <button class="btn btn-ghost btn-sm" data-fetch="${i}">${ICON.sync}Fetch</button>
+          <button class="btn btn-icon btn-sm" data-menu="${i}" title="More actions">${ICON.more}</button>
+        </div>
+      </div>`;
+    })
+    .join("");
+  if (!list.length)
+    document.getElementById("repoGrid").innerHTML = empty(
+      f || repoTagFilter.size || repoAccountFilter.size
+        ? "No repositories match your filters."
+        : "No repositories yet. Clone or add an existing one to get started."
+    );
+
+  // Scope every row-button query to the repo grid so they never bind to App
+  // Center kebabs, which also use [data-menu]. A document-wide query here would
+  // cross-wire the two pages' menus.
+  const grid = document.getElementById("repoGrid");
+
+  grid.querySelectorAll("[data-watch]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const idx = Number(btn.dataset.watch);
+      repos[idx].watched = !repos[idx].watched;
+      if (DC && DC.hasBackend) DC.setWatched(repos[idx].id, repos[idx].watched).catch((e) => console.error("setWatched failed", e));
+      renderRepos(document.getElementById("repoSearch").value);
+      refreshPrRepoFilter();
+      renderPrStats();
+      renderPulls(document.getElementById("prSearch").value);
+      if (DC && DC.hasBackend) hydratePulls();
+    });
+  });
+
+  // Kebab menu — Add tag, Open folder, Terminal, Remove.
+  const removeRepo = async (r) => {
+    const ok = await Modal.confirm({
+      title: "Remove repository",
+      message: `Remove “${r.name}” from DevCenter? This only removes it from the list — the files on disk are left untouched.`,
+      confirmText: "Remove",
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      if (DC && DC.hasBackend) await DC.removeRepo(r.id);
+      repos = repos.filter((x) => x.id !== r.id);
+      rerenderGit();
+      if (DC && DC.hasBackend) hydratePulls();
+    } catch (e) {
+      console.error("removeRepo failed", e);
+      await Modal.alert({ title: "Couldn't remove repository", message: String(e) });
+    }
+  };
+  grid.querySelectorAll("[data-menu]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (Dropdown.isOpenFor(btn)) { Dropdown.close(); return; }
+      const r = repos[Number(btn.dataset.menu)];
+      const items = [
+        { label: "Edit tags", icon: ICON.tag, onClick: () => openTagEditor(r) },
+      ];
+      if (DC && DC.hasBackend) {
+        items.push(
+          { label: "Open folder", icon: ICON.folder, onClick: () => DC.openPath(r.path).catch((e) => console.error("openPath failed", e)) },
+          { label: "Open terminal", icon: ICON.terminal, onClick: () => DC.openTerminal(r.path).catch((e) => console.error("openTerminal failed", e)) }
+        );
+      }
+      items.push({ label: "Remove from list", icon: ICON.trash, danger: true, onClick: () => removeRepo(r) });
+      Dropdown.menu(btn, items);
+    });
+  });
+
+  // Fetch (desktop only) — pulls from the remote, then refreshes the row
+  grid.querySelectorAll("[data-fetch]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      if (!DC || !DC.hasBackend) return;
+      const r = repos[Number(btn.dataset.fetch)];
+      btn.disabled = true;
+      btn.innerHTML = `<span class="spin">${ICON.sync}</span>Fetching…`;
+      try {
+        const updated = await DC.fetchRepo(r.id);
+        const at = repos.findIndex((x) => x.id === updated.id);
+        if (at >= 0) repos[at] = updated;
+        renderRepos(document.getElementById("repoSearch").value);
+      } catch (e) {
+        console.error("fetchRepo failed", e);
+        await Modal.alert({ title: "Fetch failed", message: String(e) });
+        btn.disabled = false;
+        btn.innerHTML = `${ICON.sync}Fetch`;
+      }
+    });
+  });
+
+  // Switch branch (desktop only) — click the branch chip to open an anchored dropdown
+  grid.querySelectorAll("[data-branch]").forEach((chip) => {
+    chip.addEventListener("click", async () => {
+      if (!DC || !DC.hasBackend || chip.classList.contains("loading")) return;
+      if (Dropdown.isOpenFor(chip)) { Dropdown.close(); return; }
+      const r = repos[Number(chip.dataset.branch)];
+      let branches;
+      chip.classList.add("loading");
+      try {
+        branches = await DC.listBranches(r.id);
+      } catch (e) {
+        console.error("listBranches failed", e);
+        await Modal.alert({ title: "Couldn't load branches", message: String(e) });
+        chip.classList.remove("loading");
+        return;
+      }
+      chip.classList.remove("loading");
+      Dropdown.open(chip, {
+        header: "Switch branch",
+        options: branches,
+        current: r.branch,
+        search: true,
+        searchPlaceholder: "Filter branches…",
+        emptyText: "No local branches.",
+        onSelect: async (target) => {
+          try {
+            const updated = await DC.checkoutBranch(r.id, target);
+            const at = repos.findIndex((x) => x.id === updated.id);
+            if (at >= 0) repos[at] = updated;
+            renderRepos(document.getElementById("repoSearch").value);
+          } catch (e) {
+            console.error("checkout failed", e);
+            await Modal.alert({ title: "Switch failed", message: String(e) });
+          }
+        },
+      });
+    });
+  });
+}
+
+// ---------- App Center render ----------
+let appPresets = [];
+
+const SERVE_LABELS = { command: "Command", static: "Static", script: "Script", apimock: "API Mock" };
+
+function appRunLine(a) {
+  if (a.serveMode === "command") return (a.commands || []).map((s) => s.trim()).filter(Boolean).slice(-1)[0] || "—";
+  if (a.serveMode === "static") return a.staticDir || "./";
+  if (a.serveMode === "script") return a.scriptFile || "—";
+  if (a.serveMode === "apimock") return a.specFile || "—";
+  return "";
+}
+
+// App summary panels were removed; kept as a no-op so callers stay harmless.
+function renderAppStats() {}
+
+let appStatusFilter = "all"; // "all" | "running" | "stopped"
+
+function renderApps(filter = "") {
+  // Re-rendering replaces the rows; close any open kebab menu first so it can't
+  // be orphaned (its anchor button is about to be removed from the DOM).
+  if (typeof Dropdown !== "undefined") Dropdown.close();
+  const f = filter.toLowerCase();
+  const list = apps.filter((a) => {
+    const status = a.status || "stopped";
+    const matchText =
+      a.name.toLowerCase().includes(f) || (a.appType || "").toLowerCase().includes(f) || (a.serveMode || "").includes(f);
+    const matchStatus =
+      appStatusFilter === "all" ||
+      (appStatusFilter === "running" && (status === "running" || status === "building")) ||
+      (appStatusFilter === "stopped" && status !== "running" && status !== "building");
+    return matchText && matchStatus;
+  });
+  document.getElementById("appList").innerHTML = list
+    .map((a) => {
+      const status = a.status || "stopped";
+      const running = status === "running";
+      const building = status === "building";
+      const statusLabel = { running: "Running", building: "Building", error: "Error" }[status] || "Stopped";
+      const portBadge = a.port
+        ? running
+          ? `<span class="port-badge link" data-openurl="http://localhost:${a.port}">Port <b>${a.port}</b></span>`
+          : `<span class="port-badge">Port <b>${a.port}</b></span>`
+        : "";
+      const meta = [];
+      if (running && a.uptime) meta.push(escapeHtml(a.uptime));
+      const control = building
+        ? `<button class="btn btn-ghost btn-sm" data-stop="${a.id}"><span class="spin">${ICON.sync}</span>Building…</button>`
+        : running
+        ? `<button class="btn btn-ghost btn-sm" data-stop="${a.id}">${ICON.stop}Stop</button>
+           <button class="btn btn-icon btn-sm" data-restart="${a.id}" title="Restart">${ICON.sync}</button>`
+        : `<button class="btn btn-start btn-sm" data-start="${a.id}">${ICON.play}Start</button>`;
+      return `
+      <div class="app-row ${status}" data-row="${a.id}">
+        <span class="app-drag" title="Drag to reorder">${ICON.grip}</span>
+        <span class="app-status-dot ${status}"></span>
+        <div class="app-main">
+          <div class="app-title-row">
+            <span class="app-name">${escapeHtml(a.name)}</span>
+            <span class="app-state ${status}">${statusLabel}</span>
+          </div>
+          <div class="app-sub">
+            ${a.appType ? `<span class="app-type-label">${escapeHtml(a.appType)}</span>` : ""}
+            ${portBadge}
+            <span class="app-path" title="${escapeHtml(a.projectDir)}">${escapeHtml(a.projectDir)}</span>
+            ${meta.length ? `<span class="app-dot">·</span><span>${meta.join(" · ")}</span>` : ""}
+          </div>
+        </div>
+        <div class="app-controls">
+          ${control}
+          <button class="btn btn-icon btn-sm" data-logs="${a.id}" title="Logs">${ICON.logs}</button>
+          <button class="btn btn-icon btn-sm" data-menu="${a.id}" title="More actions">${ICON.more}</button>
+        </div>
+      </div>`;
+    })
+    .join("");
+  if (!list.length)
+    document.getElementById("appList").innerHTML = empty(
+      f || appStatusFilter !== "all"
+        ? "No applications match your filters."
+        : "No applications yet. Click “New application” to add one."
+    );
+
+  setupAppListEvents();
+}
+
+function appById(id) {
+  return apps.find((a) => String(a.id) === String(id));
+}
+
+// App Center row interactions. Listeners are attached DIRECTLY to each button
+// on every render — renderApps() rewrites #appList's innerHTML, so the buttons
+// are fresh elements each time and get fresh listeners. This mirrors the Git
+// Board rows. (A single delegated listener on the container was tried before,
+// but delegated clicks on dynamically-inserted rows can silently fail to fire
+// in WebView2, leaving the kebab/controls unresponsive.)
+function setupAppListEvents() {
+  const listEl = document.getElementById("appList");
+  if (!listEl) return;
+
+  listEl.querySelectorAll("[data-start]").forEach((btn) =>
+    btn.addEventListener("click", () => appAction("start", btn.dataset.start, btn)));
+  listEl.querySelectorAll("[data-stop]").forEach((btn) =>
+    btn.addEventListener("click", () => appAction("stop", btn.dataset.stop, btn)));
+  listEl.querySelectorAll("[data-restart]").forEach((btn) =>
+    btn.addEventListener("click", () => appAction("restart", btn.dataset.restart, btn)));
+  listEl.querySelectorAll("[data-logs]").forEach((btn) =>
+    btn.addEventListener("click", () => openAppLogs(appById(btn.dataset.logs))));
+
+  listEl.querySelectorAll("[data-openurl]").forEach((el) =>
+    el.addEventListener("click", () => {
+      if (DC && DC.hasBackend) DC.openUrl(el.dataset.openurl).catch((err) => console.error(err));
+      else window.open(el.dataset.openurl, "_blank");
+    }));
+
+  listEl.querySelectorAll("[data-menu]").forEach((btn) =>
+    btn.addEventListener("click", () => {
+      if (Dropdown.isOpenFor(btn)) { Dropdown.close(); return; }
+      const a = appById(btn.dataset.menu);
+      if (!a) return;
+      const items = [{ label: "Edit", icon: ICON.pencil, onClick: () => openAppForm(a) }];
+      if (DC && DC.hasBackend) {
+        items.push(
+          { label: "Open folder", icon: ICON.folder, onClick: () => DC.openPath(a.projectDir).catch((err) => console.error(err)) },
+          { label: "Open terminal", icon: ICON.terminal, onClick: () => DC.openTerminal(a.projectDir).catch((err) => console.error(err)) }
+        );
+      }
+      items.push({ label: "Delete", icon: ICON.trash, danger: true, onClick: () => deleteApp(a) });
+      Dropdown.menu(btn, items);
+    }));
+
+  // Pointer-based reorder via the grip handle (no HTML5 `draggable`, which is
+  // unreliable in WebView2 and can swallow sibling button clicks).
+  listEl.querySelectorAll(".app-drag").forEach((handle) =>
+    handle.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      const row = handle.closest(".app-row");
+      if (!row) return;
+      const startY = e.clientY;
+      let moved = false;
+
+      const onMove = (ev) => {
+        if (!moved && Math.abs(ev.clientY - startY) < 4) return;
+        moved = true;
+        row.classList.add("dragging");
+        const others = [...listEl.querySelectorAll(".app-row:not(.dragging)")];
+        const before = others.find((r) => {
+          const rect = r.getBoundingClientRect();
+          return ev.clientY < rect.top + rect.height / 2;
+        });
+        if (before) listEl.insertBefore(row, before);
+        else listEl.appendChild(row);
+      };
+      const onUp = async () => {
+        window.removeEventListener("pointermove", onMove, true);
+        window.removeEventListener("pointerup", onUp, true);
+        window.removeEventListener("pointercancel", onUp, true);
+        row.classList.remove("dragging");
+        if (moved) {
+          const ids = [...listEl.querySelectorAll(".app-row")].map((r) => Number(r.dataset.row));
+          apps.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
+          if (DC && DC.hasBackend) {
+            try { await DC.reorderApps(ids); } catch (err) { console.error("reorderApps failed", err); }
+          }
+        }
+      };
+      window.addEventListener("pointermove", onMove, true);
+      window.addEventListener("pointerup", onUp, true);
+      window.addEventListener("pointercancel", onUp, true);
+    }));
+}
+
+async function appAction(kind, id, btn) {
+  if (!DC || !DC.hasBackend) return;
+  if (btn) btn.disabled = true;
+  try {
+    if (kind === "start") await DC.startApp(Number(id));
+    else if (kind === "stop") await DC.stopApp(Number(id));
+    else if (kind === "restart") await DC.restartApp(Number(id));
+  } catch (e) {
+    console.error(`${kind}App failed`, e);
+    await Modal.alert({ title: "Action failed", message: String(e) });
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function deleteApp(a) {
+  if (!a) return;
+  const ok = await Modal.confirm({
+    title: "Delete application",
+    message: `Remove “${a.name}”? It will be stopped if running. This cannot be undone.`,
+    confirmText: "Delete",
+    danger: true,
+  });
+  if (!ok) return;
+  try {
+    if (DC && DC.hasBackend) await DC.deleteApp(Number(a.id));
+    apps = apps.filter((x) => x.id !== a.id);
+    renderAppStats();
+    renderApps(document.getElementById("appSearch").value || "");
+  } catch (e) {
+    await Modal.alert({ title: "Couldn't delete", message: String(e) });
+  }
+}
+
+// ---------- App Center: New/Edit form ----------
+const SERVE_MODES = [
+  { value: "command", label: "Command" },
+  { value: "static", label: "Static Folder" },
+  { value: "script", label: "Script File" },
+  { value: "apimock", label: "API Mock" },
+];
+
+async function pickFolder(title) {
+  try {
+    return await window.__TAURI__.dialog.open({ directory: true, multiple: false, title });
+  } catch (e) {
+    console.error("folder picker failed", e);
+    return null;
+  }
+}
+async function pickFile(title, filters) {
+  try {
+    return await window.__TAURI__.dialog.open({ directory: false, multiple: false, title, filters });
+  } catch (e) {
+    console.error("file picker failed", e);
+    return null;
+  }
+}
+
+function openAppForm(existing) {
+  const a = existing
+    ? JSON.parse(JSON.stringify(existing))
+    : { id: 0, name: "", appType: "", serveMode: "command", projectDir: "", commands: [], staticDir: "", scriptFile: "", specFile: "", env: [], port: null, autostart: false };
+  Modal.custom({
+    title: existing ? `Edit · ${existing.name}` : "New application",
+    wide: true,
+    render: (body, foot, close, mkBtn) => {
+      const presetOpts = ['<option value="">Custom</option>']
+        .concat(appPresets.map((p) => `<option value="${p.value}" ${a.appType === p.value ? "selected" : ""}>${escapeHtml(p.label)}</option>`))
+        .join("");
+      const modeOpts = SERVE_MODES.map((m) => `<option value="${m.value}" ${a.serveMode === m.value ? "selected" : ""}>${m.label}</option>`).join("");
+      body.innerHTML = `
+        <div class="form-grid">
+          <div class="form-row"><label class="form-label">Name</label>
+            <input class="modal-input" id="afName" value="${escapeHtml(a.name)}" placeholder="My App" /></div>
+          <div class="form-row"><label class="form-label">Type (preset)</label>
+            <select class="modal-input" id="afType">${presetOpts}</select></div>
+        </div>
+        <div class="form-row"><label class="form-label">Project directory</label>
+          <div class="input-row"><input class="modal-input" id="afDir" value="${escapeHtml(a.projectDir)}" placeholder="C:\\path\\to\\project" spellcheck="false" />
+            <button class="btn btn-ghost btn-sm" id="afDirBrowse">${ICON.folder}Browse</button></div></div>
+        <div class="form-grid">
+          <div class="form-row"><label class="form-label">Serve mode</label>
+            <select class="modal-input" id="afMode">${modeOpts}</select></div>
+          <div class="form-row"><label class="form-label">Port</label>
+            <input class="modal-input" id="afPort" type="number" min="1" max="65535" value="${a.port ?? ""}" placeholder="3000" /></div>
+        </div>
+        <div class="form-row" id="afCmdRow"><label class="form-label" id="afCmdLabel">Build &amp; run commands</label>
+          <textarea class="modal-input" id="afCmds" rows="4" spellcheck="false" placeholder="npm install&#10;npm run dev">${escapeHtml((a.commands || []).join("\n"))}</textarea>
+          <div class="form-hint" id="afCmdHint"></div></div>
+        <div class="form-row" id="afStaticRow"><label class="form-label">Static folder (relative to project)</label>
+          <input class="modal-input" id="afStatic" value="${escapeHtml(a.staticDir || "")}" placeholder="./dist" spellcheck="false" /></div>
+        <div class="form-row" id="afScriptRow"><label class="form-label">Script file</label>
+          <div class="input-row"><input class="modal-input" id="afScript" value="${escapeHtml(a.scriptFile || "")}" placeholder="run.ps1 / start.sh" spellcheck="false" />
+            <button class="btn btn-ghost btn-sm" id="afScriptBrowse">${ICON.folder}Browse</button></div></div>
+        <div class="form-row" id="afSpecRow"><label class="form-label">OpenAPI / Swagger JSON</label>
+          <div class="input-row"><input class="modal-input" id="afSpec" value="${escapeHtml(a.specFile || "")}" placeholder="openapi.json" spellcheck="false" />
+            <button class="btn btn-ghost btn-sm" id="afSpecBrowse">${ICON.folder}Browse</button></div></div>
+        <div class="form-row"><label class="form-label">Environment variables (KEY=VALUE per line)</label>
+          <textarea class="modal-input" id="afEnv" rows="2" spellcheck="false" placeholder="NODE_ENV=development">${escapeHtml((a.env || []).map(([k, v]) => `${k}=${v}`).join("\n"))}</textarea></div>
+        <label class="form-check"><input type="checkbox" id="afAuto" ${a.autostart ? "checked" : ""} /> <span>Start automatically when DevCenter launches</span></label>
+        <div class="modal-error" id="afErr"></div>`;
+
+      const $ = (id) => body.querySelector(id);
+      const applyMode = () => {
+        const mode = $("#afMode").value;
+        $("#afCmdRow").style.display = mode === "apimock" || mode === "script" ? "none" : "";
+        $("#afStaticRow").style.display = mode === "static" ? "" : "none";
+        $("#afScriptRow").style.display = mode === "script" ? "" : "none";
+        $("#afSpecRow").style.display = mode === "apimock" ? "" : "none";
+        $("#afCmdLabel").textContent = mode === "command" ? "Build & run commands" : "Build commands";
+        $("#afCmdHint").textContent = mode === "command" ? "Run in order; the last line is the long-running run command." : "Optional build steps, run in order before serving.";
+      };
+      applyMode();
+      $("#afMode").addEventListener("change", applyMode);
+
+      // Preset fills defaults.
+      $("#afType").addEventListener("change", () => {
+        const p = appPresets.find((x) => x.value === $("#afType").value);
+        if (!p) return;
+        $("#afMode").value = p.serveMode;
+        $("#afPort").value = p.port || "";
+        $("#afCmds").value = p.commands || "";
+        $("#afEnv").value = p.env || "";
+        $("#afStatic").value = p.staticDir || "";
+        if (!$("#afName").value.trim()) $("#afName").value = p.label;
+        applyMode();
+      });
+
+      $("#afDirBrowse").addEventListener("click", async () => {
+        const d = await pickFolder("Choose project folder");
+        if (d) $("#afDir").value = d;
+      });
+      $("#afScriptBrowse").addEventListener("click", async () => {
+        const d = await pickFile("Choose script file", [{ name: "Scripts", extensions: ["ps1", "bat", "cmd", "sh", "bash"] }]);
+        if (d) $("#afScript").value = d;
+      });
+      $("#afSpecBrowse").addEventListener("click", async () => {
+        const d = await pickFile("Choose OpenAPI/Swagger JSON", [{ name: "JSON", extensions: ["json"] }]);
+        if (d) $("#afSpec").value = d;
+      });
+
+      const cancel = mkBtn("btn-ghost", "Cancel");
+      cancel.addEventListener("click", () => close(null));
+      const save = mkBtn("btn-primary", existing ? "Save" : "Create");
+      save.addEventListener("click", async () => {
+        const mode = $("#afMode").value;
+        const def = {
+          id: a.id || 0,
+          name: $("#afName").value.trim(),
+          appType: $("#afType").value,
+          serveMode: mode,
+          projectDir: $("#afDir").value.trim(),
+          commands: $("#afCmds").value.split("\n").map((s) => s.trim()).filter(Boolean),
+          staticDir: $("#afStatic").value.trim() || null,
+          scriptFile: $("#afScript").value.trim() || null,
+          specFile: $("#afSpec").value.trim() || null,
+          env: $("#afEnv").value.split("\n").map((l) => l.trim()).filter(Boolean).map((l) => { const i = l.indexOf("="); return i < 0 ? [l, ""] : [l.slice(0, i).trim(), l.slice(i + 1)]; }),
+          port: $("#afPort").value ? Number($("#afPort").value) : null,
+          autostart: $("#afAuto").checked,
+          order: a.order || 0,
+        };
+        const err = $("#afErr");
+        if (!def.name) return (err.textContent = "Enter a name.");
+        if (!def.projectDir && mode !== "apimock") return (err.textContent = "Choose a project directory.");
+        if (mode === "command" && !def.commands.length) return (err.textContent = "Add at least a run command.");
+        if (mode === "script" && !def.scriptFile) return (err.textContent = "Choose a script file.");
+        if (mode === "apimock" && !def.specFile) return (err.textContent = "Choose an OpenAPI/Swagger file.");
+        err.textContent = "";
+        save.disabled = true;
+        save.textContent = "Saving…";
+        try {
+          let saved;
+          if (DC && DC.hasBackend) saved = existing ? await DC.updateApp(def) : await DC.createApp(def);
+          else saved = { ...def, id: def.id || Date.now(), status: "stopped", uptime: "" };
+          const at = apps.findIndex((x) => x.id === saved.id);
+          if (at >= 0) apps[at] = saved;
+          else apps.push(saved);
+          close(true);
+          renderAppStats();
+          renderApps(document.getElementById("appSearch").value || "");
+        } catch (e) {
+          err.textContent = String(e);
+          save.disabled = false;
+          save.textContent = existing ? "Save" : "Create";
+        }
+      });
+      foot.append(cancel, save);
+    },
+  });
+}
+
+// ---------- App Center: live log viewer ----------
+let appLogUnsub = null;
+
+function openAppLogs(a) {
+  if (!a) return;
+  Modal.custom({
+    title: `Logs · ${a.name}`,
+    wide: true,
+    render: (body, foot, close, mkBtn) => {
+      body.innerHTML = `
+        <div class="log-toolbar">
+          <div class="search log-search"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input id="logFilter" placeholder="Filter…" /></div>
+          <label class="form-check inline"><input type="checkbox" id="logFollow" checked /> <span>Follow</span></label>
+        </div>
+        <pre class="log-view" id="logView"></pre>`;
+      const view = body.querySelector("#logView");
+      const filterEl = body.querySelector("#logFilter");
+      const followEl = body.querySelector("#logFollow");
+      let lines = [];
+
+      const lineHtml = (l) => {
+        const cls = l.level === "error" ? "log-err" : l.stream === "system" ? "log-sys" : "log-out";
+        return `<span class="log-line ${cls}"><span class="log-ts">${l.ts}</span>${escapeHtml(l.line)}</span>`;
+      };
+      const draw = () => {
+        const q = filterEl.value.toLowerCase();
+        const shown = q ? lines.filter((l) => l.line.toLowerCase().includes(q)) : lines;
+        view.innerHTML = shown.map(lineHtml).join("\n");
+        if (followEl.checked) view.scrollTop = view.scrollHeight;
+      };
+      filterEl.addEventListener("input", draw);
+
+      // Initial snapshot.
+      if (DC && DC.hasBackend) {
+        DC.appLogs(Number(a.id)).then((snap) => { lines = snap || []; draw(); }).catch((e) => console.error(e));
+        // Live tail.
+        DC.onAppLog((l) => {
+          if (String(l.id) !== String(a.id)) return;
+          lines.push(l);
+          if (lines.length > 2000) lines.shift();
+          draw();
+        }).then((un) => { appLogUnsub = un; });
+      } else {
+        view.textContent = "Logs stream in the desktop app.";
+      }
+
+      const clear = mkBtn("btn-ghost", "Clear");
+      clear.addEventListener("click", () => { lines = []; draw(); });
+      const done = mkBtn("btn-primary", "Close");
+      const stop = () => { if (appLogUnsub) { appLogUnsub(); appLogUnsub = null; } close(true); };
+      done.addEventListener("click", stop);
+      foot.append(clear, done);
+    },
+  });
+}
+
+// ---------- Helpers ----------
+function stat(label, value, color) {
+  return `<div class="stat" style="--stat-color:${color}">
+    <div class="stat-label"><span class="stat-dot" style="background:${color}"></span>${label}</div>
+    <div class="stat-value">${value}</div>
+  </div>`;
+}
+function empty(msg) {
+  return `<div style="grid-column:1/-1;text-align:center;color:var(--text-faint);padding:40px 0;">${msg}</div>`;
+}
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+// ---------- Repo tags: filter bar + editor ----------
+function renderTagFilter() {
+  const select = document.getElementById("repoTagSelect");
+  const menu = document.getElementById("repoTagMenu");
+  const label = document.getElementById("repoTagLabel");
+  if (!select || !menu) return;
+  // Aggregate tags across all repos with counts.
+  const counts = new Map();
+  repos.forEach((r) => (r.tags || []).forEach((t) => counts.set(t, (counts.get(t) || 0) + 1)));
+  if (!counts.size) {
+    select.hidden = true;
+    repoTagFilter.clear();
+    return;
+  }
+  select.hidden = false;
+  const tags = [...counts.keys()].sort((a, b) => a.localeCompare(b));
+  // Drop any selected tags that no longer exist.
+  repoTagFilter = new Set([...repoTagFilter].filter((t) => counts.has(t)));
+
+  menu.innerHTML =
+    `<label class="multiselect-opt all">
+       <input type="checkbox" id="repoTagAll" ${repoTagFilter.size === 0 ? "checked" : ""} />
+       <span>All tags</span>
+     </label>
+     <div class="multiselect-sep"></div>` +
+    tags
+      .map(
+        (t) => `<label class="multiselect-opt">
+          <input type="checkbox" value="${escapeHtml(t)}" ${repoTagFilter.has(t) ? "checked" : ""} />
+          <span>${escapeHtml(t)}</span>
+          <span class="multiselect-count">${counts.get(t)}</span>
+        </label>`
+      )
+      .join("");
+
+  // Button label reflects the selection.
+  if (repoTagFilter.size === 0) label.textContent = "All tags";
+  else if (repoTagFilter.size === 1) label.textContent = [...repoTagFilter][0];
+  else label.textContent = `${repoTagFilter.size} tags`;
+
+  const allBox = document.getElementById("repoTagAll");
+  if (allBox) {
+    allBox.addEventListener("change", () => {
+      repoTagFilter.clear();
+      renderRepos(document.getElementById("repoSearch").value || "");
+    });
+  }
+  menu.querySelectorAll('input[type="checkbox"][value]').forEach((box) => {
+    box.addEventListener("change", () => {
+      if (box.checked) repoTagFilter.add(box.value);
+      else repoTagFilter.delete(box.value);
+      renderRepos(document.getElementById("repoSearch").value || "");
+    });
+  });
+}
+
+function openTagEditor(repo) {
+  let tags = [...(repo.tags || [])];
+  const suggestions = [...new Set(repos.flatMap((r) => r.tags || []))].sort();
+  Modal.custom({
+    title: `Tags · ${repo.name}`,
+    render: (body, foot, close, mkBtn) => {
+      body.innerHTML = `
+        <div class="tag-edit-list" id="tagList"></div>
+        <input class="modal-input" id="tagInput" placeholder="Add a tag and press Enter" spellcheck="false" autocomplete="off" maxlength="24" />
+        <div class="tag-suggest" id="tagSuggest"></div>
+        <div class="modal-error" id="tagErr"></div>`;
+      const listEl = body.querySelector("#tagList");
+      const input = body.querySelector("#tagInput");
+      const suggestEl = body.querySelector("#tagSuggest");
+
+      const drawList = () => {
+        listEl.innerHTML = tags.length
+          ? tags.map((t, i) => `<span class="tag-edit">${escapeHtml(t)}<button data-rm="${i}" title="Remove">${ICON.x}</button></span>`).join("")
+          : `<span style="color:var(--text-faint);font-size:12.5px">No tags yet.</span>`;
+        listEl.querySelectorAll("[data-rm]").forEach((b) =>
+          b.addEventListener("click", () => {
+            tags.splice(Number(b.dataset.rm), 1);
+            drawList();
+            drawSuggest();
+          })
+        );
+      };
+      const addTag = (raw) => {
+        const t = raw.trim();
+        if (!t) return;
+        if (!tags.some((x) => x.toLowerCase() === t.toLowerCase())) tags.push(t);
+        input.value = "";
+        drawList();
+        drawSuggest();
+      };
+      const drawSuggest = () => {
+        const avail = suggestions.filter((s) => !tags.some((t) => t.toLowerCase() === s.toLowerCase()));
+        suggestEl.innerHTML = avail.length
+          ? `<span class="tag-suggest-label">Existing tags</span>` + avail.map((s) => `<button data-add="${escapeHtml(s)}">${escapeHtml(s)}</button>`).join("")
+          : "";
+        suggestEl.querySelectorAll("[data-add]").forEach((b) => b.addEventListener("click", () => addTag(b.dataset.add)));
+      };
+
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          addTag(input.value);
+        } else if (e.key === "Backspace" && !input.value && tags.length) {
+          tags.pop();
+          drawList();
+          drawSuggest();
+        }
+      });
+      drawList();
+      drawSuggest();
+      setTimeout(() => input.focus(), 40);
+
+      const cancel = mkBtn("btn-ghost", "Cancel");
+      cancel.addEventListener("click", () => close(null));
+      const save = mkBtn("btn-primary", "Save");
+      save.addEventListener("click", async () => {
+        if (input.value.trim()) addTag(input.value);
+        save.disabled = true;
+        save.textContent = "Saving…";
+        try {
+          if (DC && DC.hasBackend) {
+            const updated = await DC.setRepoTags(repo.id, tags);
+            const at = repos.findIndex((x) => x.id === updated.id);
+            if (at >= 0) repos[at] = updated;
+          } else {
+            repo.tags = tags;
+          }
+          close(true);
+          renderRepos(document.getElementById("repoSearch").value || "");
+        } catch (e) {
+          console.error("setRepoTags failed", e);
+          body.querySelector("#tagErr").textContent = String(e);
+          save.disabled = false;
+          save.textContent = "Save";
+        }
+      });
+      foot.append(cancel, save);
+    },
+  });
+}
+
+// ---------- Pull Requests render ----------
+let prCurrentFilter = "all";
+let prRepoSelected = new Set(); // empty = all watched repos
+
+function watchedRepoNames() {
+  return repos.filter((r) => r.watched).map((r) => r.name);
+}
+
+function watchedPulls() {
+  const names = watchedRepoNames();
+  return pulls.filter((p) => names.includes(p.repo));
+}
+
+// PR summary panels were removed; kept as a no-op so callers stay harmless.
+function renderPrStats() {}
+
+function refreshPrRepoFilter() {
+  const menu = document.getElementById("prRepoMenu");
+  const label = document.getElementById("prRepoLabel");
+  if (!menu) return;
+  const names = watchedRepoNames();
+  // drop any selected repos that are no longer watched
+  prRepoSelected = new Set([...prRepoSelected].filter((n) => names.includes(n)));
+
+  // Map each watched repo name to its provider for icons.
+  const providerOf = (name) => {
+    const r = repos.find((x) => x.name === name);
+    return r ? r.provider : "other";
+  };
+  const icon = (p) => (p === "github" ? ICON.github : p === "azure" ? ICON.azure : ICON.repo);
+
+  if (!names.length) {
+    menu.innerHTML = `<div class="multiselect-empty">No watched repos</div>`;
+  } else {
+    menu.innerHTML =
+      `<label class="multiselect-opt all">
+         <input type="checkbox" id="prRepoAll" ${prRepoSelected.size === 0 ? "checked" : ""} />
+         <span>All watched repos</span>
+       </label>
+       <div class="multiselect-sep"></div>` +
+      names
+        .map(
+          (n) => `<label class="multiselect-opt">
+            <input type="checkbox" value="${escapeHtml(n)}" ${prRepoSelected.has(n) ? "checked" : ""} />
+            <span class="multiselect-ico">${icon(providerOf(n))}</span>
+            <span>${escapeHtml(n)}</span>
+          </label>`
+        )
+        .join("");
+  }
+
+  // label text
+  if (prRepoSelected.size === 0) label.textContent = "All watched repos";
+  else if (prRepoSelected.size === 1) label.textContent = [...prRepoSelected][0];
+  else label.textContent = `${prRepoSelected.size} repos`;
+
+  // button icon: provider glyph when exactly one repo is selected
+  const iconHost = document.getElementById("prRepoIcon");
+  if (iconHost) {
+    const DEFAULT_REPO_ICON =
+      '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6a2 2 0 0 1 2-2h14v16H5a2 2 0 0 1-2-2Z"/><path d="M19 16H5a2 2 0 0 0-2 2"/></svg>';
+    iconHost.innerHTML = prRepoSelected.size === 1 ? icon(providerOf([...prRepoSelected][0])) : DEFAULT_REPO_ICON;
+  }
+
+  // wire option checkboxes
+  const allBox = document.getElementById("prRepoAll");
+  if (allBox) {
+    allBox.addEventListener("change", () => {
+      prRepoSelected.clear();
+      refreshPrRepoFilter();
+      renderPulls(document.getElementById("prSearch").value);
+    });
+  }
+  menu.querySelectorAll('input[type="checkbox"][value]').forEach((box) => {
+    box.addEventListener("change", () => {
+      if (box.checked) prRepoSelected.add(box.value);
+      else prRepoSelected.delete(box.value);
+      refreshPrRepoFilter();
+      renderPulls(document.getElementById("prSearch").value);
+    });
+  });
+}
+
+function renderPulls(filter = "") {
+  const f = filter.toLowerCase();
+  const watchedNames = watchedRepoNames();
+  if (!watchedNames.length) {
+    document.getElementById("prList").innerHTML = empty(
+      "No repositories are being watched. Enable \u201cWatch PRs\u201d on a repo in Git Board to see its pull requests here."
+    );
+    return;
+  }
+  const list = pulls.filter((p) => {
+    const isWatched = watchedNames.includes(p.repo);
+    const matchRepo = prRepoSelected.size === 0 || prRepoSelected.has(p.repo);
+    const matchText = p.title.toLowerCase().includes(f) || p.repo.toLowerCase().includes(f) || p.author.toLowerCase().includes(f);
+    const matchStatus = prCurrentFilter === "all" || p.status === prCurrentFilter;
+    return isWatched && matchRepo && matchText && matchStatus;
+  });
+  const reviewMap = {
+    approved: { cls: "ok", icon: ICON.check, label: "Approved" },
+    changes: { cls: "danger", icon: ICON.changes, label: "Changes requested" },
+    pending: { cls: "muted", icon: ICON.clock, label: "Review pending" },
+  };
+  document.getElementById("prList").innerHTML = list
+    .map((p) => {
+      const rev = reviewMap[p.reviews];
+      const statusTag =
+        p.status === "merged"
+          ? `<span class="pr-state merged">${ICON.merge}Merged</span>`
+          : p.status === "draft"
+          ? `<span class="pr-state draft">${ICON.pr}Draft</span>`
+          : `<span class="pr-state open">${ICON.pr}Open</span>`;
+      return `
+      <div class="pr-row ${p.status}">
+        <div class="pr-icon ${p.status}">${p.status === "merged" ? ICON.merge : ICON.pr}</div>
+        <div class="pr-main">
+          <div class="pr-title-row">
+            <span class="pr-name">${p.title}</span>
+            ${statusTag}
+          </div>
+          <div class="pr-sub">
+            <span>${p.repo} #${p.id}</span>
+            <span class="repo-dot">·</span>
+            <span><code>${p.branch}</code> → <code>${p.base}</code></span>
+            <span class="repo-dot">·</span>
+            <span>by ${p.author}</span>
+            <span class="repo-dot">·</span>
+            <span>${p.updated}</span>
+          </div>
+        </div>
+        <div class="pr-meta">
+          <span class="chip review ${rev.cls}">${rev.icon}${rev.label}</span>
+          <span class="chip">${ICON.comment}${p.comments}</span>
+          <span class="pr-diff"><span class="add">+${p.additions}</span> <span class="del">−${p.deletions}</span></span>
+        </div>
+        <div class="pr-actions">
+          <button class="btn btn-ghost btn-sm" data-pr-url="${p.url}">${ICON.external}View</button>
+        </div>
+      </div>`;
+    })
+    .join("");
+  if (!list.length) document.getElementById("prList").innerHTML = empty("No pull requests match your filters.");
+
+  document.querySelectorAll("#prList [data-pr-url]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const url = btn.dataset.prUrl;
+      if (!url) return;
+      if (DC && DC.hasBackend) DC.openUrl(url).catch((e) => console.error("openUrl failed", e));
+      else window.open(url, "_blank");
+    });
+  });
+}
+
+// ---------- Wire up search ----------
+document.getElementById("repoSearch").addEventListener("input", (e) => renderRepos(e.target.value));
+document.getElementById("appSearch").addEventListener("input", (e) => renderApps(e.target.value));
+
+// App Center status filter (All / Running / Stopped)
+document.querySelectorAll("#appFilter .seg-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    appStatusFilter = btn.dataset.appfilter;
+    document.querySelectorAll("#appFilter .seg-btn").forEach((b) => b.classList.toggle("active", b === btn));
+    renderApps(document.getElementById("appSearch").value || "");
+  });
+});
+
+const prSearch = document.getElementById("prSearch");
+prSearch.addEventListener("input", (e) => renderPulls(e.target.value));
+document.querySelectorAll("#prFilter .seg-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    prCurrentFilter = btn.dataset.filter;
+    document.querySelectorAll("#prFilter .seg-btn").forEach((b) => b.classList.toggle("active", b === btn));
+    renderPulls(prSearch.value);
+  });
+});
+
+// repo multiselect dropdown open/close
+const prRepoSelect = document.getElementById("prRepoSelect");
+const prRepoBtn = document.getElementById("prRepoBtn");
+prRepoBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  const open = prRepoSelect.classList.toggle("open");
+  prRepoBtn.setAttribute("aria-expanded", open ? "true" : "false");
+});
+document.addEventListener("click", (e) => {
+  if (!prRepoSelect.contains(e.target)) {
+    prRepoSelect.classList.remove("open");
+    prRepoBtn.setAttribute("aria-expanded", "false");
+  }
+});
+
+// Git Board tag multiselect dropdown open/close
+const repoTagSelect = document.getElementById("repoTagSelect");
+const repoTagBtn = document.getElementById("repoTagBtn");
+if (repoTagBtn) {
+  repoTagBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const open = repoTagSelect.classList.toggle("open");
+    repoTagBtn.setAttribute("aria-expanded", open ? "true" : "false");
+  });
+  document.addEventListener("click", (e) => {
+    if (!repoTagSelect.contains(e.target)) {
+      repoTagSelect.classList.remove("open");
+      repoTagBtn.setAttribute("aria-expanded", "false");
+    }
+  });
+}
+
+// Git Board account multiselect dropdown open/close
+const repoAccountSelect = document.getElementById("repoAccountSelect");
+const repoAccountBtn = document.getElementById("repoAccountBtn");
+if (repoAccountBtn) {
+  repoAccountBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const open = repoAccountSelect.classList.toggle("open");
+    repoAccountBtn.setAttribute("aria-expanded", open ? "true" : "false");
+  });
+  document.addEventListener("click", (e) => {
+    if (!repoAccountSelect.contains(e.target)) {
+      repoAccountSelect.classList.remove("open");
+      repoAccountBtn.setAttribute("aria-expanded", "false");
+    }
+  });
+}
+
+// ---------- Modal dialog (replaces native prompt/alert) ----------
+const Modal = (() => {
+  const overlay = document.getElementById("modalOverlay");
+  const modalEl = overlay.querySelector(".modal");
+  const titleEl = document.getElementById("modalTitle");
+  const bodyEl = document.getElementById("modalBody");
+  const footEl = document.getElementById("modalFoot");
+  const closeBtn = document.getElementById("modalClose");
+  let settle = null;
+
+  function close(result) {
+    overlay.classList.remove("open");
+    overlay.setAttribute("aria-hidden", "true");
+    document.removeEventListener("keydown", onKey);
+    const cb = settle;
+    settle = null;
+    if (cb) cb(result);
+  }
+  function onKey(e) {
+    if (e.key === "Escape") close(null);
+  }
+  closeBtn.addEventListener("click", () => close(null));
+  overlay.addEventListener("mousedown", (e) => {
+    if (e.target === overlay) close(null);
+  });
+
+  function open(title, resolve, render, opts = {}) {
+    titleEl.textContent = title;
+    bodyEl.innerHTML = "";
+    footEl.innerHTML = "";
+    modalEl.classList.toggle("modal-wide", !!opts.wide);
+    settle = resolve;
+    render(bodyEl, footEl, close);
+    overlay.classList.add("open");
+    overlay.setAttribute("aria-hidden", "false");
+    document.addEventListener("keydown", onKey);
+  }
+
+  function mkBtn(cls, text) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "btn " + cls;
+    b.textContent = text;
+    return b;
+  }
+
+  return {
+    // Resolves to the entered string, or null if cancelled.
+    prompt({ title, label, placeholder = "", value = "", confirmText = "OK", validate }) {
+      return new Promise((resolve) => {
+        open(title, resolve, (body, foot, close) => {
+          if (label) {
+            const l = document.createElement("label");
+            l.className = "modal-label";
+            l.setAttribute("for", "modalInput");
+            l.textContent = label;
+            body.appendChild(l);
+          }
+          const input = document.createElement("input");
+          input.className = "modal-input";
+          input.id = "modalInput";
+          input.type = "text";
+          input.placeholder = placeholder;
+          input.value = value;
+          const err = document.createElement("div");
+          err.className = "modal-error";
+          body.append(input, err);
+
+          const submit = () => {
+            const v = input.value.trim();
+            const msg = validate ? validate(v) : v ? null : "This field is required.";
+            if (msg) {
+              err.textContent = msg;
+              input.focus();
+              return;
+            }
+            close(v);
+          };
+          const cancel = mkBtn("btn-ghost", "Cancel");
+          cancel.addEventListener("click", () => close(null));
+          const ok = mkBtn("btn-primary", confirmText);
+          ok.addEventListener("click", submit);
+          input.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") submit();
+          });
+          foot.append(cancel, ok);
+          setTimeout(() => input.focus(), 40);
+        });
+      });
+    },
+    // Resolves to true when dismissed.
+    alert({ title, message, confirmText = "OK" }) {
+      return new Promise((resolve) => {
+        open(title, resolve, (body, foot, close) => {
+          const p = document.createElement("p");
+          p.className = "modal-msg";
+          p.textContent = message;
+          body.appendChild(p);
+          const ok = mkBtn("btn-primary", confirmText);
+          ok.addEventListener("click", () => close(true));
+          foot.appendChild(ok);
+          setTimeout(() => ok.focus(), 40);
+        });
+      });
+    },
+    // Resolves to true if confirmed, false otherwise.
+    confirm({ title, message, confirmText = "Confirm", danger = false }) {
+      return new Promise((resolve) => {
+        open(title, resolve, (body, foot, close) => {
+          const p = document.createElement("p");
+          p.className = "modal-msg";
+          p.textContent = message;
+          body.appendChild(p);
+          const cancel = mkBtn("btn-ghost", "Cancel");
+          cancel.addEventListener("click", () => close(false));
+          const ok = mkBtn(danger ? "btn-danger" : "btn-primary", confirmText);
+          ok.addEventListener("click", () => close(true));
+          foot.append(cancel, ok);
+          setTimeout(() => ok.focus(), 40);
+        });
+      });
+    },
+    // Generic modal: `render(body, foot, close, mkBtn)` builds the content and
+    // calls `close(value)` to resolve. Resolves to whatever value is passed.
+    custom({ title, render, wide }) {
+      return new Promise((resolve) => {
+        open(title, resolve, (body, foot, close) => render(body, foot, close, mkBtn), { wide });
+      });
+    },
+  };
+})();
+
+// ---------- Floating dropdown (anchored menu, e.g. branch picker) ----------
+// Appended to <body> with fixed positioning so it is never clipped by the
+// repo row's `overflow: hidden`. Closes on outside click, Esc, or scroll/resize.
+const Dropdown = (() => {
+  let active = null; // { menu, anchor, onDoc, onKey, onMove }
+
+  function close() {
+    if (!active) return;
+    const { menu, anchor, onDoc, onKey, onMove } = active;
+    menu.remove();
+    document.removeEventListener("mousedown", onDoc, true);
+    document.removeEventListener("keydown", onKey, true);
+    window.removeEventListener("resize", onMove, true);
+    window.removeEventListener("scroll", onMove, true);
+    anchor.classList.remove("dropdown-open");
+    active = null;
+  }
+
+  function isOpenFor(anchor) {
+    return !!active && active.anchor === anchor;
+  }
+
+  function open(anchor, { header, options, current, emptyText, onSelect, search, searchPlaceholder }) {
+    close();
+    const showSearch = search !== undefined ? search : options.length > 7;
+    const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+    const menu = document.createElement("div");
+    menu.className = "dropdown-menu";
+
+    if (header) {
+      const h = document.createElement("div");
+      h.className = "dropdown-head";
+      h.textContent = header;
+      menu.appendChild(h);
+    }
+
+    let input = null;
+    if (showSearch) {
+      const box = document.createElement("div");
+      box.className = "dropdown-search";
+      box.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>`;
+      input = document.createElement("input");
+      input.type = "text";
+      input.placeholder = searchPlaceholder || "Filter…";
+      input.spellcheck = false;
+      box.appendChild(input);
+      menu.appendChild(box);
+    }
+
+    const list = document.createElement("div");
+    list.className = "dropdown-list";
+    menu.appendChild(list);
+    document.body.appendChild(menu);
+
+    const position = () => {
+      const r = anchor.getBoundingClientRect();
+      const mw = menu.offsetWidth;
+      const mh = menu.offsetHeight;
+      let left = r.left;
+      let top = r.bottom + 6;
+      if (left + mw > window.innerWidth - 8) left = window.innerWidth - 8 - mw;
+      if (left < 8) left = 8;
+      if (top + mh > window.innerHeight - 8 && r.top - 6 - mh > 8) top = r.top - 6 - mh;
+      menu.style.left = Math.round(left) + "px";
+      menu.style.top = Math.round(top) + "px";
+    };
+
+    // Render the (filtered) option rows. Keeps the current branch visible with a
+    // check; highlights the matched substring; shows an empty state otherwise.
+    const renderList = (filter) => {
+      const f = (filter || "").trim().toLowerCase();
+      const matches = options.filter((o) => o.toLowerCase().includes(f));
+      list.innerHTML = "";
+      if (!matches.length) {
+        const empty = document.createElement("div");
+        empty.className = "dropdown-empty";
+        empty.textContent = f ? "No matching branches." : emptyText || "Nothing to show.";
+        list.appendChild(empty);
+        position();
+        return;
+      }
+      matches.forEach((opt) => {
+        const isCur = opt === current;
+        const row = document.createElement("button");
+        row.type = "button";
+        row.className = "dropdown-opt" + (isCur ? " current" : "");
+        const check = document.createElement("span");
+        check.className = "opt-check";
+        check.innerHTML = ICON.check;
+        const name = document.createElement("span");
+        name.className = "opt-name";
+        if (f) {
+          const i = opt.toLowerCase().indexOf(f);
+          name.innerHTML = esc(opt.slice(0, i)) + "<mark>" + esc(opt.slice(i, i + f.length)) + "</mark>" + esc(opt.slice(i + f.length));
+        } else {
+          name.textContent = opt;
+        }
+        row.append(check, name);
+        if (isCur) row.disabled = true;
+        else row.addEventListener("click", () => { close(); onSelect(opt); });
+        list.appendChild(row);
+      });
+      position();
+    };
+
+    // Keyboard navigation over the currently-visible, selectable rows.
+    const moveActive = (dir) => {
+      const rows = [...list.querySelectorAll(".dropdown-opt:not(:disabled)")];
+      if (!rows.length) return;
+      let idx = rows.findIndex((r) => r.classList.contains("active"));
+      idx = idx < 0 ? (dir > 0 ? 0 : rows.length - 1) : (idx + dir + rows.length) % rows.length;
+      rows.forEach((r) => r.classList.remove("active"));
+      rows[idx].classList.add("active");
+      rows[idx].scrollIntoView({ block: "nearest" });
+    };
+
+    renderList("");
+
+    if (input) {
+      input.addEventListener("input", () => renderList(input.value));
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "ArrowDown") { e.preventDefault(); moveActive(1); }
+        else if (e.key === "ArrowUp") { e.preventDefault(); moveActive(-1); }
+        else if (e.key === "Enter") {
+          e.preventDefault();
+          const active = list.querySelector(".dropdown-opt.active:not(:disabled)") ||
+            list.querySelector(".dropdown-opt:not(:disabled)");
+          if (active) active.click();
+        }
+      });
+    }
+
+    position();
+
+    const onDoc = (e) => {
+      if (menu.contains(e.target) || anchor.contains(e.target) || e.target === anchor) return;
+      close();
+    };
+    const onKey = (e) => { if (e.key === "Escape") close(); };
+    const onMove = () => position();
+
+    document.addEventListener("mousedown", onDoc, true);
+    document.addEventListener("keydown", onKey, true);
+    window.addEventListener("resize", onMove, true);
+    window.addEventListener("scroll", onMove, true);
+    anchor.classList.add("dropdown-open");
+    active = { menu, anchor, onDoc, onKey, onMove };
+    if (input) setTimeout(() => input.focus(), 30);
+  }
+
+  // Action menu (icon + label rows that run a callback). `items` is an array of
+  // { label, icon, onClick, danger }. Reuses the same positioning + dismissal.
+  function menu(anchor, items) {
+    close();
+    const el = document.createElement("div");
+    el.className = "dropdown-menu menu";
+    items.forEach((it) => {
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "menu-item" + (it.danger ? " danger" : "");
+      row.innerHTML = `<span class="menu-ico">${it.icon || ""}</span><span>${it.label}</span>`;
+      row.addEventListener("click", () => {
+        close();
+        it.onClick();
+      });
+      el.appendChild(row);
+    });
+    document.body.appendChild(el);
+
+    const position = () => {
+      const r = anchor.getBoundingClientRect();
+      const mw = el.offsetWidth;
+      const mh = el.offsetHeight;
+      let left = r.right - mw; // right-align to the kebab button
+      let top = r.bottom + 6;
+      if (left < 8) left = 8;
+      if (left + mw > window.innerWidth - 8) left = window.innerWidth - 8 - mw;
+      if (top + mh > window.innerHeight - 8 && r.top - 6 - mh > 8) top = r.top - 6 - mh;
+      // Always keep the menu fully inside the viewport (never off-screen).
+      if (top + mh > window.innerHeight - 8) top = window.innerHeight - 8 - mh;
+      if (top < 8) top = 8;
+      el.style.left = Math.round(left) + "px";
+      el.style.top = Math.round(top) + "px";
+    };
+    position();
+
+    const onDoc = (e) => {
+      if (el.contains(e.target) || anchor.contains(e.target) || e.target === anchor) return;
+      close();
+    };
+    const onKey = (e) => { if (e.key === "Escape") close(); };
+    const onMove = () => position();
+    document.addEventListener("mousedown", onDoc, true);
+    document.addEventListener("keydown", onKey, true);
+    window.addEventListener("resize", onMove, true);
+    window.addEventListener("scroll", onMove, true);
+    anchor.classList.add("dropdown-open");
+    active = { menu: el, anchor, onDoc, onKey, onMove };
+  }
+
+  return { open, close, isOpenFor, menu };
+})();
+
+// ---------- Initial render ----------
+renderAppStats();
+renderApps();
+refreshPrRepoFilter();
+renderPrStats();
+
+if (DC && DC.hasBackend) {
+  // Repositories and pull requests load from the backend (see hydration below).
+  // Show loading placeholders so no stale or sample data is ever shown.
+  document.getElementById("repoGrid").innerHTML = empty("Loading repositories…");
+  document.getElementById("prList").innerHTML = empty("Loading pull requests…");
+} else {
+  renderRepos();
+  renderPulls();
+}
+
+// ---------- Backend hydration (Tauri desktop) ----------
+function rerenderGit() {
+  renderRepos(document.getElementById("repoSearch").value || "");
+  refreshPrRepoFilter();
+  renderPrStats();
+  renderPulls(document.getElementById("prSearch").value || "");
+}
+
+async function hydrateFromBackend() {
+  try {
+    const data = await DC.listRepos();
+    if (Array.isArray(data)) {
+      repos = data;
+      rerenderGit();
+    }
+  } catch (e) {
+    console.error("listRepos failed", e);
+  }
+}
+
+// ---------- Pull Requests (backend) ----------
+async function hydratePulls() {
+  if (!DC || !DC.hasBackend) return;
+  if (!watchedRepoNames().length) {
+    renderPrStats();
+    renderPulls(document.getElementById("prSearch").value || "");
+    return;
+  }
+  const prList = document.getElementById("prList");
+  if (prList) prList.innerHTML = empty("Loading pull requests…");
+  try {
+    const data = await DC.listPullRequests(null);
+    if (Array.isArray(data)) {
+      pulls = data;
+      renderPrStats();
+      renderPulls(document.getElementById("prSearch").value || "");
+    }
+  } catch (e) {
+    console.error("listPullRequests failed", e);
+    if (prList) prList.innerHTML = empty(String(e));
+  }
+}
+
+// ---------- Accounts (backend) ----------
+let accounts = [];
+
+function providerMeta(p) {
+  return p === "azure"
+    ? { icon: ICON.azure, cls: "azure", name: "Azure DevOps" }
+    : { icon: ICON.github, cls: "github", name: "GitHub" };
+}
+
+function renderAccounts() {
+  const host = document.getElementById("accountList");
+  if (!host) return;
+  if (!DC || !DC.hasBackend) {
+    host.innerHTML = `<div class="account-empty">${ICON.key}<div>Account management is available in the desktop app.</div></div>`;
+    return;
+  }
+  if (!accounts.length) {
+    host.innerHTML = `<div class="account-empty">${ICON.key}<div><strong>No accounts connected</strong><br>Add a GitHub or Azure DevOps account to load pull requests for your watched repositories.</div></div>`;
+    return;
+  }
+  host.innerHTML = accounts
+    .map((a, i) => {
+      const m = providerMeta(a.provider);
+      const stateCls = a.status === "connected" ? "connected" : a.status === "error" ? "error" : "unverified";
+      const stateLabel = a.status === "connected" ? "Connected" : a.status === "error" ? "Error" : "Unverified";
+      const who = a.username ? `<code>${a.username}</code>` : "Token";
+      const org = a.organization ? ` · ${a.organization}` : "";
+      return `
+      <div class="account-row">
+        <div class="account-icon ${m.cls}">${m.icon}</div>
+        <div class="account-main">
+          <div class="account-title-row">
+            <span class="account-name">${a.label}</span>
+            <span class="account-state ${stateCls}">${stateLabel}</span>
+          </div>
+          <div class="account-sub">${m.name}${org} · ${who}</div>
+        </div>
+        <div class="account-actions">
+          <button class="btn btn-ghost btn-sm" data-test="${i}">${ICON.sync}Test</button>
+          <button class="btn btn-icon btn-sm" data-remove="${i}" title="Remove account">${ICON.trash}</button>
+        </div>
+      </div>`;
+    })
+    .join("");
+
+  host.querySelectorAll("[data-test]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const a = accounts[Number(btn.dataset.test)];
+      btn.disabled = true;
+      btn.innerHTML = `<span class="spin">${ICON.sync}</span>Testing…`;
+      try {
+        const updated = await DC.testAccount(a.id);
+        const i = accounts.findIndex((x) => x.id === updated.id);
+        if (i >= 0) accounts[i] = updated;
+        renderAccounts();
+        hydratePulls();
+      } catch (e) {
+        const i = accounts.findIndex((x) => x.id === a.id);
+        if (i >= 0) accounts[i].status = "error";
+        renderAccounts();
+        await Modal.alert({ title: "Connection failed", message: String(e) });
+      }
+    });
+  });
+
+  host.querySelectorAll("[data-remove]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const a = accounts[Number(btn.dataset.remove)];
+      const ok = await Modal.confirm({
+        title: "Remove account",
+        message: `Remove “${a.label}”? Its stored token will be deleted from this machine.`,
+        confirmText: "Remove",
+        danger: true,
+      });
+      if (!ok) return;
+      try {
+        await DC.removeAccount(a.id);
+        accounts = accounts.filter((x) => x.id !== a.id);
+        renderAccounts();
+        hydratePulls();
+      } catch (e) {
+        await Modal.alert({ title: "Couldn't remove account", message: String(e) });
+      }
+    });
+  });
+}
+
+async function hydrateAccounts() {
+  if (!DC || !DC.hasBackend) return;
+  try {
+    const data = await DC.listAccounts();
+    if (Array.isArray(data)) {
+      accounts = data;
+      renderAccounts();
+    }
+  } catch (e) {
+    console.error("listAccounts failed", e);
+  }
+}
+
+// ---------- App Center (backend) ----------
+async function hydrateApps() {
+  if (!DC || !DC.hasBackend) return;
+  try {
+    const [list, presets] = await Promise.all([DC.listApps(), DC.listPresets()]);
+    if (Array.isArray(presets)) appPresets = presets;
+    if (Array.isArray(list)) {
+      apps = list;
+      renderAppStats();
+      renderApps(document.getElementById("appSearch").value || "");
+    }
+  } catch (e) {
+    console.error("listApps failed", e);
+  }
+}
+
+function openAddAccount() {
+  let provider = "github";
+  // Normalize an ADO org input (bare slug, dev.azure.com URL, or
+  // {org}.visualstudio.com URL) down to just the org slug — for the browser link.
+  const normalizeOrg = (s) => {
+    s = (s || "").trim().replace(/^https?:\/\//, "");
+    const vs = s.indexOf(".visualstudio.com");
+    if (vs >= 0) return s.slice(0, vs);
+    if (s.startsWith("dev.azure.com/")) return s.slice("dev.azure.com/".length).split("/")[0];
+    return s.split("/")[0].trim();
+  };
+  return Modal.custom({
+    title: "Add account",
+    render: (body, foot, close, mkBtn) => {
+      body.innerHTML = `
+        <div class="form-row">
+          <label class="form-label">Provider</label>
+          <div class="form-choice" id="acProvider">
+            <button type="button" class="form-opt active" data-p="github">${ICON.github}GitHub</button>
+            <button type="button" class="form-opt" data-p="azure">${ICON.azure}Azure DevOps</button>
+          </div>
+        </div>
+        <div class="form-row" id="acUserRow">
+          <label class="form-label">Username (optional)</label>
+          <input class="modal-input" id="acUser" placeholder="auto-detected if left blank" spellcheck="false" autocomplete="off" />
+        </div>
+        <div class="form-row" id="acOrgRow" style="display:none">
+          <label class="form-label">Organization</label>
+          <input class="modal-input" id="acOrg" placeholder="e.g. contoso — or paste your Azure DevOps URL" spellcheck="false" autocomplete="off" />
+        </div>
+        <div class="form-row">
+          <label class="form-label">Authentication</label>
+          <button type="button" class="btn btn-primary" id="acAuthBtn" style="width:100%;justify-content:center">${ICON.external}Sign in with Git in browser</button>
+          <div class="form-hint" id="acHint"></div>
+        </div>
+        <div class="form-row">
+          <label class="form-label">Or paste a token</label>
+          <input class="modal-input" id="acToken" type="password" placeholder="Personal access token" spellcheck="false" autocomplete="off" />
+          <button type="button" class="btn btn-ghost btn-sm" id="acTokenLink" style="margin-top:8px">${ICON.key}Create a token…</button>
+        </div>
+        <div class="modal-error" id="acErr"></div>`;
+
+      const userRow = body.querySelector("#acUserRow");
+      const orgRow = body.querySelector("#acOrgRow");
+      const hint = body.querySelector("#acHint");
+      const err = body.querySelector("#acErr");
+      // Auth mode: "git" (Credential Manager, token not stored) or "token" (PAT).
+      let mode = "token";
+      let gitHost = null;
+      const setHint = () => {
+        hint.textContent =
+          provider === "azure"
+            ? "Reuses Git Credential Manager — the same Microsoft sign-in you saw when cloning. Or paste a token below."
+            : "Reuses Git Credential Manager — the same GitHub sign-in you saw when cloning. Or paste a token below.";
+      };
+      const resetGit = () => {
+        mode = "token";
+        gitHost = null;
+        const ab = body.querySelector("#acAuthBtn");
+        if (ab) ab.innerHTML = `${ICON.external}Sign in with Git in browser`;
+      };
+      const applyProvider = () => {
+        userRow.style.display = provider === "github" ? "" : "none";
+        orgRow.style.display = provider === "azure" ? "" : "none";
+        resetGit();
+        setHint();
+      };
+      applyProvider();
+
+      body.querySelectorAll("#acProvider .form-opt").forEach((o) =>
+        o.addEventListener("click", () => {
+          provider = o.dataset.p;
+          body.querySelectorAll("#acProvider .form-opt").forEach((x) => x.classList.toggle("active", x === o));
+          applyProvider();
+        })
+      );
+
+      // Typing a PAT switches back to token mode.
+      body.querySelector("#acToken").addEventListener("input", () => {
+        if (body.querySelector("#acToken").value) resetGit();
+      });
+
+      // Sign in via Git Credential Manager (same flow Git uses for clone/fetch).
+      // On success we mark the account as git-auth; the token is NOT pulled into
+      // the form (the backend re-resolves it via GCM and never stores it).
+      body.querySelector("#acAuthBtn").addEventListener("click", async () => {
+        err.textContent = "";
+        let host;
+        if (provider === "azure") {
+          const raw = body.querySelector("#acOrg").value.trim();
+          const org = normalizeOrg(raw);
+          if (!org) {
+            err.textContent = "Enter your Azure DevOps organization first.";
+            return;
+          }
+          host = /visualstudio\.com/i.test(raw) ? `${org}.visualstudio.com` : "dev.azure.com";
+        } else {
+          host = "github.com";
+        }
+        if (!DC || !DC.hasBackend) {
+          err.textContent = "Browser sign-in is only available in the desktop app.";
+          return;
+        }
+        const ab = body.querySelector("#acAuthBtn");
+        const orig = `${ICON.external}Sign in with Git in browser`;
+        ab.disabled = true;
+        ab.innerHTML = `<span class="spin">${ICON.sync}</span>Waiting for sign-in…`;
+        try {
+          const cred = await DC.gitToken(host);
+          if (provider === "github" && cred.username && /^[a-zA-Z0-9-]+$/.test(cred.username)) {
+            const u = body.querySelector("#acUser");
+            if (!u.value.trim()) u.value = cred.username;
+          }
+          body.querySelector("#acToken").value = "";
+          mode = "git";
+          gitHost = host;
+          ab.disabled = false;
+          ab.innerHTML = `${ICON.check}Signed in — click “Add account”`;
+        } catch (e) {
+          err.textContent = String(e);
+          ab.disabled = false;
+          ab.innerHTML = orig;
+        }
+      });
+
+      // Open the provider's token-creation page (PAT alternative).
+      body.querySelector("#acTokenLink").addEventListener("click", () => {
+        let url;
+        if (provider === "azure") {
+          const org = normalizeOrg(body.querySelector("#acOrg").value);
+          if (!org) {
+            err.textContent = "Enter your Azure DevOps organization first.";
+            return;
+          }
+          url = `https://dev.azure.com/${encodeURIComponent(org)}/_usersSettings/tokens`;
+        } else {
+          url = "https://github.com/settings/tokens/new?description=DevCenter&scopes=repo";
+        }
+        err.textContent = "";
+        if (DC && DC.hasBackend) DC.openUrl(url).catch((e) => console.error("openUrl failed", e));
+        else window.open(url, "_blank");
+      });
+
+      const cancel = mkBtn("btn-ghost", "Cancel");
+      cancel.addEventListener("click", () => close(null));
+      const save = mkBtn("btn-primary", "Add account");
+      save.addEventListener("click", async () => {
+        const username = body.querySelector("#acUser").value.trim();
+        const organization = body.querySelector("#acOrg").value.trim();
+        const token = body.querySelector("#acToken").value;
+        if (provider === "azure" && !organization) {
+          err.textContent = "Enter your Azure DevOps organization.";
+          return;
+        }
+        if (mode !== "git" && !token) {
+          err.textContent = "Sign in with Git, or paste a token.";
+          return;
+        }
+        err.textContent = "";
+        save.disabled = true;
+        save.textContent = "Connecting…";
+        try {
+          const account = await DC.addAccount({
+            provider,
+            username: provider === "github" ? username : null,
+            organization: provider === "azure" ? organization : null,
+            authKind: mode,
+            host: mode === "git" ? gitHost : null,
+            token: mode === "git" ? null : token,
+            label: null,
+          });
+          close(account);
+        } catch (e) {
+          err.textContent = String(e);
+          save.disabled = false;
+          save.textContent = "Add account";
+        }
+      });
+      foot.append(cancel, save);
+    },
+  });
+}
+
+if (DC && DC.hasBackend) {
+  hydrateFromBackend().then(hydratePulls);
+  hydrateAccounts();
+  hydrateApps();
+  DC.onReposUpdated((data) => {
+    if (Array.isArray(data)) {
+      repos = data;
+      rerenderGit();
+    }
+  });
+
+  // Live app status updates → patch the matching app and re-render.
+  DC.onAppStatus((s) => {
+    const at = apps.findIndex((a) => String(a.id) === String(s.id));
+    if (at >= 0) {
+      apps[at] = { ...apps[at], status: s.status, pid: s.pid, uptime: s.uptime };
+      renderAppStats();
+      renderApps(document.getElementById("appSearch").value || "");
+    }
+  });
+
+  // New application.
+  const newAppBtn = document.getElementById("newAppBtn");
+  if (newAppBtn) newAppBtn.addEventListener("click", () => openAppForm(null));
+
+  // Add account — open the connect form, then refresh accounts + PRs.
+  const addAccountBtn = document.getElementById("addAccountBtn");
+  if (addAccountBtn) {
+    addAccountBtn.addEventListener("click", async () => {
+      const account = await openAddAccount();
+      if (!account) return;
+      const i = accounts.findIndex((a) => a.id === account.id);
+      if (i >= 0) accounts[i] = account;
+      else accounts.push(account);
+      renderAccounts();
+      hydratePulls();
+    });
+  }
+
+  // Clone repository — ask for a URL, pick a destination folder, clone, then refresh.
+  const cloneBtn = document.getElementById("cloneBtn");
+  if (cloneBtn) {
+    cloneBtn.addEventListener("click", async () => {
+      const url = await Modal.prompt({
+        title: "Clone repository",
+        label: "Repository URL",
+        placeholder: "https://github.com/owner/repo.git",
+        confirmText: "Choose folder…",
+        validate: (v) => (v ? null : "Enter a repository URL."),
+      });
+      if (!url) return;
+      let dir;
+      try {
+        dir = await window.__TAURI__.dialog.open({ directory: true, multiple: false, title: "Choose a folder to clone into" });
+      } catch (e) {
+        console.error("folder picker failed", e);
+        return;
+      }
+      if (!dir) return;
+      cloneBtn.disabled = true;
+      try {
+        const repo = await DC.cloneRepo(url, dir);
+        if (repo && !repos.some((r) => r.id === repo.id)) repos.push(repo);
+        rerenderGit();
+      } catch (e) {
+        console.error("cloneRepo failed", e);
+        await Modal.alert({ title: "Clone failed", message: String(e) });
+      } finally {
+        cloneBtn.disabled = false;
+      }
+    });
+  }
+
+  // Add existing repository — pick an already-cloned folder and register it.
+  const addRepoBtn = document.getElementById("addRepoBtn");
+  if (addRepoBtn) {
+    addRepoBtn.addEventListener("click", async () => {
+      let dir;
+      try {
+        dir = await window.__TAURI__.dialog.open({ directory: true, multiple: false, title: "Select a cloned repository folder" });
+      } catch (e) {
+        console.error("folder picker failed", e);
+        return;
+      }
+      if (!dir) return;
+      addRepoBtn.disabled = true;
+      try {
+        const repo = await DC.addRepo(dir);
+        const exists = repos.some((r) => r.id === repo.id);
+        if (!exists) repos.push(repo);
+        rerenderGit();
+        if (exists) await Modal.alert({ title: "Already added", message: `“${repo.name}” is already in your list.` });
+      } catch (e) {
+        console.error("addRepo failed", e);
+        await Modal.alert({ title: "Couldn't add repository", message: String(e) });
+      } finally {
+        addRepoBtn.disabled = false;
+      }
+    });
+  }
+}

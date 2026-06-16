@@ -1,0 +1,48 @@
+[package]
+name = "devcenter"
+version = "0.1.0"
+description = "DevCenter — track repos, pull requests and local apps"
+authors = ["DevCenter"]
+edition = "2021"
+rust-version = "1.77"
+
+# The library powers the desktop binary. (cdylib/staticlib are only needed for
+# mobile targets; they're omitted because the Windows GNU linker overflows its
+# export-ordinal table when building the cdylib DLL. Re-add them for mobile.)
+[lib]
+name = "devcenter_lib"
+crate-type = ["lib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+git2 = "0.19"
+rusqlite = { version = "0.32", features = ["bundled"] }
+keyring = { version = "3", features = ["windows-native", "apple-native", "linux-native"] }
+ureq = { version = "2", features = ["json"] }
+base64 = "0.22"
+tokio = { version = "1", features = ["rt-multi-thread", "process", "io-util", "macros", "sync", "time", "net"] }
+axum = "0.7"
+tower-http = { version = "0.6", features = ["fs"] }
+
+# --- Added in later phases (kept here as a reference; uncomment when needed) ---
+# tauri-plugin-shell = "2"
+# tauri-plugin-process = "2"
+# tauri-plugin-updater = "2"
+# sysinfo = "0.32"
+# tracing = "0.1"
+# tracing-subscriber = "0.3"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
