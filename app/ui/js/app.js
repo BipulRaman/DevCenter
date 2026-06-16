@@ -2008,7 +2008,7 @@ const ChangesPage = (() => {
   let repoId = null;        // selected repo path (== id)
   let branch = "main";
   let tab = "changes";      // "changes" | "history"
-  let viewMode = "tree";    // "tree" | "list"
+  let viewMode = "list";    // "tree" | "list"
 
   // Changes tab state.
   let files = [];           // working-tree changes [{path, oldPath, status}]
@@ -2286,7 +2286,6 @@ const ChangesPage = (() => {
       const cs = await DC.gitCommit(repoId, summary, desc, picked);
       $("commitSummary").value = ""; $("commitDesc").value = "";
       branch = cs.branch || branch;
-      $("commitBranch").textContent = branch;
       files = cs.files || [];
       selected = new Set(files.map((f) => f.path));
       activeFile = null;
@@ -2296,7 +2295,12 @@ const ChangesPage = (() => {
       console.error("gitCommit failed", e);
       await Modal.alert({ title: "Commit failed", message: String(e) });
     } finally {
-      busy = false; btn.innerHTML = prev; updateCommitBtn();
+      // Restore the button markup FIRST — the spinner innerHTML replaced the
+      // #commitBranch span, so the label element only exists again after this.
+      busy = false; btn.innerHTML = prev;
+      const branchEl = $("commitBranch");
+      if (branchEl) branchEl.textContent = branch;
+      updateCommitBtn();
     }
   }
 
