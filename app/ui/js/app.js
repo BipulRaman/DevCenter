@@ -47,12 +47,15 @@ const ICON = {
 const navItems = document.querySelectorAll(".nav-item[data-page]");
 const pages = document.querySelectorAll(".page");
 
+function showPage(page) {
+  navItems.forEach((n) => n.classList.toggle("active", n.dataset.page === page));
+  pages.forEach((p) => p.classList.toggle("active", p.id === `page-${page}`));
+  if (page === "changes" && window.ChangesPage) window.ChangesPage.onShow();
+}
+
 navItems.forEach((item) => {
   item.addEventListener("click", () => {
-    const page = item.dataset.page;
-    navItems.forEach((n) => n.classList.toggle("active", n === item));
-    pages.forEach((p) => p.classList.toggle("active", p.id === `page-${page}`));
-    if (page === "changes" && window.ChangesPage) window.ChangesPage.onShow();
+    showPage(item.dataset.page);
   });
 });
 
@@ -260,7 +263,7 @@ function renderRepos(filter = "") {
         <div class="repo-icon">${ICON.repo}</div>
         <div class="repo-main">
           <div class="repo-title-row">
-            <span class="repo-name">${r.name}</span>
+            <span class="repo-name repo-open-link" data-open-changes="${i}" title="Open in Changes">${r.name}</span>
             ${branchChip}
             ${syncChip}${dirtyChip}${tagChips}
           </div>
@@ -289,6 +292,21 @@ function renderRepos(filter = "") {
   // Center kebabs, which also use [data-menu]. A document-wide query here would
   // cross-wire the two pages' menus.
   const grid = document.getElementById("repoGrid");
+
+  // Open the selected repository directly in the Changes page.
+  grid.querySelectorAll("[data-open-changes]").forEach((el) => {
+    el.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const idx = Number(el.dataset.openChanges);
+      const r = repos[idx];
+      if (!r) return;
+      showPage("changes");
+      if (window.ChangesPage && typeof window.ChangesPage.openRepoById === "function") {
+        window.ChangesPage.openRepoById(r.id);
+      }
+    });
+  });
 
   grid.querySelectorAll("[data-watch]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -384,6 +402,7 @@ function renderRepos(filter = "") {
         current: r.branch,
         search: true,
         searchPlaceholder: "Filter branches…",
+        optionKind: "branch",
         emptyText: "No local branches.",
         onSelect: async (target) => {
           try {
@@ -1357,7 +1376,7 @@ const Dropdown = (() => {
     return !!active && active.anchor === anchor;
   }
 
-  function open(anchor, { header, options, current, emptyText, onSelect, search, searchPlaceholder, minWidth }) {
+  function open(anchor, { header, options, current, emptyText, onSelect, search, searchPlaceholder, minWidth, optionKind }) {
     close();
     const showSearch = search !== undefined ? search : options.length > 7;
     const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -1404,6 +1423,17 @@ const Dropdown = (() => {
       menu.style.top = Math.round(top) + "px";
     };
 
+    const classifyOption = (opt) => {
+      if (optionKind !== "branch") return null;
+      if (opt === "main" || opt === "master") return { label: "base", tone: "base" };
+      if (opt.startsWith("users/")) return { label: "user", tone: "user" };
+      if (opt.startsWith("dependabot/")) return { label: "bot", tone: "bot" };
+      if (opt.startsWith("feature/") || opt.startsWith("feat/")) return { label: "feature", tone: "feature" };
+      if (opt.startsWith("release/")) return { label: "release", tone: "release" };
+      if (opt.startsWith("hotfix/")) return { label: "hotfix", tone: "hotfix" };
+      return { label: "branch", tone: "branch" };
+    };
+
     // Render the (filtered) option rows. Keeps the current branch visible with a
     // check; highlights the matched substring; shows an empty state otherwise.
     const renderList = (filter) => {
@@ -1423,6 +1453,7 @@ const Dropdown = (() => {
         const row = document.createElement("button");
         row.type = "button";
         row.className = "dropdown-opt" + (isCur ? " current" : "");
+        row.title = opt;
         const check = document.createElement("span");
         check.className = "opt-check";
         check.innerHTML = ICON.check;
@@ -1434,7 +1465,15 @@ const Dropdown = (() => {
         } else {
           name.textContent = opt;
         }
-        row.append(check, name);
+        const meta = classifyOption(opt);
+        if (meta) {
+          const badge = document.createElement("span");
+          badge.className = "opt-badge " + meta.tone;
+          badge.textContent = meta.label;
+          row.append(check, name, badge);
+        } else {
+          row.append(check, name);
+        }
         if (isCur) row.disabled = true;
         else row.addEventListener("click", () => { close(); onSelect(opt); });
         list.appendChild(row);
@@ -2211,11 +2250,63 @@ const ChangesPage = (() => {
     branch = r.branch || "main";
     try { localStorage.setItem("dc.changes.repoId", r.id); } catch (e) {}
     $("chgRepoLabel").textContent = r.name;
-    $("commitBranch").textContent = branch; // reset branch label immediately
+    $("chgBranchLabel").textContent = branch;
     activeSha = null; activeFile = null; navOrder = [];
     files = []; selected = new Set(); history = []; commitFiles = [];
     showDiffEmpty("Select a file to view its diff.");
     if (tab === "history") loadHistory(); else loadChanges();
+  }
+
+  async function openBranchPicker() {
+    if (!repoId || !DC || !DC.hasBackend || busy) return;
+    const btn = $("chgBranchBtn");
+    const r = repos.find((x) => x.id === repoId);
+    if (!btn || !r) return;
+
+    if (Dropdown.isOpenFor(btn)) { Dropdown.close(); return; }
+
+    let branches;
+    btn.disabled = true;
+    try {
+      branches = await DC.listBranches(repoId);
+    } catch (e) {
+      console.error("listBranches failed", e);
+      await Modal.alert({ title: "Couldn't load branches", message: String(e) });
+      return;
+    } finally {
+      btn.disabled = false;
+    }
+
+    Dropdown.open(btn, {
+      header: "Switch branch",
+      options: branches,
+      current: branch,
+      search: true,
+      searchPlaceholder: "Filter branches…",
+      optionKind: "branch",
+      emptyText: "No local branches.",
+      minWidth: Math.max(300, btn.offsetWidth),
+      onSelect: async (target) => {
+        try {
+          const updated = await DC.checkoutBranch(repoId, target);
+          const at = repos.findIndex((x) => x.id === updated.id);
+          if (at >= 0) repos[at] = updated;
+          branch = updated.branch || target;
+          $("chgBranchLabel").textContent = branch;
+          if (tab === "history") loadHistory(); else loadChanges();
+        } catch (e) {
+          console.error("checkout failed", e);
+          await Modal.alert({ title: "Switch failed", message: String(e) });
+        }
+      },
+    });
+  }
+
+  function openRepoById(id) {
+    const r = repos.find((x) => x.id === id);
+    if (!r) return false;
+    selectRepo(r);
+    return true;
   }
 
   // ---- changes tab ----
@@ -2225,7 +2316,7 @@ const ChangesPage = (() => {
     try {
       const cs = await DC.gitChanges(repoId, null);
       branch = cs.branch || branch;
-      $("commitBranch").textContent = branch;
+      $("chgBranchLabel").textContent = branch;
       files = cs.files || [];
       selected = new Set(files.map((f) => f.path)); // select all (GitHub Desktop)
       collapsedChanges = new Set();
@@ -2308,7 +2399,7 @@ const ChangesPage = (() => {
       else if (kind === "pull") cs = await DC.gitPull(repoId);
       else { await DC.fetchRepo(repoId); cs = await DC.gitChanges(repoId, null); }
       branch = cs.branch || branch;
-      $("commitBranch").textContent = branch;
+      $("chgBranchLabel").textContent = branch;
       files = cs.files || [];
       selected = new Set(files.map((f) => f.path));
       renderSync(cs);
@@ -2341,6 +2432,7 @@ const ChangesPage = (() => {
       const cs = await DC.gitCommit(repoId, summary, desc, picked);
       $("commitSummary").value = ""; $("commitDesc").value = "";
       branch = cs.branch || branch;
+      $("chgBranchLabel").textContent = branch;
       files = cs.files || [];
       selected = new Set(files.map((f) => f.path));
       activeFile = null;
@@ -2351,11 +2443,10 @@ const ChangesPage = (() => {
       console.error("gitCommit failed", e);
       await Modal.alert({ title: "Commit failed", message: String(e) });
     } finally {
-      // Restore the button markup FIRST — the spinner innerHTML replaced the
-      // #commitBranch span, so the label element only exists again after this.
+      // Restore the original commit button content after the spinner state.
       busy = false; btn.innerHTML = prev;
-      const branchEl = $("commitBranch");
-      if (branchEl) branchEl.textContent = branch;
+      const branchLbl = $("chgBranchLabel");
+      if (branchLbl) branchLbl.textContent = branch;
       updateCommitBtn();
     }
   }
@@ -2565,6 +2656,8 @@ const ChangesPage = (() => {
 
   function onShow() {
     if (!DC || !DC.hasBackend) return;
+    const branchBtn = $("chgBranchBtn");
+    if (branchBtn) branchBtn.disabled = !repos.length;
     if (!repoId) {
       // Restore the last-used repo across app restarts; fall back to the first.
       let saved = null;
@@ -2636,6 +2729,7 @@ const ChangesPage = (() => {
     $("detailCollapseBtn").addEventListener("click", () => collapseAll(collapsedDetail, commitFiles, renderDetail));
     $("commitSummary").addEventListener("input", updateCommitBtn);
     $("commitBtn").addEventListener("click", doCommit);
+    $("chgBranchBtn").addEventListener("click", openBranchPicker);
     $("pushBtn").addEventListener("click", () => doSync("push"));
     $("pullBtn").addEventListener("click", () => doSync("pull"));
     $("fetchSyncBtn").addEventListener("click", () => doSync("fetch"));
@@ -2645,6 +2739,6 @@ const ChangesPage = (() => {
   }
 
   init();
-  return { onShow };
+  return { onShow, openRepoById };
 })();
 window.ChangesPage = ChangesPage;
