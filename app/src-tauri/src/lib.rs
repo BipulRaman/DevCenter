@@ -8,25 +8,106 @@ mod secrets;
 mod state;
 mod store;
 
-use tauri::Manager;
+use serde::Serialize;
+use tauri::{Emitter, Manager};
+use tauri_plugin_updater::UpdaterExt;
 
 use state::AppState;
+
+#[derive(Clone, Serialize)]
+struct UpdateState {
+    status: String,
+    version: Option<String>,
+    error: Option<String>,
+}
+
+fn emit_update(app: &tauri::AppHandle, status: &str, version: Option<String>, error: Option<String>) {
+    let _ = app.emit(
+        "update_state",
+        UpdateState {
+            status: status.to_string(),
+            version,
+            error,
+        },
+    );
+}
+
+async fn auto_update_on_start(app: tauri::AppHandle) {
+    emit_update(&app, "checking", None, None);
+
+    let updater = match app.updater() {
+        Ok(u) => u,
+        Err(e) => {
+            emit_update(&app, "error", None, Some(format!("updater init failed: {e}")));
+            return;
+        }
+    };
+
+    let update = match updater.check().await {
+        Ok(v) => v,
+        Err(e) => {
+            emit_update(&app, "error", None, Some(format!("update check failed: {e}")));
+            return;
+        }
+    };
+
+    let Some(update) = update else {
+        emit_update(&app, "up_to_date", None, None);
+        return;
+    };
+
+    let target_version = update.version.to_string();
+    emit_update(&app, "available", Some(target_version.clone()), None);
+
+    let install_result = update
+        .download_and_install(
+            |_chunk_len, _content_len| {},
+            || {},
+        )
+        .await;
+
+    match install_result {
+        Ok(_) => {
+            emit_update(&app, "installed", Some(target_version), None);
+            app.restart();
+        }
+        Err(e) => {
+            emit_update(
+                &app,
+                "error",
+                Some(target_version),
+                Some(format!("update install failed: {e}")),
+            );
+        }
+    }
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             // Per-user app data dir (e.g. %APPDATA%\com.devcenter.desktop on Windows).
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
             let conn = store::open(&dir.join("devcenter.db"))?;
             app.manage(AppState::new(conn));
+
+            // Auto-update runs only in release builds.
+            if !cfg!(debug_assertions) {
+                let app_handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    auto_update_on_start(app_handle).await;
+                });
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             commands::os::app_version,
+            commands::os::check_for_updates,
             commands::os::open_path,
             commands::os::open_url,
             commands::os::open_terminal,

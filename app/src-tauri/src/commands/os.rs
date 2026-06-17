@@ -1,4 +1,12 @@
+use serde::Serialize;
+use tauri_plugin_updater::UpdaterExt;
 use tauri_plugin_opener::OpenerExt;
+
+#[derive(Serialize)]
+pub struct UpdateActionResult {
+    pub status: String,
+    pub version: Option<String>,
+}
 
 /// Returns the application version (from Cargo/tauri.conf.json).
 #[tauri::command]
@@ -52,4 +60,32 @@ pub fn open_terminal(path: String) -> Result<(), String> {
             .map_err(|e| e.to_string())?;
     }
     Ok(())
+}
+
+/// Manually checks for app updates and installs if available.
+#[tauri::command]
+pub async fn check_for_updates(app: tauri::AppHandle) -> Result<UpdateActionResult, String> {
+    let updater = app.updater().map_err(|e| e.to_string())?;
+    let update = updater.check().await.map_err(|e| e.to_string())?;
+
+    let Some(update) = update else {
+        return Ok(UpdateActionResult {
+            status: "up_to_date".to_string(),
+            version: None,
+        });
+    };
+
+    let version = update.version.to_string();
+    update
+        .download_and_install(
+            |_chunk_len, _content_len| {},
+            || {},
+        )
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(UpdateActionResult {
+        status: "installed".to_string(),
+        version: Some(version),
+    })
 }

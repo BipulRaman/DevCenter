@@ -81,6 +81,7 @@ if (mainScroll) {
   const btn = document.getElementById("settingsBtn");
   const menu = document.getElementById("settingsMenu");
   const themeBtn = document.getElementById("themeToggle");
+  const updateBtn = document.getElementById("checkUpdateBtn");
   const themeIco = document.getElementById("themeIco");
   const themeLabel = document.getElementById("themeLabel");
   if (!btn || !menu) return;
@@ -113,6 +114,21 @@ if (mainScroll) {
       const root = document.documentElement;
       root.setAttribute("data-theme", root.getAttribute("data-theme") === "light" ? "dark" : "light");
       syncThemeUI();
+    });
+  }
+  if (updateBtn) {
+    updateBtn.addEventListener("click", async () => {
+      if (!DC || !DC.hasBackend || !DC.checkForUpdates) return;
+      try {
+        const result = await DC.checkForUpdates();
+        if (result && result.status === "up_to_date") {
+          await Modal.alert({ title: "Up to date", message: "You're already on the latest version." });
+        } else if (result && result.status === "installed") {
+          await Modal.alert({ title: "Update installed", message: `Version ${result.version || "new"} installed. Please restart DevCenter to apply the update.` });
+        }
+      } catch (e) {
+        await Modal.alert({ title: "Update check failed", message: String(e) });
+      }
     });
   }
   syncThemeUI();
