@@ -411,13 +411,149 @@ pub fn list_branches(path: &Path) -> AppResult<Vec<String>> {
 }
 
 /// Check out an existing local branch in the repository at `path`.
-/// Delegates to system `git` so the index/working tree are updated correctly
-/// and any conflicting local changes surface as a clear error.
-pub fn checkout(path: &Path, branch: &str) -> AppResult<()> {
+///
+/// When `stash` is true, the current working-tree changes (including untracked
+/// files) are stashed before switching — tagged with the branch they were left
+/// on — so they stay behind on that branch (GitHub Desktop's "Leave my changes
+/// on <branch>"). When false, uncommitted changes are carried to the target by
+/// git's default checkout ("Bring my changes"). After switching, a change set
+/// previously left on the target branch is auto-restored when the working tree
+/// is clean, so returning to a branch brings its stashed work back.
+pub fn checkout(path: &Path, branch: &str, stash: bool) -> AppResult<()> {
+    if stash {
+        let current = head_branch_name(path).unwrap_or_default();
+        let msg = format!("{AUTOSTASH_TAG}{current}");
+        let output = git_cmd()
+            .arg("-C")
+            .arg(path)
+            .args(["stash", "push", "--include-untracked", "-m", &msg])
+            .output()?;
+        if !output.status.success() {
+            let err = String::from_utf8_lossy(&output.stderr);
+            let out = String::from_utf8_lossy(&output.stdout);
+            // "nothing to stash" is not a real failure — just proceed to switch.
+            if !err.contains("No local changes") && !out.contains("No local changes") {
+                return Err(AppError::msg(err.trim().to_string()));
+            }
+        }
+    }
+
     let output = git_cmd()
         .arg("-C")
         .arg(path)
         .args(["checkout", branch])
+        .output()?;
+    if !output.status.success() {
+        return Err(AppError::msg(
+            String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        ));
+    }
+
+    restore_autostash(path, branch);
+    Ok(())
+}
+
+/// Prefix used to tag DevCenter-created "leave my changes" stashes so they can
+/// be recognized and auto-restored when the user returns to that branch.
+const AUTOSTASH_TAG: &str = "DevCenter autostash @ ";
+
+/// The short name of the currently checked-out branch, if HEAD is on a branch.
+fn head_branch_name(path: &Path) -> Option<String> {
+    let repo = Repository::open(path).ok()?;
+    let head = repo.head().ok()?;
+    if head.is_branch() {
+        head.shorthand().map(|s| s.to_string())
+    } else {
+        None
+    }
+}
+
+/// Pop a DevCenter-tagged stash that was left on `branch`, if the working tree is
+/// currently clean. Best-effort: any failure is ignored so the stash is never
+/// lost (the user can still restore it manually).
+fn restore_autostash(path: &Path, branch: &str) {
+    if let Ok(repo) = Repository::open(path) {
+        if is_dirty(&repo) {
+            return; // carried changes present — don't risk a conflicting pop
+        }
+    }
+    let wanted = format!("{AUTOSTASH_TAG}{branch}");
+    let list = match git_cmd().arg("-C").arg(path).args(["stash", "list"]).output() {
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).into_owned(),
+        _ => return,
+    };
+    // Each line looks like: "stash@{0}: On <branch>: DevCenter autostash @ <branch>"
+    for line in list.lines() {
+        if let Some((refname, rest)) = line.split_once(':') {
+            if rest.trim_end().ends_with(&wanted) {
+                let _ = git_cmd()
+                    .arg("-C")
+                    .arg(path)
+                    .args(["stash", "pop", refname.trim()])
+                    .output();
+                return;
+            }
+        }
+    }
+}
+
+/// Create a new branch named `name`, starting from `base`, and check it out, in
+/// the repository at `path`. Delegates to system `git checkout -b <name> <base>`
+/// so the new branch starts at the base branch's tip and the working tree is
+/// updated. When `base` is empty the new branch starts from the current HEAD.
+/// Surfaces git's own error (e.g. invalid name, branch already exists, or a
+/// dirty working tree that would conflict).
+pub fn create_branch(path: &Path, name: &str, base: &str) -> AppResult<()> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err(AppError::msg("Branch name is required.".to_string()));
+    }
+    let mut cmd = git_cmd();
+    cmd.arg("-C").arg(path).args(["checkout", "-b", name]);
+    let base = base.trim();
+    if !base.is_empty() {
+        cmd.arg(base);
+    }
+    let output = cmd.output()?;
+    if !output.status.success() {
+        return Err(AppError::msg(
+            String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        ));
+    }
+    Ok(())
+}
+
+/// Rename branch `old` to `new` in the repository at `path`. Delegates to system
+/// `git branch -m <old> <new>` (works for the current branch too). Surfaces
+/// git's own error (e.g. invalid name or a destination that already exists).
+pub fn rename_branch(path: &Path, old: &str, new: &str) -> AppResult<()> {
+    let new = new.trim();
+    if new.is_empty() {
+        return Err(AppError::msg("Branch name is required.".to_string()));
+    }
+    let output = git_cmd()
+        .arg("-C")
+        .arg(path)
+        .args(["branch", "-m", old, new])
+        .output()?;
+    if !output.status.success() {
+        return Err(AppError::msg(
+            String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        ));
+    }
+    Ok(())
+}
+
+/// Delete the local branch `name` in the repository at `path`. Uses `git branch
+/// -d` (safe; refuses to delete a branch with unmerged commits) unless `force`
+/// is set, which uses `-D`. The currently checked-out branch cannot be deleted —
+/// git surfaces a clear error in that case.
+pub fn delete_branch(path: &Path, name: &str, force: bool) -> AppResult<()> {
+    let flag = if force { "-D" } else { "-d" };
+    let output = git_cmd()
+        .arg("-C")
+        .arg(path)
+        .args(["branch", flag, name])
         .output()?;
     if !output.status.success() {
         return Err(AppError::msg(

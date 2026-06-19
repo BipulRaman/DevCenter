@@ -12,6 +12,7 @@ let pulls = [];
 // ---------- Icons ----------
 const ICON = {
   branch: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>',
+  plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>',
   folder: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>',
   repo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6a2 2 0 0 1 2-2h14v16H5a2 2 0 0 1-2-2Z"/><path d="M19 16H5a2 2 0 0 0-2 2"/></svg>',
   sync: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>',
@@ -39,6 +40,7 @@ const ICON = {
   tag: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4l8.2 8.2a2 2 0 0 0 2.8 0l6.8-6.8a2 2 0 0 0 0-2.8Z"/><circle cx="7" cy="7" r="1.2" fill="currentColor"/></svg>',
   x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>',
   pencil: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
+  copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
   more: '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>',
   grip: '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>',
 };
@@ -470,15 +472,57 @@ function renderRepos(filter = "") {
       chip.classList.remove("loading");
       Dropdown.open(chip, {
         header: "Switch branch",
+        headerAction: {
+          label: "New branch",
+          icon: ICON.plus,
+          title: "Create a new branch",
+          onClick: () =>
+            openNewBranchDialog({
+              branches,
+              current: r.branch,
+              onCreate: async (name, base) => {
+                try {
+                  const updated = await DC.createBranch(r.id, name, base);
+                  const at = repos.findIndex((x) => x.id === updated.id);
+                  if (at >= 0) repos[at] = updated;
+                  renderRepos(document.getElementById("repoSearch").value);
+                } catch (e) {
+                  console.error("createBranch failed", e);
+                  await Modal.alert({ title: "Couldn't create branch", message: String(e) });
+                }
+              },
+            }),
+        },
         options: branches,
         current: r.branch,
         search: true,
         searchPlaceholder: "Filter branches…",
         optionKind: "branch",
         emptyText: "No local branches.",
+        onContext: (opt, isCur, ev) =>
+          openBranchContextMenu(ev, {
+            repoId: r.id,
+            branch: opt,
+            isCurrent: isCur,
+            branches,
+            onChanged: (updated) => {
+              if (updated) {
+                const at = repos.findIndex((x) => x.id === updated.id);
+                if (at >= 0) repos[at] = updated;
+              }
+              Dropdown.close();
+              renderRepos(document.getElementById("repoSearch").value);
+            },
+          }),
         onSelect: async (target) => {
           try {
-            const updated = await DC.checkoutBranch(r.id, target);
+            const updated = await performBranchSwitch({
+              repoId: r.id,
+              current: r.branch,
+              target,
+              dirty: r.status === "dirty",
+            });
+            if (!updated) return; // cancelled
             const at = repos.findIndex((x) => x.id === updated.id);
             if (at >= 0) repos[at] = updated;
             renderRepos(document.getElementById("repoSearch").value);
@@ -924,6 +968,267 @@ function empty(msg, icon) {
 }
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+// ---------- New branch: validation + dialog ----------
+// Validate a branch name against the (subset of) git ref-name rules that matter
+// for a UI: no spaces, no special tokens, no `..`/`//`, no leading/trailing
+// `/`/`.`, no `.lock` suffix, and not a duplicate of an existing branch.
+function validateBranchName(name, existing) {
+  if (!name) return "Branch name is required.";
+  if (/\s/.test(name)) return "Branch name cannot contain spaces.";
+  if (/[~^:?*[\\]/.test(name)) return "Branch name cannot contain ~ ^ : ? * [ or \\.";
+  if (/[\x00-\x1f\x7f]/.test(name)) return "Branch name cannot contain control characters.";
+  if (name.includes("..")) return "Branch name cannot contain '..'.";
+  if (name.includes("//")) return "Branch name cannot contain '//'.";
+  if (name.startsWith("/") || name.endsWith("/")) return "Branch name cannot start or end with '/'.";
+  if (name.startsWith(".") || name.endsWith(".")) return "Branch name cannot start or end with '.'.";
+  if (name.endsWith(".lock")) return "Branch name cannot end with '.lock'.";
+  if (name.includes("@{") || name === "@") return "Branch name cannot contain '@{' or be '@'.";
+  if (existing && existing.includes(name)) return "A branch with this name already exists.";
+  return null;
+}
+
+// Open the "Create a branch" dialog. `branches` is the list of base candidates,
+// `current` is preselected as the base. `onCreate(name, base)` runs on confirm.
+function openNewBranchDialog({ branches, current, onCreate }) {
+  const bases = branches && branches.length ? branches.slice() : [];
+  const base0 = current && bases.includes(current) ? current : bases[0] || "";
+  Modal.custom({
+    title: "Create a branch",
+    render: (body, foot, close, mkBtn) => {
+      body.innerHTML = `
+        <div class="form-row">
+          <label class="form-label" for="nbName">New branch name</label>
+          <input class="modal-input" id="nbName" type="text" placeholder="feature/my-change" spellcheck="false" autocomplete="off" />
+        </div>
+        <div class="form-row">
+          <label class="form-label" for="nbBase">Base branch</label>
+          <select class="modal-input" id="nbBase"></select>
+          <div class="form-hint">The new branch will start from the tip of this branch.</div>
+        </div>
+        <div class="modal-error" id="nbErr"></div>`;
+      const nameEl = body.querySelector("#nbName");
+      const baseEl = body.querySelector("#nbBase");
+      const errEl = body.querySelector("#nbErr");
+      if (!bases.length) {
+        const o = document.createElement("option");
+        o.value = "";
+        o.textContent = "(current branch)";
+        baseEl.appendChild(o);
+        baseEl.disabled = true;
+      } else {
+        bases.forEach((b) => {
+          const o = document.createElement("option");
+          o.value = b;
+          o.textContent = b;
+          if (b === base0) o.selected = true;
+          baseEl.appendChild(o);
+        });
+      }
+
+      const submit = () => {
+        const name = nameEl.value.trim();
+        const base = baseEl.value;
+        const msg = validateBranchName(name, bases);
+        if (msg) {
+          errEl.textContent = msg;
+          nameEl.focus();
+          return;
+        }
+        close({ name, base });
+      };
+      nameEl.addEventListener("input", () => (errEl.textContent = ""));
+      nameEl.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") submit();
+      });
+      const cancel = mkBtn("btn-ghost", "Cancel");
+      cancel.addEventListener("click", () => close(null));
+      const create = mkBtn("btn-primary", "Create branch");
+      create.addEventListener("click", submit);
+      foot.append(cancel, create);
+      setTimeout(() => nameEl.focus(), 40);
+    },
+  }).then((res) => {
+    if (res) onCreate(res.name, res.base);
+  });
+}
+
+// Copy text to the clipboard, with a textarea fallback for non-secure contexts.
+async function copyToClipboard(text) {
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch (e) {
+    /* fall through to the legacy path */
+  }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.top = "-1000px";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand("copy");
+    ta.remove();
+    return ok;
+  } catch (e) {
+    return false;
+  }
+}
+
+// Rename dialog for a branch. `existing` is the full branch list (for dup check).
+function openRenameBranchDialog({ branch, existing, onRename }) {
+  Modal.prompt({
+    title: "Rename branch",
+    label: `New name for “${branch}”`,
+    value: branch,
+    confirmText: "Rename",
+    validate: (v) => {
+      if (!v) return "Branch name is required.";
+      if (v === branch) return "Enter a different name.";
+      return validateBranchName(v, existing);
+    },
+  }).then((v) => {
+    if (v && v !== branch) onRename(v);
+  });
+}
+
+// Confirm + delete a branch, offering a force-delete fallback when git reports
+// the branch is not fully merged.
+async function deleteBranchFlow({ repoId, branch, onChanged }) {
+  const ok = await Modal.confirm({
+    title: "Delete branch",
+    message: `Are you sure you want to delete the branch “${branch}”? This cannot be undone.`,
+    confirmText: "Delete",
+    danger: true,
+  });
+  if (!ok) return;
+  try {
+    const updated = await DC.deleteBranch(repoId, branch, false);
+    if (onChanged) onChanged(updated);
+  } catch (e) {
+    const msg = String(e);
+    if (/not fully merged/i.test(msg)) {
+      const force = await Modal.confirm({
+        title: "Branch not fully merged",
+        message: `“${branch}” has commits that aren't merged anywhere else. Delete it anyway? Those commits may be lost.`,
+        confirmText: "Delete anyway",
+        danger: true,
+      });
+      if (!force) return;
+      try {
+        const updated = await DC.deleteBranch(repoId, branch, true);
+        if (onChanged) onChanged(updated);
+      } catch (e2) {
+        console.error("deleteBranch (force) failed", e2);
+        await Modal.alert({ title: "Delete failed", message: String(e2) });
+      }
+    } else {
+      console.error("deleteBranch failed", e);
+      await Modal.alert({ title: "Delete failed", message: msg });
+    }
+  }
+}
+
+// Right-click menu for a branch row: Rename / Copy name / Delete. `isCurrent`
+// disables Delete (you can't delete the checked-out branch). `onChanged(repo)`
+// runs after a successful rename/delete to refresh the surrounding view.
+function openBranchContextMenu(e, { repoId, branch, isCurrent, branches, onChanged }) {
+  if (!DC || !DC.hasBackend) return;
+  const existing = branches || [];
+  Dropdown.context(e.clientX, e.clientY, [
+    {
+      label: "Rename…",
+      icon: ICON.pencil,
+      onClick: () =>
+        openRenameBranchDialog({
+          branch,
+          existing,
+          onRename: async (newName) => {
+            try {
+              const updated = await DC.renameBranch(repoId, branch, newName);
+              if (onChanged) onChanged(updated);
+            } catch (err) {
+              console.error("renameBranch failed", err);
+              await Modal.alert({ title: "Rename failed", message: String(err) });
+            }
+          },
+        }),
+    },
+    {
+      label: "Copy branch name",
+      icon: ICON.copy,
+      onClick: () => copyToClipboard(branch),
+    },
+    { separator: true },
+    {
+      label: "Delete…",
+      icon: ICON.trash,
+      danger: true,
+      disabled: !!isCurrent,
+      onClick: () => deleteBranchFlow({ repoId, branch, onChanged }),
+    },
+  ]);
+}
+
+// GitHub Desktop-style prompt shown when switching branches with uncommitted
+// changes. Resolves to "leave" (stash the work on the current branch), "bring"
+// (carry it to the target), or null if cancelled.
+function openSwitchBranchDialog({ current, target }) {
+  return Modal.custom({
+    title: "Switch branch",
+    render: (body, foot, close, mkBtn) => {
+      body.innerHTML = `
+        <p class="modal-msg">You have changes on this branch. What would you like to do with them?</p>
+        <div class="switch-opts">
+          <label class="switch-opt">
+            <input type="radio" name="switchChoice" value="leave" checked />
+            <span class="switch-opt-body">
+              <span class="switch-opt-title">Leave my changes on ${escapeHtml(current)}</span>
+              <span class="switch-opt-desc">Your in-progress work will be stashed on this branch for you to return to later</span>
+            </span>
+          </label>
+          <label class="switch-opt">
+            <input type="radio" name="switchChoice" value="bring" />
+            <span class="switch-opt-body">
+              <span class="switch-opt-title">Bring my changes to ${escapeHtml(target)}</span>
+              <span class="switch-opt-desc">Your in-progress work will follow you to the new branch</span>
+            </span>
+          </label>
+        </div>`;
+      const opts = [...body.querySelectorAll(".switch-opt")];
+      const sync = () => opts.forEach((o) => o.classList.toggle("active", o.querySelector("input").checked));
+      opts.forEach((o) => o.querySelector("input").addEventListener("change", sync));
+      sync();
+      const cancel = mkBtn("btn-ghost", "Cancel");
+      cancel.addEventListener("click", () => close(null));
+      const ok = mkBtn("btn-primary", "Switch branch");
+      ok.addEventListener("click", () => {
+        const sel = body.querySelector('input[name="switchChoice"]:checked');
+        close(sel ? sel.value : null);
+      });
+      foot.append(cancel, ok);
+      setTimeout(() => ok.focus(), 40);
+    },
+  });
+}
+
+// Switch `repoId` to `target`. When the working tree is dirty, first ask the
+// user what to do with the changes (leave/stash vs bring/carry). Returns the
+// refreshed Repo, or null if the user cancelled.
+async function performBranchSwitch({ repoId, current, target, dirty }) {
+  let stash = false;
+  if (dirty) {
+    const choice = await openSwitchBranchDialog({ current, target });
+    if (!choice) return null; // cancelled
+    stash = choice === "leave";
+  }
+  return DC.checkoutBranch(repoId, target, stash);
 }
 
 // ---------- Repo tags: filter bar + editor ----------
@@ -1448,7 +1753,7 @@ const Dropdown = (() => {
     return !!active && active.anchor === anchor;
   }
 
-  function open(anchor, { header, options, current, emptyText, onSelect, search, searchPlaceholder, minWidth, optionKind }) {
+  function open(anchor, { header, headerAction, options, current, emptyText, onSelect, onContext, search, searchPlaceholder, minWidth, optionKind }) {
     close();
     const showSearch = search !== undefined ? search : options.length > 7;
     const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -1460,7 +1765,23 @@ const Dropdown = (() => {
     if (header) {
       const h = document.createElement("div");
       h.className = "dropdown-head";
-      h.textContent = header;
+      const ht = document.createElement("span");
+      ht.className = "dropdown-head-title";
+      ht.textContent = header;
+      h.appendChild(ht);
+      if (headerAction) {
+        const ab = document.createElement("button");
+        ab.type = "button";
+        ab.className = "dropdown-head-action";
+        ab.title = headerAction.title || headerAction.label;
+        ab.innerHTML = (headerAction.icon || "") + `<span>${esc(headerAction.label)}</span>`;
+        ab.addEventListener("click", (e) => {
+          e.stopPropagation();
+          close();
+          headerAction.onClick();
+        });
+        h.appendChild(ab);
+      }
       menu.appendChild(h);
     }
 
@@ -1546,8 +1867,25 @@ const Dropdown = (() => {
         } else {
           row.append(check, name);
         }
-        if (isCur) row.disabled = true;
-        else row.addEventListener("click", () => { close(); onSelect(opt); });
+        if (isCur) {
+          // When a context menu is available, keep the current row clickable so it
+          // can be right-clicked (disabled buttons swallow contextmenu events); mark
+          // it non-selectable via aria-disabled instead of the disabled attribute.
+          if (onContext) {
+            row.setAttribute("aria-disabled", "true");
+            row.addEventListener("click", () => close());
+          } else {
+            row.disabled = true;
+          }
+        } else {
+          row.addEventListener("click", () => { close(); onSelect(opt); });
+        }
+        if (onContext) {
+          row.addEventListener("contextmenu", (e) => {
+            e.preventDefault();
+            onContext(opt, isCur, e);
+          });
+        }
         list.appendChild(row);
       });
       position();
@@ -1555,7 +1893,7 @@ const Dropdown = (() => {
 
     // Keyboard navigation over the currently-visible, selectable rows.
     const moveActive = (dir) => {
-      const rows = [...list.querySelectorAll(".dropdown-opt:not(:disabled)")];
+      const rows = [...list.querySelectorAll('.dropdown-opt:not(:disabled):not([aria-disabled="true"])')];
       if (!rows.length) return;
       let idx = rows.findIndex((r) => r.classList.contains("active"));
       idx = idx < 0 ? (dir > 0 ? 0 : rows.length - 1) : (idx + dir + rows.length) % rows.length;
@@ -1573,8 +1911,8 @@ const Dropdown = (() => {
         else if (e.key === "ArrowUp") { e.preventDefault(); moveActive(-1); }
         else if (e.key === "Enter") {
           e.preventDefault();
-          const active = list.querySelector(".dropdown-opt.active:not(:disabled)") ||
-            list.querySelector(".dropdown-opt:not(:disabled)");
+          const active = list.querySelector('.dropdown-opt.active:not(:disabled):not([aria-disabled="true"])') ||
+            list.querySelector('.dropdown-opt:not(:disabled):not([aria-disabled="true"])');
           if (active) active.click();
         }
       });
@@ -1648,7 +1986,64 @@ const Dropdown = (() => {
     active = { menu: el, anchor, onDoc, onKey, onMove };
   }
 
-  return { open, close, isOpenFor, menu };
+  // Cursor-anchored context menu (e.g. right-click a branch). Lives in its own
+  // singleton so it can float ABOVE an open picker without closing it. `items`
+  // is an array of { label, icon, onClick, danger, disabled } or { separator }.
+  let ctx = null;
+  function closeContext() {
+    if (!ctx) return;
+    ctx.el.remove();
+    document.removeEventListener("mousedown", ctx.onDoc, true);
+    document.removeEventListener("contextmenu", ctx.onDoc, true);
+    document.removeEventListener("keydown", ctx.onKey, true);
+    window.removeEventListener("scroll", ctx.onScroll, true);
+    window.removeEventListener("resize", ctx.onScroll, true);
+    ctx = null;
+  }
+  function context(x, y, items) {
+    closeContext();
+    const el = document.createElement("div");
+    el.className = "dropdown-menu menu context-menu";
+    items.forEach((it) => {
+      if (it.separator) {
+        const sep = document.createElement("div");
+        sep.className = "menu-sep";
+        el.appendChild(sep);
+        return;
+      }
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "menu-item" + (it.danger ? " danger" : "");
+      if (it.disabled) row.disabled = true;
+      row.innerHTML = `<span class="menu-ico">${it.icon || ""}</span><span>${it.label}</span>`;
+      if (!it.disabled) row.addEventListener("click", () => { closeContext(); it.onClick(); });
+      el.appendChild(row);
+    });
+    document.body.appendChild(el);
+
+    const mw = el.offsetWidth;
+    const mh = el.offsetHeight;
+    let left = x;
+    let top = y;
+    if (left + mw > window.innerWidth - 8) left = window.innerWidth - 8 - mw;
+    if (left < 8) left = 8;
+    if (top + mh > window.innerHeight - 8) top = window.innerHeight - 8 - mh;
+    if (top < 8) top = 8;
+    el.style.left = Math.round(left) + "px";
+    el.style.top = Math.round(top) + "px";
+
+    const onDoc = (e) => { if (!el.contains(e.target)) closeContext(); };
+    const onKey = (e) => { if (e.key === "Escape") closeContext(); };
+    const onScroll = () => closeContext();
+    ctx = { el, onDoc, onKey, onScroll };
+    document.addEventListener("mousedown", onDoc, true);
+    document.addEventListener("contextmenu", onDoc, true);
+    document.addEventListener("keydown", onKey, true);
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", onScroll, true);
+  }
+
+  return { open, close, isOpenFor, menu, context, closeContext };
 })();
 
 // ---------- Initial render ----------
@@ -2369,6 +2764,29 @@ const ChangesPage = (() => {
 
     Dropdown.open(btn, {
       header: "Switch branch",
+      headerAction: {
+        label: "New branch",
+        icon: ICON.plus,
+        title: "Create a new branch",
+        onClick: () =>
+          openNewBranchDialog({
+            branches,
+            current: branch,
+            onCreate: async (name, base) => {
+              try {
+                const updated = await DC.createBranch(repoId, name, base);
+                const at = repos.findIndex((x) => x.id === updated.id);
+                if (at >= 0) repos[at] = updated;
+                branch = updated.branch || name;
+                $("chgBranchLabel").textContent = branch;
+                if (tab === "history") loadHistory(); else loadChanges();
+              } catch (e) {
+                console.error("createBranch failed", e);
+                await Modal.alert({ title: "Couldn't create branch", message: String(e) });
+              }
+            },
+          }),
+      },
       options: branches,
       current: branch,
       search: true,
@@ -2376,9 +2794,29 @@ const ChangesPage = (() => {
       optionKind: "branch",
       emptyText: "No local branches.",
       minWidth: Math.max(300, btn.offsetWidth),
+      onContext: (opt, isCur, ev) =>
+        openBranchContextMenu(ev, {
+          repoId,
+          branch: opt,
+          isCurrent: isCur,
+          branches,
+          onChanged: (updated) => {
+            if (updated) {
+              const at = repos.findIndex((x) => x.id === updated.id);
+              if (at >= 0) repos[at] = updated;
+              branch = updated.branch || branch;
+              $("chgBranchLabel").textContent = branch;
+            }
+            Dropdown.close();
+            if (tab === "history") loadHistory(); else loadChanges();
+          },
+        }),
       onSelect: async (target) => {
         try {
-          const updated = await DC.checkoutBranch(repoId, target);
+          const rd = repos.find((x) => x.id === repoId);
+          const dirty = (rd && rd.status === "dirty") || files.length > 0;
+          const updated = await performBranchSwitch({ repoId, current: branch, target, dirty });
+          if (!updated) return; // cancelled
           const at = repos.findIndex((x) => x.id === updated.id);
           if (at >= 0) repos[at] = updated;
           branch = updated.branch || target;
@@ -2481,7 +2919,13 @@ const ChangesPage = (() => {
   async function doSync(kind) {
     if (busy || !repoId) return;
     const btn = kind === "push" ? $("pushBtn") : kind === "pull" ? $("pullBtn") : $("fetchSyncBtn");
+    // Swap the directional arrow for the circular spinner while the operation
+    // runs so the in-progress state is unmistakable (Fetch already uses this
+    // icon). `.sync-btn.busy svg` rotates it. Restored in `finally`.
+    const iconEl = btn.querySelector("svg");
+    const prevIcon = iconEl ? iconEl.outerHTML : null;
     busy = true; btn.classList.add("busy");
+    if (iconEl) iconEl.outerHTML = ICON.sync;
     [$("pushBtn"), $("pullBtn"), $("fetchSyncBtn")].forEach((b) => (b.disabled = true));
     try {
       let cs;
@@ -2499,6 +2943,8 @@ const ChangesPage = (() => {
       await Modal.alert({ title: `${kind[0].toUpperCase() + kind.slice(1)} failed`, message: String(e) });
     } finally {
       busy = false; btn.classList.remove("busy");
+      const cur = btn.querySelector("svg");
+      if (cur && prevIcon) cur.outerHTML = prevIcon;
       updateCommitBtn();
     }
   }

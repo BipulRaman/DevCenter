@@ -152,16 +152,78 @@ pub async fn list_branches(id: String) -> AppResult<Vec<String>> {
 }
 
 /// Check out an existing local branch and return the repository's refreshed state.
+/// `stash` true leaves the current changes behind on the old branch; false
+/// carries them to the target (git's default).
 #[tauri::command]
 pub async fn git_checkout(
     id: String,
     branch: String,
+    stash: bool,
     state: State<'_, AppState>,
 ) -> AppResult<Repo> {
     let st = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || -> AppResult<Repo> {
         let path = PathBuf::from(&id);
-        git::checkout(&path, &branch)?;
+        git::checkout(&path, &branch, stash)?;
+        let (watched, tags) = meta_for(&st, &id);
+        git::repo_info(&path, watched, tags)
+    })
+    .await
+    .map_err(|e| AppError::msg(e.to_string()))?
+}
+
+/// Create a new branch from `base`, check it out, and return the repository's
+/// refreshed state. `base` may be empty to branch from the current HEAD.
+#[tauri::command]
+pub async fn git_create_branch(
+    id: String,
+    name: String,
+    base: String,
+    state: State<'_, AppState>,
+) -> AppResult<Repo> {
+    let st = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || -> AppResult<Repo> {
+        let path = PathBuf::from(&id);
+        git::create_branch(&path, &name, &base)?;
+        let (watched, tags) = meta_for(&st, &id);
+        git::repo_info(&path, watched, tags)
+    })
+    .await
+    .map_err(|e| AppError::msg(e.to_string()))?
+}
+
+/// Rename a branch (`name` -> `new_name`) and return the repository's refreshed state.
+#[tauri::command]
+pub async fn git_rename_branch(
+    id: String,
+    name: String,
+    new_name: String,
+    state: State<'_, AppState>,
+) -> AppResult<Repo> {
+    let st = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || -> AppResult<Repo> {
+        let path = PathBuf::from(&id);
+        git::rename_branch(&path, &name, &new_name)?;
+        let (watched, tags) = meta_for(&st, &id);
+        git::repo_info(&path, watched, tags)
+    })
+    .await
+    .map_err(|e| AppError::msg(e.to_string()))?
+}
+
+/// Delete a local branch and return the repository's refreshed state. When
+/// `force` is false a branch with unmerged commits is refused (git `-d`).
+#[tauri::command]
+pub async fn git_delete_branch(
+    id: String,
+    name: String,
+    force: bool,
+    state: State<'_, AppState>,
+) -> AppResult<Repo> {
+    let st = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || -> AppResult<Repo> {
+        let path = PathBuf::from(&id);
+        git::delete_branch(&path, &name, force)?;
         let (watched, tags) = meta_for(&st, &id);
         git::repo_info(&path, watched, tags)
     })
