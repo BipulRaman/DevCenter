@@ -363,6 +363,55 @@ pub async fn git_discard(
     staging_op(id, state, app, move |p| git::discard(p, &files)).await
 }
 
+/// Save the current changes to a new stash and return the refreshed working
+/// changes (now clean, with the new stash listed). Emits `repos_updated`.
+#[tauri::command]
+pub async fn git_stash_push(
+    id: String,
+    message: String,
+    include_untracked: bool,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> AppResult<ChangeSet> {
+    staging_op(id, state, app, move |p| {
+        git::stash_push(p, &message, include_untracked)
+    })
+    .await
+}
+
+/// Apply a stash (keeping it) and return the refreshed working changes.
+#[tauri::command]
+pub async fn git_stash_apply(
+    id: String,
+    index: usize,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> AppResult<ChangeSet> {
+    staging_op(id, state, app, move |p| git::stash_apply(p, index)).await
+}
+
+/// Apply a stash and remove it from the list, returning the refreshed changes.
+#[tauri::command]
+pub async fn git_stash_pop(
+    id: String,
+    index: usize,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> AppResult<ChangeSet> {
+    staging_op(id, state, app, move |p| git::stash_pop(p, index)).await
+}
+
+/// Delete a stash without applying it, returning the refreshed changes.
+#[tauri::command]
+pub async fn git_stash_drop(
+    id: String,
+    index: usize,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> AppResult<ChangeSet> {
+    staging_op(id, state, app, move |p| git::stash_drop(p, index)).await
+}
+
 /// Shared plumbing for stage/unstage/discard: run `op`, return the refreshed
 /// working changes, and emit `repos_updated` so the Git Board stays in sync.
 async fn staging_op<F>(

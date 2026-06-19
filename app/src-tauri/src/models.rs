@@ -87,6 +87,20 @@ pub struct FileChange {
     pub status: String,
 }
 
+/// A single entry in `git stash list` (working-tree snapshots saved for later).
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct StashEntry {
+    /// Stash index (`stash@{index}`); 0 is the most recent.
+    pub index: usize,
+    /// The stash message (custom message, or the auto WIP description).
+    pub message: String,
+    /// Branch the stash was created on.
+    pub branch: String,
+    /// Humanized relative time the stash was created.
+    pub when: String,
+}
+
 /// The set of changes shown on the Changes page — either the working tree
 /// (`branch` set) or a single commit (`summary`/`author`/`when` set).
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -104,6 +118,9 @@ pub struct ChangeSet {
     pub staged: Vec<FileChange>,
     #[serde(default)]
     pub unstaged: Vec<FileChange>,
+    /// Saved stashes for this repo (most recent first). Empty for commit views.
+    #[serde(default)]
+    pub stashes: Vec<StashEntry>,
     /// Working-tree sync state vs the upstream branch (0 for commit views).
     #[serde(default)]
     pub ahead: u32,

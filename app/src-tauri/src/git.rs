@@ -5,7 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use git2::{Delta, DiffOptions, Patch, Repository, Sort, StatusEntry, StatusOptions};
 
 use crate::error::{AppError, AppResult};
-use crate::models::{ChangeSet, CommitInfo, DiffHunk, DiffLine, FileChange, FileDiff, Repo};
+use crate::models::{ChangeSet, CommitInfo, DiffHunk, DiffLine, FileChange, FileDiff, Repo, StashEntry};
 
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -843,6 +843,8 @@ pub fn working_changes(path: &Path) -> AppResult<ChangeSet> {
         .is_some();
     let (ahead, behind) = ahead_behind(&repo).unwrap_or((0, 0));
 
+    let stashes = stash_list(path).unwrap_or_default();
+
     Ok(ChangeSet {
         branch: Some(branch),
         summary: None,
@@ -851,10 +853,148 @@ pub fn working_changes(path: &Path) -> AppResult<ChangeSet> {
         files,
         staged,
         unstaged,
+        stashes,
         ahead,
         behind,
         has_upstream,
     })
+}
+
+/// List the saved stashes for the repo at `path` (most recent first). Returns an
+/// empty list when there are none. Parses `git stash list` with a unit-separated
+/// format so messages containing spaces/colons stay intact.
+pub fn stash_list(path: &Path) -> AppResult<Vec<StashEntry>> {
+    let output = git_cmd()
+        .arg("-C")
+        .arg(path)
+        .args(["stash", "list", "--format=%gd%x1f%ct%x1f%gs"])
+        .output()?;
+    if !output.status.success() {
+        return Ok(Vec::new());
+    }
+    let text = String::from_utf8_lossy(&output.stdout);
+    let mut entries = Vec::new();
+    for line in text.lines() {
+        let mut parts = line.split('\u{1f}');
+        let selector = parts.next().unwrap_or("");
+        let ts = parts.next().unwrap_or("");
+        let subject = parts.next().unwrap_or("");
+        let index = selector
+            .trim_start_matches("stash@{")
+            .trim_end_matches('}')
+            .parse::<usize>()
+            .unwrap_or(entries.len());
+        let when = ts.parse::<i64>().ok().map(humanize_epoch).unwrap_or_default();
+        let (branch, message) = parse_stash_subject(subject);
+        entries.push(StashEntry {
+            index,
+            message,
+            branch,
+            when,
+        });
+    }
+    Ok(entries)
+}
+
+/// Split a stash subject ("On <branch>: <msg>" or "WIP on <branch>: <msg>") into
+/// its branch and message parts. Falls back to the whole subject when it doesn't
+/// match the expected shape.
+fn parse_stash_subject(subject: &str) -> (String, String) {
+    let s = subject.trim();
+    let rest = s
+        .strip_prefix("WIP on ")
+        .or_else(|| s.strip_prefix("On "))
+        .unwrap_or(s);
+    match rest.split_once(": ") {
+        Some((branch, msg)) => (branch.trim().to_string(), msg.trim().to_string()),
+        None => (String::new(), s.to_string()),
+    }
+}
+
+/// Save the current changes to a new stash. Includes untracked files when
+/// `include_untracked` is set. A blank `message` lets git auto-generate the
+/// usual "WIP on <branch>" subject.
+pub fn stash_push(path: &Path, message: &str, include_untracked: bool) -> AppResult<()> {
+    let mut cmd = git_cmd();
+    cmd.arg("-C").arg(path).args(["stash", "push"]);
+    if include_untracked {
+        cmd.arg("--include-untracked");
+    }
+    let message = message.trim();
+    if !message.is_empty() {
+        cmd.arg("-m").arg(message);
+    }
+    let output = cmd.output()?;
+    if !output.status.success() {
+        return Err(AppError::msg(
+            String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        ));
+    }
+    Ok(())
+}
+
+/// Run a `git stash <op> stash@{index}` operation (op = "apply" | "pop" | "drop").
+fn stash_op(path: &Path, op: &str, index: usize) -> AppResult<()> {
+    let stash_ref = format!("stash@{{{index}}}");
+    let output = git_cmd()
+        .arg("-C")
+        .arg(path)
+        .args(["stash", op, &stash_ref])
+        .output()?;
+    if !output.status.success() {
+        return Err(AppError::msg(
+            String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        ));
+    }
+    Ok(())
+}
+
+/// Apply or pop a stash, preserving the original staged/unstaged split via
+/// `--index` (so files that were staged come back staged). When git can't
+/// reinstate the index it aborts cleanly — nothing is applied and the stash is
+/// kept — so on that failure we safely retry without `--index` (the changes
+/// still come back, just unstaged).
+fn stash_restore(path: &Path, op: &str, index: usize) -> AppResult<()> {
+    let stash_ref = format!("stash@{{{index}}}");
+    let with_index = git_cmd()
+        .arg("-C")
+        .arg(path)
+        .args(["stash", op, "--index", &stash_ref])
+        .output()?;
+    if with_index.status.success() {
+        return Ok(());
+    }
+    let plain = git_cmd()
+        .arg("-C")
+        .arg(path)
+        .args(["stash", op, &stash_ref])
+        .output()?;
+    if plain.status.success() {
+        return Ok(());
+    }
+    let plain_err = String::from_utf8_lossy(&plain.stderr).trim().to_string();
+    let idx_err = String::from_utf8_lossy(&with_index.stderr).trim().to_string();
+    Err(AppError::msg(if plain_err.is_empty() {
+        idx_err
+    } else {
+        plain_err
+    }))
+}
+
+/// Apply a stash to the working tree (keeping the staged split) without removing
+/// it from the stash list.
+pub fn stash_apply(path: &Path, index: usize) -> AppResult<()> {
+    stash_restore(path, "apply", index)
+}
+
+/// Apply a stash (keeping the staged split) and remove it from the stash list.
+pub fn stash_pop(path: &Path, index: usize) -> AppResult<()> {
+    stash_restore(path, "pop", index)
+}
+
+/// Delete a stash without applying it (destructive — confirm in the UI first).
+pub fn stash_drop(path: &Path, index: usize) -> AppResult<()> {
+    stash_op(path, "drop", index)
 }
 
 /// Stage files into the index (`git add -A`). An empty `files` list stages
@@ -1136,6 +1276,7 @@ pub fn commit_changes(path: &Path, sha: &str) -> AppResult<ChangeSet> {
         files,
         staged: Vec::new(),
         unstaged: Vec::new(),
+        stashes: Vec::new(),
         ahead: 0,
         behind: 0,
         has_upstream: false,

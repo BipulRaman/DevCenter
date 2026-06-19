@@ -41,6 +41,7 @@ const ICON = {
   x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>',
   pencil: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
   copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
+  archive: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/></svg>',
   more: '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>',
   grip: '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>',
 };
@@ -2539,6 +2540,7 @@ const ChangesPage = (() => {
   // Changes tab state — git staging model (like VS Code's Source Control view).
   let staged = [];          // index changes [{path, oldPath, status}]
   let unstaged = [];        // working-tree changes [{path, oldPath, status}]
+  let stashes = [];         // saved stashes [{index, message, branch, when}]
   let collapsedChanges = new Set(); // collapsed folders in the "Changes" group
   let collapsedStaged = new Set();  // collapsed folders in the "Staged Changes" group
   let collapsedGroups = new Set();  // collapsed top-level groups: "staged" / "unstaged"
@@ -2566,6 +2568,8 @@ const ChangesPage = (() => {
   const ACT_STAGE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
   const ACT_UNSTAGE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>';
   const ACT_DISCARD = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor"><path d="M3.00098 2.5C3.00098 2.22386 3.22483 2 3.50098 2C3.77712 2 4.00098 2.22386 4.00098 2.5V6.34262L7.17202 3.17157C8.73412 1.60948 11.2668 1.60948 12.8289 3.17157C14.391 4.73367 14.391 7.26633 12.8289 8.82843L7.80375 13.8536C7.60849 14.0488 7.2919 14.0488 7.09664 13.8536C6.90138 13.6583 6.90138 13.3417 7.09664 13.1464L12.1218 8.12132C13.2933 6.94975 13.2933 5.05025 12.1218 3.87868C10.9502 2.70711 9.0507 2.70711 7.87913 3.87868L4.75781 7H8.50098C8.77712 7 9.00098 7.22386 9.00098 7.5C9.00098 7.77614 8.77712 8 8.50098 8H3.60098C3.26961 8 3.00098 7.73137 3.00098 7.4V2.5Z"/></svg>';
+  // Restore-from-stash: an up-arrow lifting out of a tray.
+  const ACT_RESTORE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/><polyline points="8 8 12 4 16 8"/><line x1="12" y1="4" x2="12" y2="15"/></svg>';
 
   const statBadge = (s) =>
     ({ new: "A", untracked: "U", modified: "M", deleted: "D", renamed: "R", conflicted: "C", typechange: "T" }[s] || "M");
@@ -2865,6 +2869,7 @@ const ChangesPage = (() => {
   function setChangeSet(cs) {
     staged = cs.staged || [];
     unstaged = cs.unstaged || [];
+    stashes = cs.stashes || [];
     renderSync(cs);
     renderChanges();
   }
@@ -2879,12 +2884,8 @@ const ChangesPage = (() => {
       total === 0 ? "No changes" : `${total} change${total === 1 ? "" : "s"}`;
 
     const list = $("changesList");
-    if (total === 0) {
+    if (total === 0 && !stashes.length) {
       list.innerHTML = `<div class="changes-empty">No uncommitted changes.</div>`;
-      navOrder = []; updateCommitBtn(); return;
-    }
-    if (!fStaged.length && !fUnstaged.length) {
-      list.innerHTML = `<div class="changes-empty">No files match the filter.</div>`;
       navOrder = []; updateCommitBtn(); return;
     }
 
@@ -2939,8 +2940,117 @@ const ChangesPage = (() => {
 
     makeGroup("staged", fStaged, "Staged Changes", unstageGroupActions);
     makeGroup("unstaged", fUnstaged, "Changes", stageGroupActions);
+    renderStashGroup(list);
+
+    // Nothing rendered (the filter hid every file and there are no stashes).
+    if (!list.children.length) {
+      list.innerHTML = `<div class="changes-empty">No files match the filter.</div>`;
+    }
 
     updateCommitBtn();
+  }
+
+  // Render the collapsible "Stashes" group at the bottom of the changes list.
+  function renderStashGroup(list) {
+    if (!stashes.length) return;
+    const groupKey = "stashes";
+    const isCollapsed = collapsedGroups.has(groupKey);
+    const section = document.createElement("div");
+    section.className = "scm-group scm-stashes" + (isCollapsed ? " collapsed" : "");
+    section.dataset.group = groupKey;
+    const head = document.createElement("div");
+    head.className = "scm-group-head";
+    head.innerHTML =
+      `<span class="tree-twisty${isCollapsed ? " collapsed" : ""}">${CARET}</span>` +
+      `<span class="scm-group-title">Stashes</span>` +
+      `<span class="scm-group-count">${stashes.length}</span>`;
+    section.appendChild(head);
+    list.appendChild(section);
+    head.addEventListener("click", () => {
+      if (collapsedGroups.has(groupKey)) collapsedGroups.delete(groupKey);
+      else collapsedGroups.add(groupKey);
+      renderChanges();
+    });
+    if (isCollapsed) return;
+    const body = document.createElement("div");
+    body.className = "scm-group-body";
+    section.appendChild(body);
+    stashes.forEach((st) => {
+      const row = document.createElement("div");
+      row.className = "stash-row";
+      row.title = st.message;
+      row.innerHTML =
+        `<span class="stash-ico">${ICON.archive}</span>` +
+        `<span class="stash-main">` +
+          `<span class="stash-msg">${esc(st.message)}</span>` +
+          `<span class="stash-meta">${st.branch ? esc(st.branch) + " · " : ""}${esc(st.when)}</span>` +
+        `</span>` +
+        `<span class="scm-actions">` +
+          `<button class="scm-act" type="button" data-act="restore" title="Restore — apply &amp; remove">${ACT_RESTORE}</button>` +
+          `<button class="scm-act" type="button" data-act="drop" title="Delete stash">${ICON.trash}</button>` +
+        `</span>`;
+      body.appendChild(row);
+      row.querySelector('[data-act="restore"]').addEventListener("click", (e) => { e.stopPropagation(); stashRestore(st); });
+      row.querySelector('[data-act="drop"]').addEventListener("click", (e) => { e.stopPropagation(); stashDrop(st); });
+      row.addEventListener("contextmenu", (e) => { e.preventDefault(); openStashContextMenu(e, st); });
+    });
+  }
+
+  // ---- stash actions ----
+  function openStashDialog() {
+    if (!repoId || (staged.length === 0 && unstaged.length === 0) || busy) return;
+    Modal.custom({
+      title: "Stash changes",
+      render: (body, foot, close, mkBtn) => {
+        body.innerHTML = `
+          <p class="modal-msg">Saves your uncommitted changes to a stash and resets the working tree to a clean state. Restore them anytime from the Stashes list.</p>
+          <div class="form-row">
+            <label class="form-label" for="stashMsg">Message (optional)</label>
+            <input class="modal-input" id="stashMsg" type="text" placeholder="Work in progress on ${esc(branch)}" spellcheck="false" autocomplete="off" />
+          </div>
+          <label class="form-check"><input type="checkbox" id="stashUntracked" checked /> <span>Include untracked files</span></label>`;
+        const msgEl = body.querySelector("#stashMsg");
+        const untrackedEl = body.querySelector("#stashUntracked");
+        const submit = () => close({ message: msgEl.value.trim(), includeUntracked: untrackedEl.checked });
+        msgEl.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
+        const cancel = mkBtn("btn-ghost", "Cancel");
+        cancel.addEventListener("click", () => close(null));
+        const ok = mkBtn("btn-primary", "Stash changes");
+        ok.addEventListener("click", submit);
+        foot.append(cancel, ok);
+        setTimeout(() => msgEl.focus(), 40);
+      },
+    }).then((res) => {
+      if (res) runStaging(() => DC.gitStashPush(repoId, res.message, res.includeUntracked));
+    });
+  }
+
+  function stashRestore(st) {
+    runStaging(() => DC.gitStashPop(repoId, st.index));
+  }
+
+  function stashApply(st) {
+    runStaging(() => DC.gitStashApply(repoId, st.index));
+  }
+
+  async function stashDrop(st) {
+    const ok = await Modal.confirm({
+      title: "Delete stash",
+      message: `Delete this stash? The saved changes will be permanently lost.\n\n“${st.message}”`,
+      confirmText: "Delete stash",
+      danger: true,
+    });
+    if (ok) runStaging(() => DC.gitStashDrop(repoId, st.index));
+  }
+
+  function openStashContextMenu(e, st) {
+    if (!DC || !DC.hasBackend) return;
+    Dropdown.context(e.clientX, e.clientY, [
+      { label: "Restore (apply & remove)", icon: ACT_RESTORE, onClick: () => stashRestore(st) },
+      { label: "Apply (keep stash)", icon: ICON.copy, onClick: () => stashApply(st) },
+      { separator: true },
+      { label: "Delete stash", icon: ICON.trash, danger: true, onClick: () => stashDrop(st) },
+    ]);
   }
 
   // ---- staging actions ----
@@ -2957,6 +3067,7 @@ const ChangesPage = (() => {
       const cs = await fn();
       staged = cs.staged || [];
       unstaged = cs.unstaged || [];
+      stashes = cs.stashes || [];
       renderSync(cs);
       // If the open file no longer exists in its group, clear the diff; else
       // refresh it (its staged/unstaged content may have shifted).
@@ -3064,6 +3175,8 @@ const ChangesPage = (() => {
     const has = staged.length > 0 || unstaged.length > 0;
     $("commitBtn").disabled = busy || !summary || !has;
     if (!busy) $("commitBtn").textContent = staged.length > 0 ? "Commit" : "Commit all";
+    const stashBtn = $("changeStashBtn");
+    if (stashBtn) stashBtn.disabled = busy || !has;
   }
 
   async function doCommit() {
@@ -3366,6 +3479,7 @@ const ChangesPage = (() => {
     document.querySelectorAll("#chgViewToggle .seg-btn").forEach((b) => b.addEventListener("click", () => setView(b.dataset.view)));
     $("changeFilter").addEventListener("input", renderChanges);
     $("historyFilter").addEventListener("input", renderHistory);
+    $("changeStashBtn").addEventListener("click", openStashDialog);
     $("changeRefreshBtn").addEventListener("click", async () => {
       const b = $("changeRefreshBtn");
       if (!repoId || b.classList.contains("busy")) return;

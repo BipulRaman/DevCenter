@@ -45,6 +45,11 @@
     gitStage: (id, files) => invoke("git_stage", { id, files: files || [] }),
     gitUnstage: (id, files) => invoke("git_unstage", { id, files: files || [] }),
     gitDiscard: (id, files) => invoke("git_discard", { id, files: files || [] }),
+    gitStashPush: (id, message, includeUntracked) =>
+      invoke("git_stash_push", { id, message: message || "", includeUntracked: includeUntracked !== false }),
+    gitStashApply: (id, index) => invoke("git_stash_apply", { id, index }),
+    gitStashPop: (id, index) => invoke("git_stash_pop", { id, index }),
+    gitStashDrop: (id, index) => invoke("git_stash_drop", { id, index }),
     gitCommit: (id, summary, description, all) =>
       invoke("git_commit", { id, summary, description, all: !!all }),
     gitPush: (id) => invoke("git_push", { id }),

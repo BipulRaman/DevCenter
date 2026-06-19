@@ -1199,7 +1199,8 @@ body.col-resizing * { cursor: col-resize !important; }
 .changes-head-actions .seg { padding: 2px; }
 .changes-head-actions .seg-btn { width: 26px; height: 22px; padding: 0; display: grid; place-items: center; }
 .changes-head-actions .seg-btn svg { width: 14px; height: 14px; }
-.changes-head-actions #changeRefreshBtn:hover { background: var(--bg-elev); color: var(--accent-hover); }
+.changes-head-actions .seg:not(.view-toggle) .seg-btn:hover:not(:disabled) { background: var(--bg-elev); color: var(--accent-hover); }
+.changes-head-actions .seg-btn:disabled { opacity: .4; cursor: default; }
 .changes-head-actions #changeRefreshBtn.busy svg { animation: spin .8s linear infinite; }
 
 /* ---- file tree / list (VS Code explorer look-and-feel) ---- */
@@ -1278,17 +1279,42 @@ body.col-resizing * { cursor: col-resize !important; }
 }
 .scm-act svg { width: 15px; height: 15px; }
 .scm-act:hover { background: var(--bg-hover); color: var(--text); }
-.scm-act[data-act="discard"]:hover { color: var(--red); }
+.scm-act[data-act="discard"]:hover, .scm-act[data-act="drop"]:hover { color: var(--red); }
+.scm-act[data-act="restore"]:hover { color: var(--accent-hover); }
 /* file/folder row actions: overlaid on the right, revealed on hover (VS Code) */
 .scm-actions {
   position: absolute; right: 6px; top: 0; bottom: 0;
   display: flex; align-items: center; gap: 1px;
   opacity: 0; pointer-events: none;
 }
-.tree-row:hover .scm-actions, .tree-file.selected .scm-actions { opacity: 1; pointer-events: auto; }
+/* Reveal on hover/selection and fade the text behind the icons into the row
+   background so a long name/message never collides with the actions. */
+.tree-row:hover .scm-actions, .tree-file.selected .scm-actions,
+.stash-row:hover .scm-actions {
+  opacity: 1; pointer-events: auto; padding-left: 24px;
+}
+.tree-row:hover .scm-actions, .stash-row:hover .scm-actions {
+  background: linear-gradient(to right, transparent, var(--bg-hover) 18px);
+}
+.tree-file.selected .scm-actions {
+  background: linear-gradient(to right, transparent, var(--accent-soft) 18px);
+}
 .tree-row:hover .change-stat, .tree-file.selected .change-stat,
 .tree-folder:hover .tree-count { visibility: hidden; }
 .change-stat.typechange { color: var(--text-dim); }
+
+/* Stashes group rows (saved working-tree snapshots) */
+.scm-stashes { margin-top: 2px; }
+.stash-row {
+  display: flex; align-items: center; gap: 9px; position: relative;
+  padding: 5px 12px 5px 26px; min-height: 42px; cursor: default;
+}
+.stash-row:hover { background-color: var(--bg-hover); }
+.stash-ico { width: 16px; height: 16px; flex-shrink: 0; color: var(--text-faint); display: grid; place-items: center; }
+.stash-ico svg { width: 15px; height: 15px; }
+.stash-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.stash-msg { font-size: 13px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stash-meta { font-size: 11px; color: var(--text-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
 
 /* commit message box pinned to the bottom of the side panel */
 .commit-box { border-top: 1px solid var(--border); padding: 12px; display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
