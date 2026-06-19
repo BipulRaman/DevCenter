@@ -136,6 +136,54 @@ if (mainScroll) {
       }
     });
   }
+
+  const aboutBtn = document.getElementById("aboutBtn");
+  if (aboutBtn) aboutBtn.addEventListener("click", () => { close(); openAbout(); });
+
+  async function openAbout() {
+    let version = "";
+    try { version = DC && DC.appVersion ? await DC.appVersion() : ""; } catch (_) {}
+    const showVer = version && version !== "browser";
+    const LOGO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg>';
+    const GLOBE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z"/></svg>';
+    const year = new Date().getFullYear();
+    await Modal.custom({
+      title: "",
+      render: (body, foot, closeModal) => {
+        const titleEl = document.getElementById("modalTitle");
+        titleEl.innerHTML =
+          '<span class="about-head"><span class="about-logo">' + LOGO + '</span>' +
+          '<span class="about-id"><span class="about-name">DevCenter</span>' +
+          (showVer ? '<span class="about-ver">Version ' + esc(version) + '</span>' : '') +
+          '</span></span>';
+        body.innerHTML =
+          '<p class="about-desc">A fast desktop companion for your local Git workflow — track repositories, review pull requests across GitHub and Azure DevOps, commit changes, and run your local apps, all in one place.</p>' +
+          '<div class="about-meta">' +
+            '<div class="about-row"><span class="about-key">Created by</span><a class="about-link" href="#" data-url="https://bipul.in">Bipul Raman</a></div>' +
+            '<div class="about-row"><span class="about-key">Website</span><a class="about-link" href="#" data-url="https://github.com/BipulRaman/DevCenter">' + GLOBE + '<span>github.com/BipulRaman/DevCenter</span></a></div>' +
+          '</div>';
+        foot.classList.add("about-foot");
+        foot.innerHTML = '<span class="about-copy">\u00a9 ' + year + ' Bipul Raman</span>';
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "btn btn-primary";
+        btn.textContent = "Close";
+        btn.addEventListener("click", () => closeModal(null));
+        foot.appendChild(btn);
+        body.querySelectorAll(".about-link").forEach((a) => {
+          a.addEventListener("click", (e) => {
+            e.preventDefault();
+            const url = a.dataset.url;
+            if (DC && DC.openUrl) DC.openUrl(url); else window.open(url, "_blank");
+          });
+        });
+        setTimeout(() => btn.focus(), 40);
+      },
+    });
+    const f = document.getElementById("modalFoot");
+    if (f) f.classList.remove("about-foot");
+  }
+
   syncThemeUI();
 })();
 
