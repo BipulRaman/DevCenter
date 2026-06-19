@@ -2620,6 +2620,8 @@ const ChangesPage = (() => {
     wireDiffNav();
     if (d.binary) { $("diffBody").innerHTML = `<div class="diff-binary">Binary file — no text diff to display.</div>`; return; }
     if (!d.hunks.length) { $("diffBody").innerHTML = `<div class="diff-binary">No textual changes to display.</div>`; return; }
+    const lang = (window.Highlighter && Highlighter.langForPath(d.path)) || "";
+    const hl = (s) => (window.Highlighter ? Highlighter.line(s, lang) : esc(s));
     const rows = [];
     d.hunks.forEach((h) => {
       rows.push(`<div class="diff-hunk-head">${esc(h.header)}</div>`);
@@ -2627,7 +2629,8 @@ const ChangesPage = (() => {
         const cls = l.kind === "add" ? "add" : l.kind === "del" ? "del" : "";
         const oldN = l.oldLineno != null ? l.oldLineno : "";
         const newN = l.newLineno != null ? l.newLineno : "";
-        rows.push(`<div class="diff-line ${cls}"><span class="diff-gutter"><span>${oldN}</span><span>${newN}</span></span><span class="diff-text">${esc(l.content) || "&nbsp;"}</span></div>`);
+        const body = l.content ? hl(l.content) : "&nbsp;";
+        rows.push(`<div class="diff-line ${cls}"><span class="diff-gutter"><span>${oldN}</span><span>${newN}</span></span><span class="diff-text">${body}</span></div>`);
       });
     });
     $("diffBody").innerHTML = rows.join("");
