@@ -3366,6 +3366,12 @@ const ChangesPage = (() => {
     document.querySelectorAll("#chgViewToggle .seg-btn").forEach((b) => b.addEventListener("click", () => setView(b.dataset.view)));
     $("changeFilter").addEventListener("input", renderChanges);
     $("historyFilter").addEventListener("input", renderHistory);
+    $("changeRefreshBtn").addEventListener("click", async () => {
+      const b = $("changeRefreshBtn");
+      if (!repoId || b.classList.contains("busy")) return;
+      b.classList.add("busy");
+      try { await loadChanges(); } finally { b.classList.remove("busy"); }
+    });
     $("detailCollapseBtn").addEventListener("click", () => collapseAll(collapsedDetail, commitFiles, renderDetail));
     $("commitSummary").addEventListener("input", updateCommitBtn);
     $("commitBtn").addEventListener("click", doCommit);

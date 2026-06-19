@@ -1194,11 +1194,13 @@ body.col-resizing * { cursor: col-resize !important; }
 }
 .icon-mini:hover { background: var(--bg-hover); color: var(--text); }
 
-/* view toggle + collapse-all live in the Changes panel header (compact) */
-.changes-head-actions { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
-.changes-head .view-toggle { padding: 2px; }
-.changes-head .view-toggle .seg-btn { width: 26px; height: 22px; }
-.changes-head .view-toggle .seg-btn svg { width: 14px; height: 14px; }
+/* view toggle + refresh live in the Changes panel header (compact, segmented) */
+.changes-head-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.changes-head-actions .seg { padding: 2px; }
+.changes-head-actions .seg-btn { width: 26px; height: 22px; padding: 0; display: grid; place-items: center; }
+.changes-head-actions .seg-btn svg { width: 14px; height: 14px; }
+.changes-head-actions #changeRefreshBtn:hover { background: var(--bg-elev); color: var(--accent-hover); }
+.changes-head-actions #changeRefreshBtn.busy svg { animation: spin .8s linear infinite; }
 
 /* ---- file tree / list (VS Code explorer look-and-feel) ---- */
 .file-tree { flex: 1; overflow: auto; padding: 2px 0 8px; min-height: 0; outline: none; }
