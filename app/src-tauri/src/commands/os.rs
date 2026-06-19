@@ -62,37 +62,37 @@ pub fn open_terminal(path: String) -> Result<(), String> {
     Ok(())
 }
 
-/// Manually checks for app updates and installs if available.
+/// Checks for an available update WITHOUT installing it. Installing restarts the
+/// app, so the UI asks the user first (see install_update).
 #[tauri::command]
 pub async fn check_for_updates(app: tauri::AppHandle) -> Result<UpdateActionResult, String> {
     let updater = app.updater().map_err(|e| e.to_string())?;
     let update = updater.check().await.map_err(|e| e.to_string())?;
 
-    let Some(update) = update else {
-        return Ok(UpdateActionResult {
+    match update {
+        Some(update) => Ok(UpdateActionResult {
+            status: "available".to_string(),
+            version: Some(update.version.to_string()),
+        }),
+        None => Ok(UpdateActionResult {
             status: "up_to_date".to_string(),
             version: None,
-        });
-    };
-
-    let version = update.version.to_string();
-    update
-        .download_and_install(
-            |_chunk_len, _content_len| {},
-            || {},
-        )
-        .await
-        .map_err(|e| e.to_string())?;
-
-    Ok(UpdateActionResult {
-        status: "installed".to_string(),
-        version: Some(version),
-    })
+        }),
+    }
 }
 
-/// Relaunches the app to apply a staged update. Invoked from the UI only after
-/// the user explicitly confirms the restart — updates are never auto-applied.
+/// Downloads and installs the available update. On Windows the NSIS installer
+/// closes the app and relaunches it, so this is invoked ONLY after the user
+/// explicitly confirms — updates are never installed or restarted automatically.
 #[tauri::command]
-pub fn relaunch_app(app: tauri::AppHandle) {
-    app.restart();
+pub async fn install_update(app: tauri::AppHandle) -> Result<(), String> {
+    let updater = app.updater().map_err(|e| e.to_string())?;
+    let update = updater.check().await.map_err(|e| e.to_string())?;
+    if let Some(update) = update {
+        update
+            .download_and_install(|_chunk_len, _content_len| {}, || {})
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }

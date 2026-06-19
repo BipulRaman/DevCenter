@@ -56,32 +56,12 @@ async fn auto_update_on_start(app: tauri::AppHandle) {
         return;
     };
 
-    let target_version = update.version.to_string();
-    emit_update(&app, "available", Some(target_version.clone()), None);
-
-    let install_result = update
-        .download_and_install(
-            |_chunk_len, _content_len| {},
-            || {},
-        )
-        .await;
-
-    match install_result {
-        Ok(_) => {
-            // Update is staged but NOT applied. We deliberately do not auto-restart;
-            // the UI listens for this "installed" state and asks the user to restart
-            // when they're ready (which calls the relaunch_app command).
-            emit_update(&app, "installed", Some(target_version), None);
-        }
-        Err(e) => {
-            emit_update(
-                &app,
-                "error",
-                Some(target_version),
-                Some(format!("update install failed: {e}")),
-            );
-        }
-    }
+    // An update is available. Do NOT download/install automatically — on Windows
+    // download_and_install runs the NSIS installer, which closes and relaunches
+    // the app (the auto-restart the user reported). Only notify the UI here; the
+    // user confirms, and the install (which restarts the app) runs via the
+    // install_update command.
+    emit_update(&app, "available", Some(update.version.to_string()), None);
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -110,7 +90,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::os::app_version,
             commands::os::check_for_updates,
-            commands::os::relaunch_app,
+            commands::os::install_update,
             commands::os::open_path,
             commands::os::open_url,
             commands::os::open_terminal,

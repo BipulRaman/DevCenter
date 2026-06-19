@@ -123,13 +123,13 @@ if (mainScroll) {
         const result = await DC.checkForUpdates();
         if (result && result.status === "up_to_date") {
           await Modal.alert({ title: "Up to date", message: "You're already on the latest version." });
-        } else if (result && result.status === "installed") {
-          const restart = await Modal.confirm({
-            title: "Update installed",
-            message: `Version ${result.version || "new"} has been installed. Restart DevCenter now to apply it?`,
-            confirmText: "Restart now",
+        } else if (result && result.status === "available") {
+          const go = await Modal.confirm({
+            title: "Update available",
+            message: `DevCenter ${result.version || ""} is available. Install it now? DevCenter will restart to finish updating.`,
+            confirmText: "Update & restart",
           });
-          if (restart) await DC.relaunchApp();
+          if (go) await DC.installUpdate();
         }
       } catch (e) {
         await Modal.alert({ title: "Update check failed", message: String(e) });
@@ -154,8 +154,11 @@ if (mainScroll) {
         titleEl.innerHTML =
           '<span class="about-head"><span class="about-logo">' + LOGO + '</span>' +
           '<span class="about-id"><span class="about-name">DevCenter</span>' +
-          (showVer ? '<span class="about-ver">Version ' + esc(version) + '</span>' : '') +
+          '<span class="about-ver"></span>' +
           '</span></span>';
+        const verEl = titleEl.querySelector(".about-ver");
+        if (showVer) verEl.textContent = "Version " + version;
+        else verEl.remove();
         body.innerHTML =
           '<p class="about-desc">A fast desktop companion for your local Git workflow — track repositories, review pull requests across GitHub and Azure DevOps, commit changes, and run your local apps, all in one place.</p>' +
           '<div class="about-meta">' +
@@ -2027,18 +2030,22 @@ if (DC && DC.hasBackend) {
     }
   });
 
-  // Background updater finished staging an update on startup → ask the user to
-  // restart (we never auto-restart). Prompt only once per session.
-  let updateRestartPrompted = false;
+  // Startup update check found an update → ask the user before installing,
+  // because installing restarts the app. We never auto-install/restart. Prompt
+  // only once per session.
+  let updatePrompted = false;
   DC.onUpdateState(async (s) => {
-    if (!s || s.status !== "installed" || updateRestartPrompted) return;
-    updateRestartPrompted = true;
-    const restart = await Modal.confirm({
-      title: "Update ready",
-      message: `Version ${s.version || "new"} has been installed. Restart DevCenter now to apply it?`,
-      confirmText: "Restart now",
+    if (!s || s.status !== "available" || updatePrompted) return;
+    updatePrompted = true;
+    const go = await Modal.confirm({
+      title: "Update available",
+      message: `DevCenter ${s.version || ""} is available. Install it now? DevCenter will restart to finish updating.`,
+      confirmText: "Update & restart",
     });
-    if (restart) await DC.relaunchApp();
+    if (go) {
+      try { await DC.installUpdate(); }
+      catch (e) { await Modal.alert({ title: "Update failed", message: String(e) }); }
+    }
   });
 
   // New application.
