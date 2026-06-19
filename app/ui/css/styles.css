@@ -1186,8 +1186,7 @@ body.col-resizing * { cursor: col-resize !important; }
   font-size: 11.5px; font-weight: 600; color: var(--text-dim);
 }
 .detail-filebar { padding: 10px 12px 8px; border-top: 1px solid var(--border); text-transform: uppercase; letter-spacing: .4px; color: var(--text-faint); }
-.changes-head .select-all { display: flex; align-items: center; gap: 9px; min-height: 26px; flex: 1; cursor: pointer; }
-.changes-head input { width: 16px; height: 16px; margin: 0; display: block; accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
+.changes-head-title { flex: 1; min-width: 0; min-height: 26px; display: flex; align-items: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .icon-mini {
   flex-shrink: 0; width: 26px; height: 26px; display: grid; place-items: center;
   background: transparent; border: none; border-radius: 6px; color: var(--text-faint); cursor: pointer;
@@ -1243,6 +1242,50 @@ body.col-resizing * { cursor: col-resize !important; }
 .change-stat.deleted { color: var(--red); }
 .change-stat.renamed { color: var(--accent-hover); }
 .change-stat.conflicted { color: var(--red); }
+
+/* ---- Source-control groups (Staged Changes / Changes) ---- */
+.scm-group { display: flex; flex-direction: column; }
+.scm-group-head {
+  display: flex; align-items: center; gap: 4px; height: 26px;
+  padding: 0 12px 0 8px; position: relative; cursor: pointer; user-select: none;
+  font-size: 11px; font-weight: 600; letter-spacing: .4px; text-transform: uppercase; color: var(--text-faint);
+}
+.scm-group-head:hover { color: var(--text-dim); }
+.scm-group-head .tree-twisty { color: var(--text-faint); }
+.scm-group-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* indent the file rows so they sit under the group label, leaving the chevron column as left space (VS Code) */
+.scm-group-body .tree-row { padding-left: calc(26px + var(--d, 0) * 8px); background-image: none; }
+.scm-group-count {
+  flex-shrink: 0; min-width: 18px; height: 17px; padding: 0 6px; display: inline-grid; place-items: center;
+  background: var(--bg-elev-2); border: 1px solid var(--border); border-radius: 999px;
+  font-size: 10.5px; font-weight: 600; color: var(--text-faint); font-variant-numeric: tabular-nums;
+}
+.scm-group-actions {
+  position: absolute; right: 10px; top: 0; bottom: 0;
+  display: flex; align-items: center; gap: 2px;
+  opacity: 0; pointer-events: none;
+}
+.scm-group:hover .scm-group-actions { opacity: 1; pointer-events: auto; }
+.scm-group:hover .scm-group-count { visibility: hidden; }
+
+/* per-row + per-group action buttons (stage +, unstage −, discard ↩) */
+.scm-act {
+  width: 22px; height: 22px; flex-shrink: 0; display: grid; place-items: center;
+  background: transparent; border: none; border-radius: 5px; color: var(--text-dim); cursor: pointer;
+  transition: background .12s, color .12s;
+}
+.scm-act svg { width: 15px; height: 15px; }
+.scm-act:hover { background: var(--bg-hover); color: var(--text); }
+.scm-act[data-act="discard"]:hover { color: var(--red); }
+/* file/folder row actions: overlaid on the right, revealed on hover (VS Code) */
+.scm-actions {
+  position: absolute; right: 6px; top: 0; bottom: 0;
+  display: flex; align-items: center; gap: 1px;
+  opacity: 0; pointer-events: none;
+}
+.tree-row:hover .scm-actions, .tree-file.selected .scm-actions { opacity: 1; pointer-events: auto; }
+.tree-row:hover .change-stat, .tree-file.selected .change-stat,
+.tree-folder:hover .tree-count { visibility: hidden; }
 .change-stat.typechange { color: var(--text-dim); }
 
 /* commit message box pinned to the bottom of the side panel */

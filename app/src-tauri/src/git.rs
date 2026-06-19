@@ -717,6 +717,74 @@ fn classify_status(s: git2::Status, entry: &StatusEntry) -> (String, Option<Stri
     (status.to_string(), old_path)
 }
 
+/// The staged (index) portion of a status entry, if any — i.e. what differs
+/// between HEAD and the index. Returns `None` when nothing is staged.
+fn staged_change(s: git2::Status, entry: &StatusEntry, path: &str) -> Option<FileChange> {
+    use git2::Status as St;
+    let status = if s.contains(St::INDEX_NEW) {
+        "new"
+    } else if s.contains(St::INDEX_MODIFIED) {
+        "modified"
+    } else if s.contains(St::INDEX_DELETED) {
+        "deleted"
+    } else if s.contains(St::INDEX_RENAMED) {
+        "renamed"
+    } else if s.contains(St::INDEX_TYPECHANGE) {
+        "typechange"
+    } else {
+        return None;
+    };
+    let old_path = if s.contains(St::INDEX_RENAMED) {
+        entry.head_to_index().and_then(|d| {
+            d.old_file()
+                .path()
+                .map(|p| p.to_string_lossy().replace('\\', "/"))
+        })
+    } else {
+        None
+    };
+    Some(FileChange {
+        path: path.to_string(),
+        old_path,
+        status: status.to_string(),
+    })
+}
+
+/// The unstaged (working-tree) portion of a status entry, if any — i.e. what
+/// differs between the index and the working tree (including untracked files).
+fn unstaged_change(s: git2::Status, entry: &StatusEntry, path: &str) -> Option<FileChange> {
+    use git2::Status as St;
+    let status = if s.contains(St::CONFLICTED) {
+        "conflicted"
+    } else if s.contains(St::WT_NEW) {
+        "untracked"
+    } else if s.contains(St::WT_MODIFIED) {
+        "modified"
+    } else if s.contains(St::WT_DELETED) {
+        "deleted"
+    } else if s.contains(St::WT_RENAMED) {
+        "renamed"
+    } else if s.contains(St::WT_TYPECHANGE) {
+        "typechange"
+    } else {
+        return None;
+    };
+    let old_path = if s.contains(St::WT_RENAMED) {
+        entry.index_to_workdir().and_then(|d| {
+            d.old_file()
+                .path()
+                .map(|p| p.to_string_lossy().replace('\\', "/"))
+        })
+    } else {
+        None
+    };
+    Some(FileChange {
+        path: path.to_string(),
+        old_path,
+        status: status.to_string(),
+    })
+}
+
 /// List the working-tree changes for a repo (everything that would be committed
 /// if all files were selected), GitHub-Desktop style.
 pub fn working_changes(path: &Path) -> AppResult<ChangeSet> {
@@ -737,6 +805,8 @@ pub fn working_changes(path: &Path) -> AppResult<ChangeSet> {
 
     let statuses = repo.statuses(Some(&mut opts))?;
     let mut files = Vec::new();
+    let mut staged = Vec::new();
+    let mut unstaged = Vec::new();
     for entry in statuses.iter() {
         let s = entry.status();
         if s.is_ignored() {
@@ -748,12 +818,21 @@ pub fn working_changes(path: &Path) -> AppResult<ChangeSet> {
         };
         let (status, old_path) = classify_status(s, &entry);
         files.push(FileChange {
-            path: path_str,
+            path: path_str.clone(),
             old_path,
             status,
         });
+        if let Some(fc) = staged_change(s, &entry, &path_str) {
+            staged.push(fc);
+        }
+        if let Some(fc) = unstaged_change(s, &entry, &path_str) {
+            unstaged.push(fc);
+        }
     }
-    files.sort_by(|a, b| a.path.to_lowercase().cmp(&b.path.to_lowercase()));
+    let by_path = |a: &FileChange, b: &FileChange| a.path.to_lowercase().cmp(&b.path.to_lowercase());
+    files.sort_by(by_path);
+    staged.sort_by(by_path);
+    unstaged.sort_by(by_path);
 
     // Sync state vs upstream (for the Push/Pull controls on the Changes page).
     let has_upstream = repo
@@ -770,10 +849,93 @@ pub fn working_changes(path: &Path) -> AppResult<ChangeSet> {
         author: None,
         when: None,
         files,
+        staged,
+        unstaged,
         ahead,
         behind,
         has_upstream,
     })
+}
+
+/// Stage files into the index (`git add -A`). An empty `files` list stages
+/// everything (the working tree). Handles new, modified, deleted and renamed
+/// paths.
+pub fn stage(path: &Path, files: &[String]) -> AppResult<()> {
+    let mut cmd = git_cmd();
+    cmd.arg("-C").arg(path);
+    if files.is_empty() {
+        cmd.args(["add", "-A"]);
+    } else {
+        cmd.args(["add", "-A", "--"]);
+        for f in files {
+            cmd.arg(f);
+        }
+    }
+    let out = cmd.output()?;
+    if !out.status.success() {
+        return Err(AppError::msg(
+            String::from_utf8_lossy(&out.stderr).trim().to_string(),
+        ));
+    }
+    Ok(())
+}
+
+/// Unstage files (move them back from the index to the working tree, keeping the
+/// edits). An empty `files` list unstages everything. Uses `git restore
+/// --staged`, falling back to `git rm --cached` on an unborn branch (no HEAD).
+pub fn unstage(path: &Path, files: &[String]) -> AppResult<()> {
+    let unborn = Repository::open(path).map(|r| r.head().is_err()).unwrap_or(false);
+    let mut cmd = git_cmd();
+    cmd.arg("-C").arg(path);
+    if unborn {
+        cmd.args(["rm", "--cached", "-r", "-q", "--"]);
+    } else {
+        cmd.args(["restore", "--staged", "--"]);
+    }
+    if files.is_empty() {
+        cmd.arg(".");
+    } else {
+        for f in files {
+            cmd.arg(f);
+        }
+    }
+    let out = cmd.output()?;
+    if !out.status.success() {
+        return Err(AppError::msg(
+            String::from_utf8_lossy(&out.stderr).trim().to_string(),
+        ));
+    }
+    Ok(())
+}
+
+/// Discard unstaged working-tree changes: revert tracked files to the index/HEAD
+/// state and delete untracked files. An empty `files` list discards everything.
+/// Destructive — the caller is expected to confirm first. Best-effort: a benign
+/// failure on one phase (e.g. `restore` on an untracked-only set) doesn't block
+/// the other, so mixed selections are fully discarded.
+pub fn discard(path: &Path, files: &[String]) -> AppResult<()> {
+    // Revert tracked files (drops unstaged edits, keeps any staged version).
+    let mut restore = git_cmd();
+    restore.arg("-C").arg(path).args(["restore", "--"]);
+    if files.is_empty() {
+        restore.arg(".");
+    } else {
+        for f in files {
+            restore.arg(f);
+        }
+    }
+    let _ = restore.output();
+
+    // Remove untracked files and directories.
+    let mut clean = git_cmd();
+    clean.arg("-C").arg(path).args(["clean", "-fd", "--"]);
+    if !files.is_empty() {
+        for f in files {
+            clean.arg(f);
+        }
+    }
+    let _ = clean.output();
+    Ok(())
 }
 
 /// Convert a git2 `Diff` into our serializable `FileDiff` for one file.
@@ -839,61 +1001,50 @@ fn build_file_diff(diff: &git2::Diff, file: &str) -> AppResult<FileDiff> {
     Ok(result)
 }
 
-/// Diff a single file in the working tree against HEAD (includes staged,
-/// unstaged and untracked content — i.e. what a full commit would record).
-pub fn file_diff(path: &Path, file: &str) -> AppResult<FileDiff> {
+/// Diff a single file. When `staged` is true, show the staged diff (HEAD vs the
+/// index); otherwise show the unstaged diff (index vs the working tree,
+/// including untracked content) — matching VS Code's split source-control view.
+pub fn file_diff(path: &Path, file: &str, staged: bool) -> AppResult<FileDiff> {
     let repo = Repository::open(path)?;
     let mut opts = DiffOptions::new();
-    opts.include_untracked(true)
-        .recurse_untracked_dirs(true)
-        .show_untracked_content(true)
-        .context_lines(3)
-        .pathspec(file);
-    let head_tree = repo.head().ok().and_then(|h| h.peel_to_tree().ok());
-    let diff = repo.diff_tree_to_workdir_with_index(head_tree.as_ref(), Some(&mut opts))?;
+    opts.context_lines(3).pathspec(file);
+    let diff = if staged {
+        let head_tree = repo.head().ok().and_then(|h| h.peel_to_tree().ok());
+        repo.diff_tree_to_index(head_tree.as_ref(), None, Some(&mut opts))?
+    } else {
+        opts.include_untracked(true)
+            .recurse_untracked_dirs(true)
+            .show_untracked_content(true);
+        repo.diff_index_to_workdir(None, Some(&mut opts))?
+    };
     build_file_diff(&diff, file)
 }
 
-/// Commit the selected files with `summary` (+ optional `description`) using the
-/// system `git` (so the user's configured identity and hooks apply). Returns the
-/// new short hash. With a pathspec, git commits *only* those files — matching
-/// GitHub Desktop — except for the very first (unborn) commit.
-pub fn commit(path: &Path, summary: &str, description: &str, files: &[String]) -> AppResult<String> {
+/// Commit the staged index with `summary` (+ optional `description`) using the
+/// system `git` (so the user's configured identity and hooks apply). When `all`
+/// is true, everything is staged first (`git add -A`) — used when the user
+/// commits without having staged anything. Returns the new short hash.
+pub fn commit(path: &Path, summary: &str, description: &str, all: bool) -> AppResult<String> {
     let summary = summary.trim();
     if summary.is_empty() {
         return Err(AppError::msg("Enter a commit summary."));
     }
-    if files.is_empty() {
-        return Err(AppError::msg("Select at least one file to commit."));
-    }
     let repo = Repository::open(path)?;
-    let unborn = repo.head().is_err();
 
-    // Stage exactly the selected paths (covers new, modified and deleted files).
-    let mut add = git_cmd();
-    add.arg("-C").arg(path).args(["add", "-A", "--"]);
-    for f in files {
-        add.arg(f);
-    }
-    let out = add.output()?;
-    if !out.status.success() {
-        return Err(AppError::msg(
-            String::from_utf8_lossy(&out.stderr).trim().to_string(),
-        ));
+    if all {
+        let out = git_cmd().arg("-C").arg(path).args(["add", "-A"]).output()?;
+        if !out.status.success() {
+            return Err(AppError::msg(
+                String::from_utf8_lossy(&out.stderr).trim().to_string(),
+            ));
+        }
     }
 
-    // Commit. A pathspec makes git use "commit only" mode so unrelated staged
-    // entries are excluded; the first commit can't do partial, so commit staged.
+    // Commit whatever is staged (the index).
     let mut c = git_cmd();
     c.arg("-C").arg(path).arg("commit").arg("-m").arg(summary);
     if !description.trim().is_empty() {
         c.arg("-m").arg(description.trim());
-    }
-    if !unborn {
-        c.arg("--");
-        for f in files {
-            c.arg(f);
-        }
     }
     let out = c.output()?;
     if !out.status.success() {
@@ -983,6 +1134,8 @@ pub fn commit_changes(path: &Path, sha: &str) -> AppResult<ChangeSet> {
         author: Some(author),
         when: Some(when),
         files,
+        staged: Vec::new(),
+        unstaged: Vec::new(),
         ahead: 0,
         behind: 0,
         has_upstream: false,

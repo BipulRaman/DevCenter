@@ -2536,10 +2536,12 @@ const ChangesPage = (() => {
   let changesView = "list"; // left panel (Changes): "tree" | "list" — default flat list
   let detailView = "tree";  // middle panel (History detail): "tree" | "list" — default tree
 
-  // Changes tab state.
-  let files = [];           // working-tree changes [{path, oldPath, status}]
-  let selected = new Set(); // file paths checked for commit
-  let collapsedChanges = new Set();
+  // Changes tab state — git staging model (like VS Code's Source Control view).
+  let staged = [];          // index changes [{path, oldPath, status}]
+  let unstaged = [];        // working-tree changes [{path, oldPath, status}]
+  let collapsedChanges = new Set(); // collapsed folders in the "Changes" group
+  let collapsedStaged = new Set();  // collapsed folders in the "Staged Changes" group
+  let collapsedGroups = new Set();  // collapsed top-level groups: "staged" / "unstaged"
 
   // History tab state.
   let history = [];
@@ -2549,7 +2551,8 @@ const ChangesPage = (() => {
 
   // Diff/navigation state.
   let activeFile = null;
-  let navOrder = [];        // visible file paths, in render order (for prev/next + keys)
+  let activeGroup = null;   // "staged" | "unstaged" | null (history/commit)
+  let navOrder = [];        // visible {path, group} in render order (prev/next + keys)
   let busy = false;
 
   const $ = (id) => document.getElementById(id);
@@ -2559,6 +2562,10 @@ const ChangesPage = (() => {
   const CHEV_UP = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>';
   const CHEV_DOWN = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
   const FOLDER_ICO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>';
+  // Source-control row/group action icons (stage +, unstage −, discard ↩).
+  const ACT_STAGE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+  const ACT_UNSTAGE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+  const ACT_DISCARD = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor"><path d="M3.00098 2.5C3.00098 2.22386 3.22483 2 3.50098 2C3.77712 2 4.00098 2.22386 4.00098 2.5V6.34262L7.17202 3.17157C8.73412 1.60948 11.2668 1.60948 12.8289 3.17157C14.391 4.73367 14.391 7.26633 12.8289 8.82843L7.80375 13.8536C7.60849 14.0488 7.2919 14.0488 7.09664 13.8536C6.90138 13.6583 6.90138 13.3417 7.09664 13.1464L12.1218 8.12132C13.2933 6.94975 13.2933 5.05025 12.1218 3.87868C10.9502 2.70711 9.0507 2.70711 7.87913 3.87868L4.75781 7H8.50098C8.77712 7 9.00098 7.22386 9.00098 7.5C9.00098 7.77614 8.77712 8 8.50098 8H3.60098C3.26961 8 3.00098 7.73137 3.00098 7.4V2.5Z"/></svg>';
 
   const statBadge = (s) =>
     ({ new: "A", untracked: "U", modified: "M", deleted: "D", renamed: "R", conflicted: "C", typechange: "T" }[s] || "M");
@@ -2597,23 +2604,35 @@ const ChangesPage = (() => {
 
   /**
    * Render a file tree/list into `container`.
-   * opts: { files, checkboxes, collapsed, onToggleFolder, onToggleFile }
-   * Returns the ordered list of visible file paths (for keyboard nav).
+   * opts: { files, collapsed, viewMode, rerender, group, onAction, onFolderAction }
+   *   group: "staged" | "unstaged" | null (null = history commit, no actions)
+   * Returns the ordered list of visible { path, group } entries (for keyboard nav).
    */
   function renderFileTree(container, opts) {
     const order = [];
     const rows = [];
-    const indeterminate = [];
+    const group = opts.group || null;
+    const withActions = group !== null;
+
+    // Hover action buttons for a file/folder row, scoped to the group.
+    const actionsHtml = (scope, key) => {
+      if (!withActions) return "";
+      const attr = scope === "folder" ? "data-act-folder" : "data-act-file";
+      const btn = (act, title, icon) =>
+        `<button class="scm-act" type="button" data-act="${act}" ${attr}="${esc(key)}" title="${title}">${icon}</button>`;
+      let inner = "";
+      if (group === "unstaged") inner = btn("discard", "Discard changes", ACT_DISCARD) + btn("stage", "Stage changes", ACT_STAGE);
+      else if (group === "staged") inner = btn("unstage", "Unstage changes", ACT_UNSTAGE);
+      return `<span class="scm-actions">${inner}</span>`;
+    };
 
     const fileRow = (f, depth) => {
-      const sel = activeFile === f.path ? " selected" : "";
-      const cb = opts.checkboxes
-        ? `<input type="checkbox" data-check="${esc(f.path)}" ${selected.has(f.path) ? "checked" : ""} />`
-        : "";
-      order.push(f.path);
-      return `<div class="tree-row tree-file${sel}" data-file="${esc(f.path)}" style="--d:${depth}" title="${esc(f.path)}">
-        ${cb}<span class="tree-twisty" style="visibility:hidden">${CARET}</span>
+      const on = activeFile === f.path && activeGroup === group;
+      order.push({ path: f.path, group });
+      return `<div class="tree-row tree-file${on ? " selected" : ""}" data-file="${esc(f.path)}" data-group="${group || ""}" style="--d:${depth}" title="${esc(f.path)}">
+        <span class="tree-twisty" style="visibility:hidden">${CARET}</span>
         <span class="tree-name">${esc(f.name)}</span>
+        ${actionsHtml("file", f.path)}
         <span class="change-stat ${f.status}" title="${f.status}">${statBadge(f.status)}</span>
       </div>`;
     };
@@ -2629,17 +2648,11 @@ const ChangesPage = (() => {
         }
         const isCollapsed = opts.collapsed.has(eff.path);
         const desc = collectFiles(eff);
-        let cb = "";
-        if (opts.checkboxes) {
-          const selCount = desc.filter((f) => selected.has(f.path)).length;
-          const checked = selCount === desc.length ? "checked" : "";
-          if (selCount > 0 && selCount < desc.length) indeterminate.push(eff.path);
-          cb = `<input type="checkbox" data-folder="${esc(eff.path)}" ${checked} />`;
-        }
         rows.push(`<div class="tree-row tree-folder" data-folder-row="${esc(eff.path)}" style="--d:${depth}">
-          ${cb}<span class="tree-twisty ${isCollapsed ? "collapsed" : ""}" data-twisty="${esc(eff.path)}">${CARET}</span>
+          <span class="tree-twisty ${isCollapsed ? "collapsed" : ""}" data-twisty="${esc(eff.path)}">${CARET}</span>
           <span class="tree-ico">${FOLDER_ICO}</span>
           <span class="tree-name" title="${esc(eff.path)}">${esc(label)}</span>
+          ${actionsHtml("folder", eff.path)}
           <span class="tree-count">${desc.length}</span>
         </div>`);
         if (!isCollapsed) walk(eff, depth + 1);
@@ -2655,11 +2668,11 @@ const ChangesPage = (() => {
           const i = f.path.lastIndexOf("/");
           const dir = i < 0 ? "" : f.path.slice(0, i + 1);
           const name = i < 0 ? f.path : f.path.slice(i + 1);
-          const sel = activeFile === f.path ? " selected" : "";
-          const cb = opts.checkboxes ? `<input type="checkbox" data-check="${esc(f.path)}" ${selected.has(f.path) ? "checked" : ""} />` : "";
-          order.push(f.path);
-          rows.push(`<div class="tree-row tree-file${sel}" data-file="${esc(f.path)}" title="${esc(f.path)}" style="--d:0">
-            ${cb}<span class="tree-name"><span class="change-dir">${esc(dir)}</span>${esc(name)}</span>
+          const on = activeFile === f.path && activeGroup === group;
+          order.push({ path: f.path, group });
+          rows.push(`<div class="tree-row tree-file${on ? " selected" : ""}" data-file="${esc(f.path)}" data-group="${group || ""}" title="${esc(f.path)}" style="--d:0">
+            <span class="tree-name"><span class="change-dir">${esc(dir)}</span>${esc(name)}</span>
+            ${actionsHtml("file", f.path)}
             <span class="change-stat ${f.status}" title="${f.status}">${statBadge(f.status)}</span>
           </div>`);
         });
@@ -2668,38 +2681,31 @@ const ChangesPage = (() => {
     }
 
     container.innerHTML = rows.join("") || `<div class="changes-empty">No files.</div>`;
-    indeterminate.forEach((p) => {
-      const cb = container.querySelector(`[data-folder="${CSS.escape(p)}"]`);
-      if (cb) cb.indeterminate = true;
-    });
 
     // Listeners (direct, re-attached each render — reliable in WebView2).
     container.querySelectorAll("[data-twisty], .tree-folder").forEach((el) => {
       const key = el.dataset.twisty || el.dataset.folderRow;
       if (!key) return;
       el.addEventListener("click", (e) => {
-        if (e.target.closest("input")) return;
+        if (e.target.closest(".scm-act")) return;
         e.stopPropagation();
         if (opts.collapsed.has(key)) opts.collapsed.delete(key); else opts.collapsed.add(key);
         opts.rerender();
       });
     });
-    container.querySelectorAll("[data-folder]").forEach((cb) =>
-      cb.addEventListener("click", (e) => {
-        e.stopPropagation();
-        opts.onToggleFolder(cb.dataset.folder);
-      }));
-    container.querySelectorAll("[data-check]").forEach((cb) =>
-      cb.addEventListener("click", (e) => {
-        e.stopPropagation();
-        const p = cb.dataset.check;
-        if (cb.checked) selected.add(p); else selected.delete(p);
-        opts.rerender();
-      }));
+    if (withActions) {
+      container.querySelectorAll(".scm-act").forEach((b) =>
+        b.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const act = b.dataset.act;
+          if (b.dataset.actFile != null) opts.onAction(act, b.dataset.actFile);
+          else if (b.dataset.actFolder != null) opts.onFolderAction(act, b.dataset.actFolder);
+        }));
+    }
     container.querySelectorAll(".tree-file").forEach((row) =>
       row.addEventListener("click", (e) => {
-        if (e.target.closest("input")) return;
-        selectFile(row.dataset.file);
+        if (e.target.closest(".scm-act")) return;
+        selectFile(row.dataset.file, row.dataset.group || null);
       }));
 
     return order;
@@ -2736,8 +2742,8 @@ const ChangesPage = (() => {
     try { localStorage.setItem("dc.changes.repoId", r.id); } catch (e) {}
     $("chgRepoLabel").textContent = r.name;
     $("chgBranchLabel").textContent = branch;
-    activeSha = null; activeFile = null; navOrder = [];
-    files = []; selected = new Set(); history = []; commitFiles = [];
+    activeSha = null; activeFile = null; activeGroup = null; navOrder = [];
+    staged = []; unstaged = []; history = []; commitFiles = [];
     showDiffEmpty("Select a file to view its diff.");
     if (tab === "history") loadHistory(); else loadChanges();
   }
@@ -2814,7 +2820,7 @@ const ChangesPage = (() => {
       onSelect: async (target) => {
         try {
           const rd = repos.find((x) => x.id === repoId);
-          const dirty = (rd && rd.status === "dirty") || files.length > 0;
+          const dirty = (rd && rd.status === "dirty") || staged.length > 0 || unstaged.length > 0;
           const updated = await performBranchSwitch({ repoId, current: branch, target, dirty });
           if (!updated) return; // cancelled
           const at = repos.findIndex((x) => x.id === updated.id);
@@ -2845,45 +2851,152 @@ const ChangesPage = (() => {
       const cs = await DC.gitChanges(repoId, null);
       branch = cs.branch || branch;
       $("chgBranchLabel").textContent = branch;
-      files = cs.files || [];
-      selected = new Set(files.map((f) => f.path)); // select all (GitHub Desktop)
       collapsedChanges = new Set();
-      renderSync(cs);
-      renderChanges();
+      collapsedStaged = new Set();
+      activeFile = null; activeGroup = null;
+      setChangeSet(cs);
     } catch (e) {
       console.error("gitChanges failed", e);
       $("changesList").innerHTML = `<div class="changes-empty">${esc(String(e))}</div>`;
     }
   }
 
+  // Apply a fresh ChangeSet to the Changes tab (used by load/stage/commit/sync).
+  function setChangeSet(cs) {
+    staged = cs.staged || [];
+    unstaged = cs.unstaged || [];
+    renderSync(cs);
+    renderChanges();
+  }
+
   function renderChanges() {
     const filter = ($("changeFilter").value || "").toLowerCase();
-    const shown = filter ? files.filter((f) => f.path.toLowerCase().includes(filter)) : files;
+    const fStaged = filter ? staged.filter((f) => f.path.toLowerCase().includes(filter)) : staged;
+    const fUnstaged = filter ? unstaged.filter((f) => f.path.toLowerCase().includes(filter)) : unstaged;
+    const total = staged.length + unstaged.length;
 
     $("changeCount").textContent =
-      files.length === 0 ? "No changed files" : `${files.length} changed file${files.length === 1 ? "" : "s"}`;
-    const all = $("changeSelectAll");
-    all.checked = files.length > 0 && selected.size === files.length;
-    all.indeterminate = selected.size > 0 && selected.size < files.length;
-    $("collapseAllBtn").hidden = changesView !== "tree" || !shown.some((f) => f.path.includes("/"));
+      total === 0 ? "No changes" : `${total} change${total === 1 ? "" : "s"}`;
 
-    if (!shown.length) {
-      $("changesList").innerHTML = `<div class="changes-empty">${files.length ? "No files match the filter." : "No uncommitted changes."}</div>`;
+    const list = $("changesList");
+    if (total === 0) {
+      list.innerHTML = `<div class="changes-empty">No uncommitted changes.</div>`;
       navOrder = []; updateCommitBtn(); return;
     }
-    navOrder = renderFileTree($("changesList"), {
-      files: shown, checkboxes: true, collapsed: collapsedChanges, viewMode: changesView,
-      rerender: renderChanges,
-      onToggleFolder: (dirPath) => {
-        const tree = buildTree(files);
-        // find the dir node by path → its descendant files
-        const desc = descFilesForPath(files, dirPath);
-        const allSel = desc.every((p) => selected.has(p));
-        desc.forEach((p) => { if (allSel) selected.delete(p); else selected.add(p); });
+    if (!fStaged.length && !fUnstaged.length) {
+      list.innerHTML = `<div class="changes-empty">No files match the filter.</div>`;
+      navOrder = []; updateCommitBtn(); return;
+    }
+
+    list.innerHTML = "";
+    navOrder = [];
+
+    const makeGroup = (groupKey, fileList, title, bulkActions) => {
+      if (!fileList.length) return;
+      const isCollapsed = collapsedGroups.has(groupKey);
+      const section = document.createElement("div");
+      section.className = "scm-group" + (isCollapsed ? " collapsed" : "");
+      section.dataset.group = groupKey;
+      const head = document.createElement("div");
+      head.className = "scm-group-head";
+      head.innerHTML =
+        `<span class="tree-twisty${isCollapsed ? " collapsed" : ""}">${CARET}</span>` +
+        `<span class="scm-group-title">${title}</span>` +
+        `<span class="scm-group-actions">${bulkActions}</span>` +
+        `<span class="scm-group-count">${fileList.length}</span>`;
+      section.appendChild(head);
+      list.appendChild(section);
+      // Click the header (but not its action buttons) to expand/collapse the group.
+      head.addEventListener("click", (e) => {
+        if (e.target.closest(".scm-act")) return;
+        if (collapsedGroups.has(groupKey)) collapsedGroups.delete(groupKey);
+        else collapsedGroups.add(groupKey);
         renderChanges();
-      },
-    });
+      });
+      head.querySelectorAll(".scm-act").forEach((b) =>
+        b.addEventListener("click", (e) => { e.stopPropagation(); bulkAction(b.dataset.act, groupKey); }));
+      if (isCollapsed) return; // body (and its files) hidden while collapsed
+      const body = document.createElement("div");
+      body.className = "scm-group-body";
+      section.appendChild(body);
+      const ord = renderFileTree(body, {
+        files: fileList,
+        collapsed: groupKey === "staged" ? collapsedStaged : collapsedChanges,
+        viewMode: changesView,
+        group: groupKey,
+        rerender: renderChanges,
+        onAction: (act, path) => fileAction(act, path, groupKey),
+        onFolderAction: (act, dirPath) => folderAction(act, dirPath, groupKey),
+      });
+      navOrder = navOrder.concat(ord);
+    };
+
+    const stageGroupActions =
+      `<button class="scm-act" type="button" data-act="discard" title="Discard all changes">${ACT_DISCARD}</button>` +
+      `<button class="scm-act" type="button" data-act="stage" title="Stage all changes">${ACT_STAGE}</button>`;
+    const unstageGroupActions =
+      `<button class="scm-act" type="button" data-act="unstage" title="Unstage all changes">${ACT_UNSTAGE}</button>`;
+
+    makeGroup("staged", fStaged, "Staged Changes", unstageGroupActions);
+    makeGroup("unstaged", fUnstaged, "Changes", stageGroupActions);
+
     updateCommitBtn();
+  }
+
+  // ---- staging actions ----
+  function setOf(groupKey) {
+    return groupKey === "staged" ? staged : unstaged;
+  }
+
+  // Run a staging operation (returns a fresh ChangeSet), then re-render and keep
+  // the open diff in sync.
+  async function runStaging(fn) {
+    if (busy || !repoId) return;
+    busy = true; updateCommitBtn();
+    try {
+      const cs = await fn();
+      staged = cs.staged || [];
+      unstaged = cs.unstaged || [];
+      renderSync(cs);
+      // If the open file no longer exists in its group, clear the diff; else
+      // refresh it (its staged/unstaged content may have shifted).
+      const stillThere = activeGroup && setOf(activeGroup).some((f) => f.path === activeFile);
+      renderChanges();
+      if (activeFile && activeGroup) {
+        if (stillThere) selectFile(activeFile, activeGroup);
+        else { activeFile = null; activeGroup = null; showDiffEmpty("Select a file to view its diff."); }
+      }
+    } catch (e) {
+      console.error("staging op failed", e);
+      await Modal.alert({ title: "Action failed", message: String(e) });
+    } finally {
+      busy = false; updateCommitBtn();
+    }
+  }
+
+  function fileAction(act, path, groupKey) {
+    if (act === "stage") runStaging(() => DC.gitStage(repoId, [path]));
+    else if (act === "unstage") runStaging(() => DC.gitUnstage(repoId, [path]));
+    else if (act === "discard") confirmDiscard([path], `Are you sure you want to discard changes in “${path}”? This cannot be undone.`);
+  }
+
+  function folderAction(act, dirPath, groupKey) {
+    const paths = descFilesForPath(setOf(groupKey), dirPath);
+    if (!paths.length) return;
+    if (act === "stage") runStaging(() => DC.gitStage(repoId, paths));
+    else if (act === "unstage") runStaging(() => DC.gitUnstage(repoId, paths));
+    else if (act === "discard") confirmDiscard(paths, `Discard changes in ${paths.length} file${paths.length === 1 ? "" : "s"} under “${dirPath}”? This cannot be undone.`);
+  }
+
+  function bulkAction(act, groupKey) {
+    if (act === "stage") runStaging(() => DC.gitStage(repoId, []));
+    else if (act === "unstage") runStaging(() => DC.gitUnstage(repoId, []));
+    else if (act === "discard") confirmDiscard([], `Are you sure you want to discard ALL ${unstaged.length} change${unstaged.length === 1 ? "" : "s"}? This cannot be undone.`);
+  }
+
+  async function confirmDiscard(paths, message) {
+    const ok = await Modal.confirm({ title: "Discard changes", message, confirmText: "Discard changes", danger: true });
+    if (ok) runStaging(() => DC.gitDiscard(repoId, paths));
   }
 
   function descFilesForPath(list, dirPath) {
@@ -2934,10 +3047,7 @@ const ChangesPage = (() => {
       else { await DC.fetchRepo(repoId); cs = await DC.gitChanges(repoId, null); }
       branch = cs.branch || branch;
       $("chgBranchLabel").textContent = branch;
-      files = cs.files || [];
-      selected = new Set(files.map((f) => f.path));
-      renderSync(cs);
-      renderChanges();
+      setChangeSet(cs);
     } catch (e) {
       console.error(kind + " failed", e);
       await Modal.alert({ title: `${kind[0].toUpperCase() + kind.slice(1)} failed`, message: String(e) });
@@ -2951,28 +3061,31 @@ const ChangesPage = (() => {
 
   function updateCommitBtn() {
     const summary = ($("commitSummary").value || "").trim();
-    $("commitBtn").disabled = busy || !summary || selected.size === 0;
+    const has = staged.length > 0 || unstaged.length > 0;
+    $("commitBtn").disabled = busy || !summary || !has;
+    if (!busy) $("commitBtn").textContent = staged.length > 0 ? "Commit" : "Commit all";
   }
 
   async function doCommit() {
     if (busy) return;
     const summary = ($("commitSummary").value || "").trim();
     const desc = $("commitDesc").value || "";
-    const picked = files.filter((f) => selected.has(f.path)).map((f) => f.path);
-    if (!summary || !picked.length) return;
+    if (!summary || (staged.length === 0 && unstaged.length === 0)) return;
+    // Commit the staged index; if nothing is staged, commit everything.
+    const all = staged.length === 0;
     busy = true; updateCommitBtn();
     const btn = $("commitBtn");
     const prev = btn.innerHTML;
     btn.innerHTML = `<span class="spin">${ICON.sync}</span>Committing…`;
     try {
-      const cs = await DC.gitCommit(repoId, summary, desc, picked);
+      const cs = await DC.gitCommit(repoId, summary, desc, all);
       $("commitSummary").value = ""; $("commitDesc").value = "";
       branch = cs.branch || branch;
       $("chgBranchLabel").textContent = branch;
-      files = cs.files || [];
-      selected = new Set(files.map((f) => f.path));
-      activeFile = null;
+      activeFile = null; activeGroup = null;
       showDiffEmpty("Commit created. Select a file to view its diff.");
+      staged = cs.staged || [];
+      unstaged = cs.unstaged || [];
       renderSync(cs);
       renderChanges();
     } catch (e) {
@@ -3036,7 +3149,7 @@ const ChangesPage = (() => {
       const cs = await DC.gitChanges(repoId, sha);
       commitFiles = cs.files || [];
       renderDetail();
-      if (commitFiles.length) selectFile(commitFiles[0].path);
+      if (commitFiles.length) selectFile(commitFiles[0].path, null);
       else showDiffEmpty("This commit has no file changes.");
     } catch (e) {
       console.error("commit changes failed", e);
@@ -3054,8 +3167,7 @@ const ChangesPage = (() => {
       navOrder = []; return;
     }
     navOrder = renderFileTree($("detailFiles"), {
-      files: commitFiles, checkboxes: false, collapsed: collapsedDetail, viewMode: detailView, rerender: renderDetail,
-      onToggleFolder: () => {},
+      files: commitFiles, collapsed: collapsedDetail, viewMode: detailView, group: null, rerender: renderDetail,
     });
   }
 
@@ -3067,7 +3179,7 @@ const ChangesPage = (() => {
   }
 
   function diffHeadHtml(path, addsStr, delsStr) {
-    const idx = navOrder.indexOf(path);
+    const idx = navOrder.findIndex((e) => e.path === activeFile && e.group === activeGroup);
     const nav = navOrder.length > 1
       ? `<div class="diff-nav">
           <button class="icon-mini" id="diffPrev" title="Previous file (↑)" ${idx <= 0 ? "disabled" : ""}>${CHEV_UP}</button>
@@ -3085,19 +3197,21 @@ const ChangesPage = (() => {
 
   function step(dir) {
     if (!navOrder.length) return;
-    const idx = navOrder.indexOf(activeFile);
+    const idx = navOrder.findIndex((e) => e.path === activeFile && e.group === activeGroup);
     const ni = idx < 0 ? 0 : idx + dir;
     if (ni < 0 || ni >= navOrder.length) return;
-    selectFile(navOrder[ni]);
+    const e = navOrder[ni];
+    selectFile(e.path, e.group);
   }
 
-  async function selectFile(path) {
-    activeFile = path;
+  async function selectFile(path, group) {
+    group = group || null;
+    activeFile = path; activeGroup = group;
     // Highlight the row + scroll into view in whichever list is active.
     const listId = tab === "history" ? "detailFiles" : "changesList";
     const list = $(listId);
     list.querySelectorAll(".tree-file").forEach((r) => {
-      const on = r.dataset.file === path;
+      const on = r.dataset.file === path && (r.dataset.group || "") === (group || "");
       r.classList.toggle("selected", on);
       if (on) r.scrollIntoView({ block: "nearest" });
     });
@@ -3107,8 +3221,8 @@ const ChangesPage = (() => {
     wireDiffNav();
     $("diffBody").innerHTML = `<div class="diff-binary">Loading diff…</div>`;
     try {
-      const d = await DC.gitDiff(repoId, path, activeSha);
-      if (activeFile !== path) return; // a newer selection won
+      const d = await DC.gitDiff(repoId, path, activeSha, group === "staged");
+      if (activeFile !== path || activeGroup !== group) return; // a newer selection won
       renderDiff(d);
     } catch (e) {
       console.error("gitDiff failed", e);
@@ -3156,7 +3270,7 @@ const ChangesPage = (() => {
     } else {
       activeSha = null;
       showDiffEmpty("Select a file to view its diff.");
-      if (repoId && !files.length) loadChanges(); else renderChanges();
+      if (repoId && !staged.length && !unstaged.length) loadChanges(); else renderChanges();
     }
   }
 
@@ -3179,16 +3293,8 @@ const ChangesPage = (() => {
 
   // Arrow-key navigation between files when a tree has focus.
   function onTreeKey(e) {
-    if (e.key !== "ArrowDown" && e.key !== "ArrowUp" && !(e.key === " " && tab === "changes")) return;
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
     if (!navOrder.length) return;
-    if (e.key === " ") {
-      // Space toggles the active file's commit selection (Changes tab).
-      if (!activeFile) return;
-      e.preventDefault();
-      if (selected.has(activeFile)) selected.delete(activeFile); else selected.add(activeFile);
-      renderChanges();
-      return;
-    }
     e.preventDefault();
     step(e.key === "ArrowDown" ? 1 : -1);
   }
@@ -3260,11 +3366,6 @@ const ChangesPage = (() => {
     document.querySelectorAll("#chgViewToggle .seg-btn").forEach((b) => b.addEventListener("click", () => setView(b.dataset.view)));
     $("changeFilter").addEventListener("input", renderChanges);
     $("historyFilter").addEventListener("input", renderHistory);
-    $("changeSelectAll").addEventListener("click", () => {
-      selected = $("changeSelectAll").checked ? new Set(files.map((f) => f.path)) : new Set();
-      renderChanges();
-    });
-    $("collapseAllBtn").addEventListener("click", () => collapseAll(collapsedChanges, files, renderChanges));
     $("detailCollapseBtn").addEventListener("click", () => collapseAll(collapsedDetail, commitFiles, renderDetail));
     $("commitSummary").addEventListener("input", updateCommitBtn);
     $("commitBtn").addEventListener("click", doCommit);

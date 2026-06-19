@@ -97,6 +97,13 @@ pub struct ChangeSet {
     pub author: Option<String>,
     pub when: Option<String>,
     pub files: Vec<FileChange>,
+    /// Working-tree changes split into the index (staged) and the working tree
+    /// (unstaged). Empty for commit views. A path may appear in both when it has
+    /// staged *and* further unstaged edits.
+    #[serde(default)]
+    pub staged: Vec<FileChange>,
+    #[serde(default)]
+    pub unstaged: Vec<FileChange>,
     /// Working-tree sync state vs the upstream branch (0 for commit views).
     #[serde(default)]
     pub ahead: u32,

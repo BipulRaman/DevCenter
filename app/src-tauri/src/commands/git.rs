@@ -306,18 +306,89 @@ pub async fn git_changes(id: String, sha: Option<String>) -> AppResult<ChangeSet
     .map_err(|e| AppError::msg(e.to_string()))?
 }
 
-/// Unified diff for one file — working tree vs HEAD, or within a commit (`sha`).
+/// Unified diff for one file — the working-tree change (`staged` false), the
+/// staged change (`staged` true), or a file within a commit (`sha`).
 #[tauri::command]
-pub async fn git_diff(id: String, path: String, sha: Option<String>) -> AppResult<FileDiff> {
+pub async fn git_diff(
+    id: String,
+    path: String,
+    sha: Option<String>,
+    staged: Option<bool>,
+) -> AppResult<FileDiff> {
     tauri::async_runtime::spawn_blocking(move || {
         let p = Path::new(&id);
         match sha {
             Some(s) => git::commit_file_diff(p, &s, &path),
-            None => git::file_diff(p, &path),
+            None => git::file_diff(p, &path, staged.unwrap_or(false)),
         }
     })
     .await
     .map_err(|e| AppError::msg(e.to_string()))?
+}
+
+/// Stage files into the index (empty list = stage everything) and return the
+/// refreshed working changes. Emits `repos_updated`.
+#[tauri::command]
+pub async fn git_stage(
+    id: String,
+    files: Vec<String>,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> AppResult<ChangeSet> {
+    staging_op(id, state, app, move |p| git::stage(p, &files)).await
+}
+
+/// Unstage files (empty list = unstage everything) and return the refreshed
+/// working changes. Emits `repos_updated`.
+#[tauri::command]
+pub async fn git_unstage(
+    id: String,
+    files: Vec<String>,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> AppResult<ChangeSet> {
+    staging_op(id, state, app, move |p| git::unstage(p, &files)).await
+}
+
+/// Discard unstaged changes (empty list = discard everything) and return the
+/// refreshed working changes. Destructive — confirm in the UI first. Emits
+/// `repos_updated`.
+#[tauri::command]
+pub async fn git_discard(
+    id: String,
+    files: Vec<String>,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> AppResult<ChangeSet> {
+    staging_op(id, state, app, move |p| git::discard(p, &files)).await
+}
+
+/// Shared plumbing for stage/unstage/discard: run `op`, return the refreshed
+/// working changes, and emit `repos_updated` so the Git Board stays in sync.
+async fn staging_op<F>(
+    id: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+    op: F,
+) -> AppResult<ChangeSet>
+where
+    F: FnOnce(&Path) -> AppResult<()> + Send + 'static,
+{
+    let st = state.inner().clone();
+    let (changes, repos) = tauri::async_runtime::spawn_blocking(
+        move || -> AppResult<(ChangeSet, Vec<Repo>)> {
+            let p = Path::new(&id);
+            op(p)?;
+            let changes = git::working_changes(p)?;
+            let repos = collect_repos(&st)?;
+            Ok((changes, repos))
+        },
+    )
+    .await
+    .map_err(|e| AppError::msg(e.to_string()))??;
+
+    let _ = app.emit("repos_updated", &repos);
+    Ok(changes)
 }
 
 /// Commit the selected files with a summary + optional description, then return
@@ -328,7 +399,7 @@ pub async fn git_commit(
     id: String,
     summary: String,
     description: String,
-    files: Vec<String>,
+    all: bool,
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> AppResult<ChangeSet> {
@@ -336,7 +407,7 @@ pub async fn git_commit(
     let (changes, repos) = tauri::async_runtime::spawn_blocking(
         move || -> AppResult<(ChangeSet, Vec<Repo>)> {
             let p = Path::new(&id);
-            git::commit(p, &summary, &description, &files)?;
+            git::commit(p, &summary, &description, all)?;
             let changes = git::working_changes(p)?;
             let repos = collect_repos(&st)?;
             Ok((changes, repos))

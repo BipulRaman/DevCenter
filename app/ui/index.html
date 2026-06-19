@@ -170,10 +170,7 @@
                 <input type="text" id="changeFilter" placeholder="Filter files…" spellcheck="false" />
               </div>
               <div class="changes-head">
-                <label class="select-all">
-                  <input type="checkbox" id="changeSelectAll" />
-                  <span id="changeCount">No changed files</span>
-                </label>
+                <span class="changes-head-title" id="changeCount">No changes</span>
                 <div class="changes-head-actions">
                   <div class="seg view-toggle" id="chgViewToggle" title="Toggle file tree / flat list">
                     <button class="seg-btn" data-view="tree" type="button" title="Tree view">
@@ -183,9 +180,6 @@
                       <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
                     </button>
                   </div>
-                  <button class="icon-mini" id="collapseAllBtn" type="button" title="Collapse all folders" hidden>
-                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
-                  </button>
                 </div>
               </div>
               <div class="file-tree" id="changesList" tabindex="0"></div>

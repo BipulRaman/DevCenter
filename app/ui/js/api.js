@@ -40,9 +40,13 @@
 
     // --- Changes / commit (GitHub Desktop–style) ---
     gitChanges: (id, sha) => invoke("git_changes", { id, sha: sha || null }),
-    gitDiff: (id, path, sha) => invoke("git_diff", { id, path, sha: sha || null }),
-    gitCommit: (id, summary, description, files) =>
-      invoke("git_commit", { id, summary, description, files }),
+    gitDiff: (id, path, sha, staged) =>
+      invoke("git_diff", { id, path, sha: sha || null, staged: !!staged }),
+    gitStage: (id, files) => invoke("git_stage", { id, files: files || [] }),
+    gitUnstage: (id, files) => invoke("git_unstage", { id, files: files || [] }),
+    gitDiscard: (id, files) => invoke("git_discard", { id, files: files || [] }),
+    gitCommit: (id, summary, description, all) =>
+      invoke("git_commit", { id, summary, description, all: !!all }),
     gitPush: (id) => invoke("git_push", { id }),
     gitPull: (id) => invoke("git_pull", { id }),
     gitLog: (id, limit) => invoke("git_log", { id, limit: limit ?? null }),
