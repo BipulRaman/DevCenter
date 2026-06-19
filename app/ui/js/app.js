@@ -2533,7 +2533,7 @@ if (DC && DC.hasBackend) {
 const ChangesPage = (() => {
   let repoId = null;        // selected repo path (== id)
   let branch = "main";
-  let tab = "changes";      // "changes" | "history"
+  let tab = "changes";      // "changes" | "history" | "pulls"
   let changesView = "list"; // left panel (Changes): "tree" | "list" — default flat list
   let detailView = "tree";  // middle panel (History detail): "tree" | "list" — default tree
 
@@ -2550,6 +2550,11 @@ const ChangesPage = (() => {
   let activeSha = null;     // selected commit hash (null = working tree)
   let commitFiles = [];     // files in the selected commit
   let collapsedDetail = new Set();
+
+  // Pull Requests tab state.
+  let repoPulls = [];       // PRs for the selected repo [{id, title, branch, base, status, ...}]
+  let pullsLoaded = false;  // whether the PR list has been fetched for the current repo
+  let activePull = null;    // currently selected PR (drives the detail + diff panes)
 
   // Diff/navigation state.
   let activeFile = null;
@@ -2570,6 +2575,18 @@ const ChangesPage = (() => {
   const ACT_DISCARD = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor"><path d="M3.00098 2.5C3.00098 2.22386 3.22483 2 3.50098 2C3.77712 2 4.00098 2.22386 4.00098 2.5V6.34262L7.17202 3.17157C8.73412 1.60948 11.2668 1.60948 12.8289 3.17157C14.391 4.73367 14.391 7.26633 12.8289 8.82843L7.80375 13.8536C7.60849 14.0488 7.2919 14.0488 7.09664 13.8536C6.90138 13.6583 6.90138 13.3417 7.09664 13.1464L12.1218 8.12132C13.2933 6.94975 13.2933 5.05025 12.1218 3.87868C10.9502 2.70711 9.0507 2.70711 7.87913 3.87868L4.75781 7H8.50098C8.77712 7 9.00098 7.22386 9.00098 7.5C9.00098 7.77614 8.77712 8 8.50098 8H3.60098C3.26961 8 3.00098 7.73137 3.00098 7.4V2.5Z"/></svg>';
   // Restore-from-stash: an up-arrow lifting out of a tray.
   const ACT_RESTORE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/><polyline points="8 8 12 4 16 8"/><line x1="12" y1="4" x2="12" y2="15"/></svg>';
+  // Pull-request review state → chip styling.
+  const REVIEW_MAP = {
+    approved: { cls: "ok", icon: ICON.check, label: "Approved" },
+    changes: { cls: "danger", icon: ICON.changes, label: "Changes requested" },
+    pending: { cls: "muted", icon: ICON.clock, label: "Review pending" },
+  };
+  const prStateLabel = (s) => (s === "merged" ? "Merged" : s === "draft" ? "Draft" : "Open");
+  function openPrUrl(url) {
+    if (!url) return;
+    if (DC && DC.hasBackend) DC.openUrl(url).catch((e) => console.error("openUrl failed", e));
+    else window.open(url, "_blank");
+  }
 
   const statBadge = (s) =>
     ({ new: "A", untracked: "U", modified: "M", deleted: "D", renamed: "R", conflicted: "C", typechange: "T" }[s] || "M");
@@ -2748,8 +2765,11 @@ const ChangesPage = (() => {
     $("chgBranchLabel").textContent = branch;
     activeSha = null; activeFile = null; activeGroup = null; navOrder = [];
     staged = []; unstaged = []; history = []; commitFiles = [];
+    repoPulls = []; pullsLoaded = false;
     showDiffEmpty("Select a file to view its diff.");
-    if (tab === "history") loadHistory(); else loadChanges();
+    if (tab === "history") loadHistory();
+    else if (tab === "pulls") loadRepoPulls();
+    else loadChanges();
   }
 
   async function openBranchPicker() {
@@ -3332,7 +3352,7 @@ const ChangesPage = (() => {
     group = group || null;
     activeFile = path; activeGroup = group;
     // Highlight the row + scroll into view in whichever list is active.
-    const listId = tab === "history" ? "detailFiles" : "changesList";
+    const listId = (tab === "history" || tab === "pulls") ? "detailFiles" : "changesList";
     const list = $(listId);
     list.querySelectorAll(".tree-file").forEach((r) => {
       const on = r.dataset.file === path && (r.dataset.group || "") === (group || "");
@@ -3345,7 +3365,9 @@ const ChangesPage = (() => {
     wireDiffNav();
     $("diffBody").innerHTML = `<div class="diff-binary">Loading diff…</div>`;
     try {
-      const d = await DC.gitDiff(repoId, path, activeSha, group === "staged");
+      const d = (tab === "pulls" && activePull)
+        ? await DC.prFileDiff(repoId, activePull.base, activePull.branch, path)
+        : await DC.gitDiff(repoId, path, activeSha, group === "staged");
       if (activeFile !== path || activeGroup !== group) return; // a newer selection won
       renderDiff(d);
     } catch (e) {
@@ -3372,7 +3394,10 @@ const ChangesPage = (() => {
         rows.push(`<div class="diff-line ${cls}"><span class="diff-gutter"><span>${oldN}</span><span>${newN}</span></span><span class="diff-text">${body}</span></div>`);
       });
     });
-    $("diffBody").innerHTML = rows.join("");
+    // Wrap rows in a max-content container so each row stretches to the widest
+    // line — keeps the add/del row tints spanning the full width when the diff
+    // is scrolled horizontally.
+    $("diffBody").innerHTML = `<div class="diff-code">${rows.join("")}</div>`;
   }
 
   // ---- tabs / view mode ----
@@ -3380,21 +3405,119 @@ const ChangesPage = (() => {
     tab = next;
     $("cpane-changes").hidden = next !== "changes";
     $("cpane-history").hidden = next !== "history";
-    $("commitDetail").hidden = next !== "history";
+    $("cpane-pulls").hidden = next !== "pulls";
+    $("commitDetail").hidden = next !== "history" && next !== "pulls";
     $("commitLayout").classList.toggle("mode-history", next === "history");
+    $("commitLayout").classList.toggle("mode-pulls", next === "pulls");
     document.querySelectorAll(".commit-tab").forEach((t) => t.classList.toggle("active", t.dataset.ctab === next));
     activeFile = null; navOrder = [];
     if (next === "history") {
-      activeSha = null;
+      activeSha = null; activePull = null;
       $("detailHead").innerHTML = "";
       $("detailFiles").innerHTML = `<div class="detail-empty">Select a commit to see its files.</div>`;
       $("detailFileCount").textContent = "Files";
       showDiffEmpty("Select a commit, then a file to view its diff.");
       loadHistory();
+    } else if (next === "pulls") {
+      activeSha = null; activePull = null;
+      $("detailHead").innerHTML = "";
+      $("detailFiles").innerHTML = `<div class="detail-empty">Select a pull request to see its files.</div>`;
+      $("detailFileCount").textContent = "Files";
+      showDiffEmpty("Select a pull request, then a file to view its diff.");
+      if (pullsLoaded) renderRepoPulls($("pullFilter").value || "");
+      else loadRepoPulls();
     } else {
-      activeSha = null;
+      activeSha = null; activePull = null;
       showDiffEmpty("Select a file to view its diff.");
       if (repoId && !staged.length && !unstaged.length) loadChanges(); else renderChanges();
+    }
+  }
+
+  // ---- pull requests tab ----
+  async function loadRepoPulls() {
+    if (!repoId) return;
+    pullsLoaded = false; activePull = null;
+    $("repoPrList").innerHTML = `<div class="changes-empty">Loading pull requests…</div>`;
+    try {
+      const data = await DC.listRepoPullRequests(repoId);
+      repoPulls = Array.isArray(data) ? data : [];
+      pullsLoaded = true;
+      renderRepoPulls($("pullFilter").value || "");
+      // Auto-open the newest PR so the detail + diff panes aren't left empty.
+      if (repoPulls.length && !activePull) selectPull(repoPulls[0].id);
+    } catch (e) {
+      console.error("listRepoPullRequests failed", e);
+      repoPulls = []; pullsLoaded = true;
+      $("repoPrList").innerHTML = `<div class="changes-empty">${esc(String(e))}</div>`;
+    }
+  }
+
+  function renderRepoPulls(filter = "") {
+    const host = $("repoPrList");
+    if (!host) return;
+    if (!repoPulls.length) {
+      host.innerHTML = `<div class="changes-empty">No open pull requests for this repository.</div>`;
+      return;
+    }
+    const f = filter.toLowerCase();
+    const list = repoPulls.filter((p) =>
+      (p.title || "").toLowerCase().includes(f) ||
+      String(p.id).includes(f) ||
+      (p.author || "").toLowerCase().includes(f) ||
+      (p.branch || "").toLowerCase().includes(f));
+    if (!list.length) {
+      host.innerHTML = `<div class="changes-empty">No pull requests match the filter.</div>`;
+      return;
+    }
+    // Compact rows that mirror the commit list; clicking opens the PR in the
+    // detail + diff panes.
+    host.innerHTML = list
+      .map((p) => {
+        const sel = activePull && String(activePull.id) === String(p.id) ? " selected" : "";
+        return `<div class="history-row${sel}" data-pr-id="${esc(String(p.id))}">
+        <div class="history-main">
+          <div class="history-summary" title="${esc(p.title)}">${esc(p.title)}</div>
+          <div class="history-meta"><span class="history-hash">#${esc(String(p.id))}</span><span class="history-author" title="${esc(p.author)}">${esc(p.author)}</span><span class="hm-dot">·</span><span class="history-when">${esc(p.updated)}</span></div>
+        </div>
+        <div class="history-badges"><span class="pr-state ${esc(p.status)}">${prStateLabel(p.status)}</span></div>
+      </div>`;
+      })
+      .join("");
+    host.querySelectorAll(".history-row").forEach((row) =>
+      row.addEventListener("click", () => selectPull(row.dataset.prId)));
+  }
+
+  async function selectPull(id) {
+    const pr = repoPulls.find((p) => String(p.id) === String(id));
+    if (!pr) return;
+    activePull = pr; activeSha = null; activeFile = null; navOrder = [];
+    $("repoPrList").querySelectorAll(".history-row").forEach((r) =>
+      r.classList.toggle("selected", r.dataset.prId === String(id)));
+    const initials = (pr.author || "?").slice(0, 2).toUpperCase();
+    const rev = REVIEW_MAP[pr.reviews] || REVIEW_MAP.pending;
+    $("detailHead").innerHTML = `<div class="detail-msg">${esc(pr.title)}</div>
+      <div class="detail-meta"><span class="avatar">${esc(initials)}</span><span class="detail-author" title="${esc(pr.author)}">${esc(pr.author)}</span><span class="hm-dot">·</span><span class="history-when">${esc(pr.updated)}</span><span class="pr-state ${esc(pr.status)}">${prStateLabel(pr.status)}</span></div>
+      <div class="pr-detail-branch"><code title="${esc(pr.branch)}">${esc(pr.branch)}</code><span class="pr-arrow">→</span><code title="${esc(pr.base)}">${esc(pr.base)}</code></div>
+      <div class="pr-detail-stats"><span class="chip review ${rev.cls}">${rev.icon}${rev.label}</span><span class="chip">${ICON.comment}${pr.comments}</span><span class="pr-diff"><span class="add">+${pr.additions}</span> <span class="del">−${pr.deletions}</span></span><button class="btn btn-ghost btn-sm" id="prViewBtn">${ICON.external}View</button></div>`;
+    const vb = $("prViewBtn");
+    if (vb) vb.addEventListener("click", () => openPrUrl(pr.url));
+    $("detailFiles").innerHTML = `<div class="changes-empty">Loading…</div>`;
+    showDiffEmpty("Loading pull request…");
+    collapsedDetail = new Set();
+    try {
+      const cs = await DC.prChanges(repoId, pr.base, pr.branch);
+      if (activePull !== pr) return; // a newer selection won
+      commitFiles = cs.files || [];
+      renderDetail();
+      if (commitFiles.length) selectFile(commitFiles[0].path, null);
+      else showDiffEmpty("This pull request has no file changes.");
+    } catch (e) {
+      console.error("prChanges failed", e);
+      if (activePull !== pr) return;
+      commitFiles = []; navOrder = [];
+      $("detailFileCount").textContent = "Files";
+      $("detailFiles").innerHTML = `<div class="changes-empty">${esc(String(e))}</div>`;
+      showDiffEmpty(String(e));
     }
   }
 
@@ -3437,7 +3560,9 @@ const ChangesPage = (() => {
     }
     // A repo is already selected — refresh the active tab so changes made since
     // the last visit (or on another tab) are always shown.
-    if (tab === "history") loadHistory(); else loadChanges();
+    if (tab === "history") loadHistory();
+    else if (tab === "pulls") loadRepoPulls();
+    else loadChanges();
   }
 
   // Drag-to-resize the commit/diff columns; widths persist in localStorage.
@@ -3485,11 +3610,13 @@ const ChangesPage = (() => {
     const repoBtn = $("chgRepoBtn");
     if (!repoBtn) return;
     repoBtn.addEventListener("click", openRepoPicker);
-    $("chgRefreshBtn").addEventListener("click", () => (tab === "history" ? loadHistory() : loadChanges()));
+    $("chgRefreshBtn").addEventListener("click", () => (tab === "history" ? loadHistory() : tab === "pulls" ? loadRepoPulls() : loadChanges()));
     document.querySelectorAll(".commit-tab").forEach((t) => t.addEventListener("click", () => switchTab(t.dataset.ctab)));
     document.querySelectorAll("#chgViewToggle .seg-btn").forEach((b) => b.addEventListener("click", () => setView(b.dataset.view)));
     $("changeFilter").addEventListener("input", renderChanges);
     $("historyFilter").addEventListener("input", renderHistory);
+    $("pullFilter").addEventListener("input", () => renderRepoPulls($("pullFilter").value || ""));
+    $("pullRefreshBtn").addEventListener("click", () => { if (repoId) loadRepoPulls(); });
     $("changeStashBtn").addEventListener("click", openStashDialog);
     $("changeRefreshBtn").addEventListener("click", async () => {
       const b = $("changeRefreshBtn");

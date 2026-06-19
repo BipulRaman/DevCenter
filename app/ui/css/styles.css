@@ -736,6 +736,10 @@ button.chip { font-family: var(--mono); font-size: 11px; font-weight: 500; }
 
 /* ============ PR LIST (Pull Requests) ============ */
 .pr-list { display: flex; flex-direction: column; gap: 10px; }
+/* Compact PR row (Changes page Pull Requests tab) reuses the commit-row styling
+   and adds a small status pill on the right. */
+.history-row .pr-state { font-size: 10px; padding: 2px 7px; }
+.history-row .pr-state svg { display: none; }
 
 .pr-row {
   position: relative;
@@ -1133,8 +1137,9 @@ select.modal-input { cursor: pointer; appearance: none; background-image: url("d
   box-shadow: var(--shadow-row);
   overflow: hidden;
 }
-.commit-layout.mode-history { grid-template-columns: var(--w-side) var(--rz) var(--w-detail) var(--rz) minmax(0, 1fr); }
-.commit-layout:not(.mode-history) .rz-detail { display: none; }
+.commit-layout.mode-history,
+.commit-layout.mode-pulls { grid-template-columns: var(--w-side) var(--rz) var(--w-detail) var(--rz) minmax(0, 1fr); }
+.commit-layout:not(.mode-history):not(.mode-pulls) .rz-detail { display: none; }
 .commit-detail[hidden] { display: none; }
 
 /* draggable column dividers */
@@ -1159,7 +1164,7 @@ body.col-resizing * { cursor: col-resize !important; }
   display: flex; flex-direction: column; min-height: 0;
   background: transparent; overflow: hidden;
 }
-.commit-tabs { display: flex; padding: 6px; gap: 4px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.commit-tabs { display: flex; padding: 6px; gap: 4px; border-bottom: 1px solid var(--border); flex-shrink: 0; container-type: inline-size; }
 .commit-tab {
   flex: 1; height: 34px; border: none; border-radius: 0; background: transparent;
   color: var(--text-dim); font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer;
@@ -1167,6 +1172,12 @@ body.col-resizing * { cursor: col-resize !important; }
 }
 .commit-tab:hover { background: var(--bg-hover); color: var(--text); }
 .commit-tab.active { background: var(--accent-soft); color: var(--accent-hover); }
+/* Collapse "Pull Requests" → "PRs" when the side panel is narrowed. */
+.commit-tab .ct-short { display: none; }
+@container (max-width: 280px) {
+  .commit-tab .ct-full { display: none; }
+  .commit-tab .ct-short { display: inline; }
+}
 
 .commit-filter {
   display: flex; align-items: center; gap: 8px; margin: 10px 12px;
@@ -1414,6 +1425,13 @@ body.col-resizing * { cursor: col-resize !important; }
 .detail-meta .history-when { flex-shrink: 0; }
 .detail-meta .history-hash { color: var(--text-dim); flex-shrink: 0; }
 .detail-empty { flex: 1; display: grid; place-items: center; text-align: center; color: var(--text-faint); font-size: 13px; padding: 24px; }
+/* PR detail header (Pull Requests tab): branch flow + review/diff stats. */
+.detail-meta .pr-state { flex-shrink: 0; margin-left: auto; }
+.pr-detail-branch { display: flex; align-items: center; gap: 8px; margin-top: 12px; min-width: 0; }
+.pr-detail-branch code { background: var(--bg-elev-2); padding: 2px 8px; border-radius: 5px; font-family: var(--mono); font-size: 11px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 45%; }
+.pr-detail-branch .pr-arrow { color: var(--text-faint); flex-shrink: 0; }
+.pr-detail-stats { display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+.pr-detail-stats .btn-sm { margin-left: auto; }
 
 /* Diff viewer */
 .diff-view {
@@ -1456,7 +1474,10 @@ body.col-resizing * { cursor: col-resize !important; }
   position: sticky; left: 0; z-index: 2; font-size: 12.5px; line-height: 20px;
   border-top: 1px solid var(--code-border); border-bottom: 1px solid var(--code-border);
 }
-.diff-line { display: flex; white-space: pre; }
+.diff-line { display: flex; white-space: pre; min-width: 100%; }
+/* Rows live in a max-content wrapper so add/del backgrounds span the full line
+   width (not just the viewport) when the diff is scrolled horizontally. */
+.diff-code { width: max-content; min-width: 100%; }
 .diff-gutter {
   flex-shrink: 0; width: 96px; display: flex; user-select: none;
   color: var(--code-gutter); background: var(--code-bg); position: sticky; left: 0; z-index: 1;
@@ -1465,9 +1486,11 @@ body.col-resizing * { cursor: col-resize !important; }
 .diff-gutter span { width: 48px; text-align: right; padding: 0 12px 0 0; font-variant-numeric: tabular-nums; }
 .diff-text { flex: 1; padding: 0 6px 0 16px; white-space: pre; }
 .diff-line.add { background: var(--diff-add-bg); }
-.diff-line.add .diff-gutter { background: var(--diff-add-gutter); }
+/* Layer the tint over an OPAQUE code-bg so the sticky gutter fully hides code
+   text scrolled underneath it (a translucent tint alone lets text bleed through). */
+.diff-line.add .diff-gutter { background: linear-gradient(var(--diff-add-gutter), var(--diff-add-gutter)), var(--code-bg); }
 .diff-line.del { background: var(--diff-del-bg); }
-.diff-line.del .diff-gutter { background: var(--diff-del-gutter); }
+.diff-line.del .diff-gutter { background: linear-gradient(var(--diff-del-gutter), var(--diff-del-gutter)), var(--code-bg); }
 .diff-binary { padding: 24px; text-align: center; color: var(--text-faint); font-size: 13px; background: var(--code-bg); }
 
 .changes-empty { padding: 30px 16px; text-align: center; color: var(--text-faint); font-size: 12.5px; }

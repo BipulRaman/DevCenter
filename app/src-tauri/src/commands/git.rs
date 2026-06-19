@@ -326,6 +326,30 @@ pub async fn git_diff(
     .map_err(|e| AppError::msg(e.to_string()))?
 }
 
+/// The files changed by a pull request (the `base...head` diff), computed
+/// locally from the repo's refs. Backs the Pull Requests tab detail pane.
+#[tauri::command]
+pub async fn git_pr_changes(id: String, base: String, head: String) -> AppResult<ChangeSet> {
+    tauri::async_runtime::spawn_blocking(move || git::pr_changes(Path::new(&id), &base, &head))
+        .await
+        .map_err(|e| AppError::msg(e.to_string()))?
+}
+
+/// Unified diff for one file within a pull request (the `base...head` diff).
+#[tauri::command]
+pub async fn git_pr_file_diff(
+    id: String,
+    base: String,
+    head: String,
+    path: String,
+) -> AppResult<FileDiff> {
+    tauri::async_runtime::spawn_blocking(move || {
+        git::pr_file_diff(Path::new(&id), &base, &head, &path)
+    })
+    .await
+    .map_err(|e| AppError::msg(e.to_string()))?
+}
+
 /// Stage files into the index (empty list = stage everything) and return the
 /// refreshed working changes. Emits `repos_updated`.
 #[tauri::command]

@@ -1287,6 +1287,40 @@ pub fn commit_changes(path: &Path, sha: &str) -> AppResult<ChangeSet> {
     let mut opts = DiffOptions::new();
     let diff = repo.diff_tree_to_tree(parent_tree.as_ref(), Some(&tree), Some(&mut opts))?;
 
+    let files = diff_to_files(&diff);
+
+    let summary = commit.summary().unwrap_or("").to_string();
+    let author = commit.author().name().unwrap_or("unknown").to_string();
+    let when = humanize_epoch(commit.time().seconds());
+    Ok(ChangeSet {
+        branch: None,
+        summary: Some(summary),
+        author: Some(author),
+        when: Some(when),
+        files,
+        staged: Vec::new(),
+        unstaged: Vec::new(),
+        stashes: Vec::new(),
+        ahead: 0,
+        behind: 0,
+        has_upstream: false,
+    })
+}
+
+/// Diff a single file within a commit (vs its first parent).
+pub fn commit_file_diff(path: &Path, sha: &str, file: &str) -> AppResult<FileDiff> {
+    let repo = Repository::open(path)?;
+    let commit = repo.revparse_single(sha)?.peel_to_commit()?;
+    let tree = commit.tree()?;
+    let parent_tree = commit.parent(0).ok().and_then(|p| p.tree().ok());
+    let mut opts = DiffOptions::new();
+    opts.context_lines(3).pathspec(file);
+    let diff = repo.diff_tree_to_tree(parent_tree.as_ref(), Some(&tree), Some(&mut opts))?;
+    build_file_diff(&diff, file)
+}
+
+/// Convert a tree-to-tree diff into the normalized, path-sorted FileChange list.
+fn diff_to_files(diff: &git2::Diff) -> Vec<FileChange> {
     let mut files = Vec::new();
     for delta in diff.deltas() {
         let status = match delta.status() {
@@ -1317,16 +1351,62 @@ pub fn commit_changes(path: &Path, sha: &str) -> AppResult<ChangeSet> {
         });
     }
     files.sort_by(|a, b| a.path.to_lowercase().cmp(&b.path.to_lowercase()));
+    files
+}
 
-    let summary = commit.summary().unwrap_or("").to_string();
-    let author = commit.author().name().unwrap_or("unknown").to_string();
-    let when = humanize_epoch(commit.time().seconds());
+/// Resolve a PR branch name to a commit, trying the local ref first and then the
+/// `origin/` remote-tracking ref (PR head/base branches are often only present
+/// as remote refs after a fetch).
+fn resolve_branch_commit<'r>(repo: &'r Repository, name: &str) -> AppResult<git2::Commit<'r>> {
+    let candidates = [
+        name.to_string(),
+        format!("refs/heads/{name}"),
+        format!("origin/{name}"),
+        format!("refs/remotes/origin/{name}"),
+    ];
+    for cand in candidates {
+        if let Ok(commit) = repo
+            .revparse_single(&cand)
+            .and_then(|obj| obj.peel_to_commit())
+        {
+            return Ok(commit);
+        }
+    }
+    Err(AppError::msg(format!(
+        "Branch \"{name}\" was not found locally. Fetch the repository to view this pull request's changes."
+    )))
+}
+
+/// The two trees for a PR's three-dot diff (`base...head`): the merge-base of
+/// base and head as the "before" tree and head's tree as "after", so only the
+/// changes head introduces relative to base are shown.
+fn pr_diff_trees<'r>(
+    repo: &'r Repository,
+    base: &str,
+    head: &str,
+) -> AppResult<(git2::Tree<'r>, git2::Tree<'r>)> {
+    let base_commit = resolve_branch_commit(repo, base)?;
+    let head_commit = resolve_branch_commit(repo, head)?;
+    let before_oid = repo
+        .merge_base(base_commit.id(), head_commit.id())
+        .unwrap_or_else(|_| base_commit.id());
+    let before = repo.find_commit(before_oid)?.tree()?;
+    let after = head_commit.tree()?;
+    Ok((before, after))
+}
+
+/// The files changed by a pull request (the `base...head` diff).
+pub fn pr_changes(path: &Path, base: &str, head: &str) -> AppResult<ChangeSet> {
+    let repo = Repository::open(path)?;
+    let (before, after) = pr_diff_trees(&repo, base, head)?;
+    let mut opts = DiffOptions::new();
+    let diff = repo.diff_tree_to_tree(Some(&before), Some(&after), Some(&mut opts))?;
     Ok(ChangeSet {
-        branch: None,
-        summary: Some(summary),
-        author: Some(author),
-        when: Some(when),
-        files,
+        branch: Some(head.to_string()),
+        summary: None,
+        author: None,
+        when: None,
+        files: diff_to_files(&diff),
         staged: Vec::new(),
         unstaged: Vec::new(),
         stashes: Vec::new(),
@@ -1336,14 +1416,12 @@ pub fn commit_changes(path: &Path, sha: &str) -> AppResult<ChangeSet> {
     })
 }
 
-/// Diff a single file within a commit (vs its first parent).
-pub fn commit_file_diff(path: &Path, sha: &str, file: &str) -> AppResult<FileDiff> {
+/// Diff a single file within a pull request (the `base...head` diff).
+pub fn pr_file_diff(path: &Path, base: &str, head: &str, file: &str) -> AppResult<FileDiff> {
     let repo = Repository::open(path)?;
-    let commit = repo.revparse_single(sha)?.peel_to_commit()?;
-    let tree = commit.tree()?;
-    let parent_tree = commit.parent(0).ok().and_then(|p| p.tree().ok());
+    let (before, after) = pr_diff_trees(&repo, base, head)?;
     let mut opts = DiffOptions::new();
     opts.context_lines(3).pathspec(file);
-    let diff = repo.diff_tree_to_tree(parent_tree.as_ref(), Some(&tree), Some(&mut opts))?;
+    let diff = repo.diff_tree_to_tree(Some(&before), Some(&after), Some(&mut opts))?;
     build_file_diff(&diff, file)
 }

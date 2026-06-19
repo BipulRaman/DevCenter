@@ -42,6 +42,8 @@
     gitChanges: (id, sha) => invoke("git_changes", { id, sha: sha || null }),
     gitDiff: (id, path, sha, staged) =>
       invoke("git_diff", { id, path, sha: sha || null, staged: !!staged }),
+    prChanges: (id, base, head) => invoke("git_pr_changes", { id, base, head }),
+    prFileDiff: (id, base, head, path) => invoke("git_pr_file_diff", { id, base, head, path }),
     gitStage: (id, files) => invoke("git_stage", { id, files: files || [] }),
     gitUnstage: (id, files) => invoke("git_unstage", { id, files: files || [] }),
     gitDiscard: (id, files) => invoke("git_discard", { id, files: files || [] }),
@@ -59,6 +61,8 @@
     // --- Pull Requests (Phase 3) ---
     listPullRequests: (repoIds) =>
       hasBackend ? invoke("list_pull_requests", { repoIds }) : Promise.resolve(null),
+    listRepoPullRequests: (repoId) =>
+      hasBackend ? invoke("list_repo_pull_requests", { repoId }) : Promise.resolve(null),
 
     // --- Accounts (Phase 3) ---
     listAccounts: () => (hasBackend ? invoke("list_accounts") : Promise.resolve(null)),
