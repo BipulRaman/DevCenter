@@ -124,7 +124,12 @@ if (mainScroll) {
         if (result && result.status === "up_to_date") {
           await Modal.alert({ title: "Up to date", message: "You're already on the latest version." });
         } else if (result && result.status === "installed") {
-          await Modal.alert({ title: "Update installed", message: `Version ${result.version || "new"} installed. Please restart DevCenter to apply the update.` });
+          const restart = await Modal.confirm({
+            title: "Update installed",
+            message: `Version ${result.version || "new"} has been installed. Restart DevCenter now to apply it?`,
+            confirmText: "Restart now",
+          });
+          if (restart) await DC.relaunchApp();
         }
       } catch (e) {
         await Modal.alert({ title: "Update check failed", message: String(e) });
@@ -1972,6 +1977,20 @@ if (DC && DC.hasBackend) {
       renderAppStats();
       renderApps(document.getElementById("appSearch").value || "");
     }
+  });
+
+  // Background updater finished staging an update on startup → ask the user to
+  // restart (we never auto-restart). Prompt only once per session.
+  let updateRestartPrompted = false;
+  DC.onUpdateState(async (s) => {
+    if (!s || s.status !== "installed" || updateRestartPrompted) return;
+    updateRestartPrompted = true;
+    const restart = await Modal.confirm({
+      title: "Update ready",
+      message: `Version ${s.version || "new"} has been installed. Restart DevCenter now to apply it?`,
+      confirmText: "Restart now",
+    });
+    if (restart) await DC.relaunchApp();
   });
 
   // New application.

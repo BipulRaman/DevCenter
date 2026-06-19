@@ -89,3 +89,10 @@ pub async fn check_for_updates(app: tauri::AppHandle) -> Result<UpdateActionResu
         version: Some(version),
     })
 }
+
+/// Relaunches the app to apply a staged update. Invoked from the UI only after
+/// the user explicitly confirms the restart — updates are never auto-applied.
+#[tauri::command]
+pub fn relaunch_app(app: tauri::AppHandle) {
+    app.restart();
+}

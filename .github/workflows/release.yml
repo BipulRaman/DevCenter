@@ -30,6 +30,11 @@ jobs:
   release:
     name: Build & publish installer
     runs-on: windows-latest
+    # Incremental compilation is useless in clean CI runs and only bloats the
+    # cache; add network retries for occasional flaky crate downloads.
+    env:
+      CARGO_INCREMENTAL: "0"
+      CARGO_NET_RETRY: "10"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -60,7 +65,9 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: app/src-tauri -> target
-
+          # Same key as CI so this job restores the registry/git cache that the
+          # main-branch CI run keeps warm (profile-independent, always reusable).
+          shared-key: devcenter-rust
       # Cache the NSIS bundler Tauri downloads on first build so later runs
       # don't re-fetch nsis-3.11.zip every time.
       - name: Cache Tauri NSIS bundler

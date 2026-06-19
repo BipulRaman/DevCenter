@@ -40,9 +40,15 @@ tower-http = { version = "0.6", features = ["fs"] }
 # tracing = "0.1"
 # tracing-subscriber = "0.3"
 
+# Tuned for fast release builds. Thin LTO with parallel codegen units compiles
+# dramatically faster than fat LTO (`lto = true`) + `codegen-units = 1`, which
+# re-optimizes the whole crate graph single-threaded at link time on every
+# build — the main reason the build/sign/publish job was slow. Binary stays
+# small via `opt-level = "s"` + `strip`. (For an even faster build at the cost
+# of a slightly larger binary, set `lto = false`.)
 [profile.release]
-codegen-units = 1
-lto = true
+codegen-units = 16
+lto = "thin"
 opt-level = "s"
 panic = "abort"
 strip = true

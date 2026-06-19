@@ -14,6 +14,10 @@ jobs:
   build:
     name: Build (Windows / MSVC)
     runs-on: windows-latest
+    # Incremental compilation is useless in clean CI runs and only bloats the
+    # shared cache, so turn it off.
+    env:
+      CARGO_INCREMENTAL: "0"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -22,11 +26,15 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       # Caches the cargo registry, git deps and the target/ dir so subsequent
-      # runs only recompile what changed.
+      # runs only recompile what changed. The shared-key lets the release
+      # workflow restore this same registry/git cache; only main writes it so
+      # PR/branch runs don't thrash it.
       - name: Cache Rust build
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: app/src-tauri
+          workspaces: app/src-tauri -> target
+          shared-key: devcenter-rust
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       # A plain `cargo build` runs the tauri-build script and the
       # `generate_context!` macro, which embed the frontend from ../ui — so this

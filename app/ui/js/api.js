@@ -17,6 +17,7 @@
     // --- App / OS helpers (implemented in Phase 0) ---
     appVersion: () => (hasBackend ? invoke("app_version") : Promise.resolve("browser")),
     checkForUpdates: () => (hasBackend ? invoke("check_for_updates") : Promise.resolve({ status: "browser" })),
+    relaunchApp: () => (hasBackend ? invoke("relaunch_app") : Promise.resolve()),
     openPath: (path) => (hasBackend ? invoke("open_path", { path }) : Promise.resolve()),
     openUrl: (url) => (hasBackend ? invoke("open_url", { url }) : Promise.resolve()),
     openTerminal: (path) => (hasBackend ? invoke("open_terminal", { path }) : Promise.resolve()),

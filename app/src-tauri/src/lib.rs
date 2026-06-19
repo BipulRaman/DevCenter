@@ -68,8 +68,10 @@ async fn auto_update_on_start(app: tauri::AppHandle) {
 
     match install_result {
         Ok(_) => {
+            // Update is staged but NOT applied. We deliberately do not auto-restart;
+            // the UI listens for this "installed" state and asks the user to restart
+            // when they're ready (which calls the relaunch_app command).
             emit_update(&app, "installed", Some(target_version), None);
-            app.restart();
         }
         Err(e) => {
             emit_update(
@@ -108,6 +110,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::os::app_version,
             commands::os::check_for_updates,
+            commands::os::relaunch_app,
             commands::os::open_path,
             commands::os::open_url,
             commands::os::open_terminal,
