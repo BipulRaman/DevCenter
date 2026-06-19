@@ -1,8 +1,9 @@
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use git2::{Delta, DiffOptions, Patch, Repository, Sort, StatusEntry, StatusOptions};
+use git2::{Delta, DiffOptions, Oid, Patch, Repository, Sort, StatusEntry, StatusOptions};
 
 use crate::error::{AppError, AppResult};
 use crate::models::{ChangeSet, CommitInfo, DiffHunk, DiffLine, FileChange, FileDiff, Repo, StashEntry};
@@ -1207,6 +1208,8 @@ pub fn log(path: &Path, limit: usize) -> AppResult<Vec<CommitInfo>> {
     if repo.head().is_err() {
         return Ok(Vec::new());
     }
+    let unpushed = unpushed_oids(&repo, limit);
+    let tags = tag_map(&repo);
     let mut walk = repo.revwalk()?;
     walk.push_head()?;
     walk.set_sorting(Sort::TIME)?;
@@ -1220,9 +1223,59 @@ pub fn log(path: &Path, limit: usize) -> AppResult<Vec<CommitInfo>> {
             summary: c.summary().unwrap_or("(no message)").to_string(),
             author: c.author().name().unwrap_or("unknown").to_string(),
             when: humanize_epoch(c.time().seconds()),
+            unpushed: unpushed.contains(&oid),
+            tags: tags.get(&oid).cloned().unwrap_or_default(),
         });
     }
     Ok(out)
+}
+
+/// OIDs of commits on HEAD that haven't been pushed to the upstream branch
+/// (the commits in `@{upstream}..HEAD`). When the branch has no upstream
+/// (unpublished), every reachable commit is treated as unpushed — matching the
+/// "Publish branch" behaviour in GitHub Desktop.
+fn unpushed_oids(repo: &Repository, limit: usize) -> HashSet<Oid> {
+    let mut set = HashSet::new();
+    let upstream_oid = repo
+        .head()
+        .ok()
+        .filter(|h| h.is_branch())
+        .and_then(|h| h.name().map(|n| n.to_string()))
+        .and_then(|n| repo.branch_upstream_name(&n).ok())
+        .and_then(|u| u.as_str().map(|s| s.to_string()))
+        .and_then(|u| repo.find_reference(&u).ok())
+        .and_then(|r| r.target());
+    let mut walk = match repo.revwalk() {
+        Ok(w) => w,
+        Err(_) => return set,
+    };
+    if walk.push_head().is_err() {
+        return set;
+    }
+    if let Some(up) = upstream_oid {
+        let _ = walk.hide(up);
+    }
+    for oid in walk.take(limit).flatten() {
+        set.insert(oid);
+    }
+    set
+}
+
+/// Map every tagged commit OID to the tag names pointing at it (annotated tags
+/// are peeled through to the commit they reference).
+fn tag_map(repo: &Repository) -> HashMap<Oid, Vec<String>> {
+    let mut map: HashMap<Oid, Vec<String>> = HashMap::new();
+    if let Ok(names) = repo.tag_names(None) {
+        for name in names.iter().flatten() {
+            if let Ok(commit) = repo
+                .revparse_single(name)
+                .and_then(|obj| obj.peel_to_commit())
+            {
+                map.entry(commit.id()).or_default().push(name.to_string());
+            }
+        }
+    }
+    map
 }
 
 /// The files changed in a single commit (vs its first parent) plus its metadata.

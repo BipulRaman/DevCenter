@@ -172,4 +172,10 @@ pub struct CommitInfo {
     pub summary: String,
     pub author: String,
     pub when: String,
+    /// True when this commit is ahead of the upstream branch (not yet pushed).
+    #[serde(default)]
+    pub unpushed: bool,
+    /// Names of any tags that point at this commit.
+    #[serde(default)]
+    pub tags: Vec<String>,
 }

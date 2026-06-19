@@ -3239,10 +3239,21 @@ const ChangesPage = (() => {
       return;
     }
     $("historyList").innerHTML = shown
-      .map((c) => `<div class="history-row${c.hash === activeSha ? " selected" : ""}" data-sha="${c.hash}">
-        <div class="history-summary" title="${esc(c.summary)}">${esc(c.summary)}</div>
-        <div class="history-meta"><span class="history-hash">${c.id}</span><span class="history-author" title="${esc(c.author)}">${esc(c.author)}</span><span class="hm-dot">·</span><span class="history-when">${esc(c.when)}</span></div>
-      </div>`)
+      .map((c) => {
+        const tags = (c.tags || [])
+          .map((t) => `<span class="history-tag" title="Tag: ${esc(t)}">${ICON.tag}<span>${esc(t)}</span></span>`)
+          .join("");
+        const unpushed = c.unpushed
+          ? `<span class="history-unpushed" title="This commit hasn't been pushed yet">${ICON.up}</span>`
+          : "";
+        const badges = tags || unpushed ? `<div class="history-badges">${tags}${unpushed}</div>` : "";
+        return `<div class="history-row${c.hash === activeSha ? " selected" : ""}" data-sha="${c.hash}">
+        <div class="history-main">
+          <div class="history-summary" title="${esc(c.summary)}">${esc(c.summary)}</div>
+          <div class="history-meta"><span class="history-hash">${c.id}</span><span class="history-author" title="${esc(c.author)}">${esc(c.author)}</span><span class="hm-dot">·</span><span class="history-when">${esc(c.when)}</span></div>
+        </div>${badges}
+      </div>`;
+      })
       .join("");
     $("historyList").querySelectorAll(".history-row").forEach((row) =>
       row.addEventListener("click", () => selectCommit(row.dataset.sha)));
