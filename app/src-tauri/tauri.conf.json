@@ -26,17 +26,18 @@
   },
   "plugins": {
     "updater": {
-      "active": true,
-      "dialog": false,
       "pubkey": "",
       "endpoints": [
         "https://github.com/BipulRaman/DevCenter/releases/latest/download/latest.json"
-      ]
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
     }
   },
   "bundle": {
     "active": true,
-    "createUpdaterArtifacts": true,
+    "createUpdaterArtifacts": false,
     "targets": "all",
     "category": "DeveloperTool",
     "shortDescription": "Track repos, PRs and local apps",

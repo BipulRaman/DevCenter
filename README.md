@@ -2,14 +2,13 @@
 
 ## Auto-update
 
-Auto-update is wired for release builds using the Tauri updater plugin.
+Release builds auto-update via the Tauri updater plugin. Installers are signed
+in CI, and existing installs pick up new versions from published GitHub
+Releases. The feed endpoint is configured in
+`app/src-tauri/tauri.conf.json`; the signing keys are **not** committed — the
+public key is injected from a secret at build time.
 
-To activate real update delivery, configure these fields in
-`app/src-tauri/tauri.conf.json` under `plugins.updater`:
-
-- `pubkey`: your updater signing public key
-- `endpoints`: one or more updater feed endpoints
-
-Current scaffold values are placeholders (`pubkey: ""`, `endpoints: []`), so
-release builds will check and emit an updater error state until these values are
-set.
+To enable signed releases, add two repository secrets:
+`TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PUBLIC_KEY`. See
+**[docs/auto-update-setup.md](docs/auto-update-setup.md)** for the full
+walkthrough — key generation, the secrets, the release flow, and key rotation.

@@ -1,0 +1,138 @@
+name: Generate Updater Signing Keys
+
+# One-shot helper workflow that runs `tauri signer generate` for you so you
+# never need Tauri installed locally. Trigger it manually from the Actions tab.
+#
+# Design note — NO PASSPHRASE:
+#   The private key is generated WITHOUT a passphrase. A "second secret"
+#   (TAURI_SIGNING_PRIVATE_KEY_PASSWORD) adds zero real security: the key and
+#   its password would both live in GitHub Secrets, so an attacker who can read
+#   one can read the other. Skipping the passphrase also avoids a whole class of
+#   CI breakage ("Wrong password for that key" from shell escaping of '%', CRLF,
+#   trailing newlines, etc.). The Release workflow passes the password env as an
+#   empty string to match.
+#
+# Run this ONCE per project, or whenever you want to ROTATE the signing key.
+# (DevCenter's current key was generated locally; use this for rotation or if
+# you ever lose the local key file.)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    name: Generate keypair
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Tauri CLI
+        run: npm install -g @tauri-apps/cli@2
+
+      - name: Generate keypair (no passphrase, CI mode)
+        id: gen
+        shell: bash
+        run: |
+          set -e
+          mkdir -p out
+          # --ci      : non-interactive, never prompts
+          # --force   : overwrite if a previous key happens to exist
+          # (no -p)   : generates a key with an EMPTY passphrase
+          npx @tauri-apps/cli signer generate --ci --force -w out/key
+
+          # `-w out/key` writes BOTH files: out/key (private) and out/key.pub (public)
+          PUB="$(cat out/key.pub)"
+          echo "----- PUBLIC KEY (store as TAURI_SIGNING_PUBLIC_KEY secret) -----"
+          echo "$PUB"
+          echo "---------------------------------------------------"
+
+          # Mask the private key in the log so accidental scrolling cannot leak it.
+          echo "::add-mask::$(cat out/key)"
+
+          {
+            echo "public_key<<EOF"
+            echo "$PUB"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload keypair artifact (1-day retention)
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-signing-keypair
+          path: out/
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Print setup instructions
+        shell: bash
+        env:
+          PUBLIC_KEY: ${{ steps.gen.outputs.public_key }}
+        run: |
+          cat <<EOF
+          ============================================================
+            TAURI UPDATER SIGNING KEYS GENERATED  (no passphrase)
+          ============================================================
+
+          Three things to do, then DELETE the artifact at the bottom of
+          this run.
+
+          ─────────────────────────────────────────────────────────
+          STEP 1 — Create the PUBLIC-key repository secret
+          ─────────────────────────────────────────────────────────
+            Repo → Settings → Secrets and variables → Actions
+                 → New repository secret  (or update existing)
+
+              SECRET NAME:   TAURI_SIGNING_PUBLIC_KEY
+              SECRET VALUE:  the public key printed above
+
+            The release workflow injects this into the build via --config,
+            so the public key is never committed to tauri.conf.json.
+
+          ─────────────────────────────────────────────────────────
+          STEP 2 — Create / update the private-key repository secret
+          ─────────────────────────────────────────────────────────
+            Repo → Settings → Secrets and variables → Actions
+                 → New repository secret  (or update existing)
+
+            ┌───────────────────────────────────────────────────────┐
+            │ SECRET NAME (copy exactly):                           │
+            │                                                       │
+            │     TAURI_SIGNING_PRIVATE_KEY                         │
+            │                                                       │
+            │ SECRET VALUE:                                         │
+            │   The ENTIRE contents of the file named "key" inside  │
+            │   the tauri-signing-keypair artifact (download it     │
+            │   from the Artifacts section of this run).            │
+            └───────────────────────────────────────────────────────┘
+
+            There is NO password secret — the Release workflow sets
+            TAURI_SIGNING_PRIVATE_KEY_PASSWORD to an empty string. If an
+            old TAURI_SIGNING_PRIVATE_KEY_PASSWORD secret exists, delete it.
+
+          ─────────────────────────────────────────────────────────
+          STEP 3 — Delete the artifact
+          ─────────────────────────────────────────────────────────
+            Scroll to the Artifacts section of this run, find
+            "tauri-signing-keypair", and click the trash icon.
+            (It auto-expires in 1 day even if you forget.)
+
+          ─────────────────────────────────────────────────────────
+          DONE
+          ─────────────────────────────────────────────────────────
+            After this, every release built by the "Release" workflow
+            publishes a signed latest.json so the in-app updater can
+            verify and install new versions.
+
+            ROTATION WARNING: existing installs were signed with the OLD
+            key and will NOT accept updates signed by this NEW key
+            (signature mismatch). Those users must reinstall manually.
+
+          ============================================================
+          EOF

@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="DevCenter">
+  <defs>
+    <linearGradient id="dc-g" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6366f1" />
+      <stop offset="1" stop-color="#a855f7" />
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="url(#dc-g)" />
+  <!-- spokes from the central hub to three nodes -->
+  <g stroke="#ffffff" stroke-width="3" stroke-linecap="round" opacity="0.9">
+    <path d="M32 25V17" />
+    <path d="M37.7 36 44.4 40.7" />
+    <path d="M26.3 36 19.6 40.7" />
+  </g>
+  <!-- central hub + orbiting nodes -->
+  <g fill="#ffffff">
+    <circle cx="32" cy="32" r="7" />
+    <circle cx="32" cy="13" r="4.5" />
+    <circle cx="49" cy="44" r="4.5" />
+    <circle cx="15" cy="44" r="4.5" />
+  </g>
+</svg>

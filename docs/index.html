@@ -1,0 +1,786 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DevCenter — Track your repos, pull requests & local apps</title>
+    <meta
+      name="description"
+      content="DevCenter is a fast, native desktop app to track local Git repositories and their pull requests across GitHub & Azure DevOps, and to build, run and monitor your local apps with live logs. Built with Rust + Tauri, signed auto-updates, local-first."
+    />
+    <meta name="author" content="Bipul Raman" />
+    <meta name="theme-color" content="#090b10" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#e8ecf3" media="(prefers-color-scheme: light)" />
+
+    <meta property="og:title" content="DevCenter — Track your repos, pull requests & local apps" />
+    <meta
+      property="og:description"
+      content="One native desktop home for your local Git repos, their GitHub & Azure DevOps pull requests, and your local apps — with live logs, signed auto-updates, and local-first storage."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="./icon.svg" />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <link rel="icon" type="image/svg+xml" href="./icon.svg" />
+
+    <!-- Set theme before paint to avoid FOUC -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem("dc-theme");
+          var system = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+          var theme = stored || system;
+          document.documentElement.classList.toggle("dark", theme === "dark");
+          document.documentElement.dataset.theme = theme;
+        } catch (e) {}
+      })();
+    </script>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              brand: {
+                50: "#eef2ff", 100: "#e0e7ff", 200: "#c7d2fe", 300: "#a5b4fc",
+                400: "#818cf8", 500: "#6366f1", 600: "#4f46e5", 700: "#4338ca",
+                800: "#3730a3", 900: "#312e81",
+              },
+            },
+            fontFamily: {
+              sans: ["Inter", "ui-sans-serif", "system-ui", "-apple-system", "Segoe UI", "Roboto", "sans-serif"],
+              mono: ["JetBrains Mono", "ui-monospace", "SFMono-Regular", "Menlo", "Consolas", "monospace"],
+            },
+            boxShadow: {
+              card: "0 1px 2px rgba(2,6,23,.08), 0 12px 28px -16px rgba(2,6,23,.30)",
+            },
+          },
+        },
+      };
+    </script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      html { scroll-behavior: smooth; }
+      :root {
+        --grid-line: rgba(15, 23, 42, 0.05);
+        --bg: #ffffff; --bg-soft: #f4f6fb; --bg-elev: #ffffff;
+        --border: #e3e7f0; --border-strong: #d2d8e6;
+        --fg: #0b0d12; --fg-muted: #4a5260; --fg-subtle: #6b7585;
+        --accent: #4f46e5;
+        --green: #059669; --amber: #d97706; --violet: #7c3aed;
+      }
+      html.dark {
+        --grid-line: rgba(255, 255, 255, 0.04);
+        --bg: #090b10; --bg-soft: #0e1118; --bg-elev: #14161e;
+        --border: #272c38; --border-strong: #2f3543;
+        --fg: #f0f2f8; --fg-muted: #98a1b3; --fg-subtle: #6c7385;
+        --accent: #818cf8;
+        --green: #34d399; --amber: #fbbf24; --violet: #a855f7;
+      }
+      body {
+        background-color: var(--bg);
+        color: var(--fg);
+        background-image:
+          linear-gradient(var(--grid-line) 1px, transparent 1px),
+          linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+        background-size: 56px 56px;
+        background-position: top center;
+      }
+      .surface { background: var(--bg-elev); border: 1px solid var(--border); }
+      .surface-soft { background: var(--bg-soft); }
+      .hairline { border-color: var(--border); }
+      .eyebrow {
+        font-family: "JetBrains Mono", ui-monospace, monospace;
+        font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+        color: var(--accent);
+      }
+      .hero-headline {
+        background: linear-gradient(180deg, var(--fg) 58%, color-mix(in srgb, var(--fg) 50%, var(--accent) 50%) 100%);
+        -webkit-background-clip: text; background-clip: text; color: transparent;
+        padding-bottom: 0.12em;
+      }
+      .ring-soft { box-shadow: 0 0 0 1px var(--border); }
+      .kbd {
+        font-family: "JetBrains Mono", ui-monospace, monospace;
+        font-size: 11px; padding: 1px 6px; border-radius: 4px;
+        background: var(--bg-soft); border: 1px solid var(--border); color: var(--fg);
+      }
+      .check-row { display: grid; grid-template-columns: 18px 1fr; align-items: start; gap: 8px; }
+      .nav-surface {
+        background: color-mix(in srgb, var(--bg) 84%, transparent);
+        backdrop-filter: saturate(140%) blur(12px);
+      }
+      details > summary { list-style: none; cursor: pointer; }
+      details > summary::-webkit-details-marker { display: none; }
+      details[open] .chev { transform: rotate(180deg); }
+      .chev { transition: transform 200ms ease; }
+
+      .hero-glow::before {
+        content: ""; position: absolute; inset: -120px 10% auto 10%; height: 320px;
+        background: radial-gradient(closest-side, color-mix(in srgb, var(--accent) 28%, transparent), transparent 75%);
+        filter: blur(40px); z-index: -1; pointer-events: none;
+      }
+
+      /* Animated hero aurora */
+      .aurora { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: -1; }
+      .aurora span {
+        position: absolute; display: block; border-radius: 50%;
+        filter: blur(80px); opacity: .5; mix-blend-mode: screen; will-change: transform;
+      }
+      html:not(.dark) .aurora span { mix-blend-mode: multiply; opacity: .28; }
+      .aurora .a1 { width: 520px; height: 520px; top: -160px; left: 8%;
+        background: radial-gradient(closest-side, #6366f1, transparent 70%);
+        animation: drift1 22s ease-in-out infinite alternate; }
+      .aurora .a2 { width: 460px; height: 460px; top: -120px; right: 6%;
+        background: radial-gradient(closest-side, #a855f7, transparent 70%);
+        animation: drift2 28s ease-in-out infinite alternate; }
+      .aurora .a3 { width: 600px; height: 600px; top: 80px; left: 32%;
+        background: radial-gradient(closest-side, #4f46e5, transparent 70%);
+        animation: drift3 32s ease-in-out infinite alternate; }
+      @keyframes drift1 { from { transform: translate(0,0) scale(1); } to { transform: translate(60px,40px) scale(1.15); } }
+      @keyframes drift2 { from { transform: translate(0,0) scale(1.05); } to { transform: translate(-80px,70px) scale(.9); } }
+      @keyframes drift3 { from { transform: translate(0,0) scale(.95); } to { transform: translate(40px,-60px) scale(1.1); } }
+      @media (prefers-reduced-motion: reduce) { .aurora span { animation: none !important; } }
+
+      /* Scroll reveal */
+      .reveal { opacity: 0; transform: translateY(18px); transition: opacity 700ms ease, transform 700ms ease; }
+      .reveal.in { opacity: 1; transform: none; }
+      @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; transition: none; } }
+
+      .nav-link { position: relative; }
+      .nav-link::after {
+        content: ""; position: absolute; left: 0; right: 0; bottom: -6px; height: 2px;
+        background: var(--accent); border-radius: 2px; transform: scaleX(0);
+        transform-origin: left center; transition: transform 200ms ease;
+      }
+      .nav-link:hover::after { transform: scaleX(1); }
+
+      .new-pill {
+        display: inline-flex; align-items: center; gap: 8px;
+        padding: 4px 4px 4px 12px; border-radius: 999px;
+        border: 1px solid var(--border); background: var(--bg-elev);
+        font-size: 12px; color: var(--fg);
+        transition: border-color 200ms ease, transform 200ms ease;
+      }
+      .new-pill:hover { border-color: color-mix(in srgb, var(--accent) 60%, var(--border)); transform: translateY(-1px); }
+      .new-pill .new-badge {
+        display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 999px;
+        background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent);
+        font-family: "JetBrains Mono", ui-monospace, monospace;
+        font-size: 10px; letter-spacing: .08em; text-transform: uppercase; font-weight: 600;
+      }
+      .new-pill .new-arrow { height: 24px; width: 24px; display: grid; place-items: center; border-radius: 999px; background: var(--bg-soft); margin-left: 2px; }
+
+      .stack-pill {
+        display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px;
+        border: 1px solid var(--border); background: var(--bg-elev);
+        font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 12px; color: var(--fg-muted);
+        transition: transform 200ms ease, border-color 200ms ease, color 200ms ease;
+      }
+      .stack-pill:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--accent) 50%, var(--border)); color: var(--fg); }
+      .stack-pill .dot { width: 6px; height: 6px; border-radius: 999px; background: var(--accent); }
+
+      .variant-link {
+        display: flex; align-items: center; justify-content: space-between; gap: 10px;
+        padding: 12px 14px; border-radius: 10px; border: 1px solid var(--border);
+        background: var(--bg-elev); color: var(--fg); text-decoration: none;
+        transition: border-color 150ms ease, background-color 150ms ease, transform 150ms ease;
+      }
+      .variant-link:hover {
+        border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+        background: color-mix(in srgb, var(--accent) 6%, var(--bg-elev)); transform: translateY(-1px);
+      }
+
+      /* ---- App-window mockup (hero visual) ---- */
+      .appwin { background: var(--bg-elev); border: 1px solid var(--border); border-radius: 14px; overflow: hidden;
+        box-shadow: 0 40px 80px -40px rgba(2,6,23,.7), 0 0 0 1px var(--border); }
+      .appwin-bar { height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 14px;
+        border-bottom: 1px solid var(--border); background: var(--bg-soft); }
+      .appwin-bar .tl { width: 11px; height: 11px; border-radius: 999px; }
+      .appwin-title { margin-left: 8px; font-size: 12.5px; font-weight: 600; color: var(--fg-muted); }
+      .appwin-body { display: grid; grid-template-columns: 56px 1fr; min-height: 360px; }
+      .rail { border-right: 1px solid var(--border); background: var(--bg-soft);
+        display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px 0; }
+      .rail .ic { width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center;
+        color: var(--fg-subtle); }
+      .rail .ic svg { width: 18px; height: 18px; }
+      .rail .ic.active { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent);
+        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent); }
+      .panel { padding: 18px 18px 22px; }
+      .panel-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px; }
+      .panel-head h4 { font-size: 16px; font-weight: 700; }
+      .panel-head span { font-size: 12px; color: var(--fg-subtle); }
+      .repo-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 10px;
+        border: 1px solid var(--border); background: var(--bg); margin-bottom: 10px; }
+      .repo-ic { width: 34px; height: 34px; border-radius: 9px; flex: none; display: grid; place-items: center;
+        background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent);
+        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent); }
+      .repo-ic svg { width: 17px; height: 17px; }
+      .repo-meta { min-width: 0; flex: 1; }
+      .repo-name { font-size: 13.5px; font-weight: 600; }
+      .repo-path { font-size: 11px; color: var(--fg-subtle); font-family: "JetBrains Mono", monospace;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .chips { display: flex; gap: 6px; flex: none; }
+      .chip { font-size: 11px; padding: 3px 8px; border-radius: 7px; border: 1px solid var(--border);
+        color: var(--fg-muted); background: var(--bg-elev); white-space: nowrap;
+        font-family: "JetBrains Mono", monospace; }
+      .chip.sync { color: var(--green); border-color: color-mix(in srgb, var(--green) 35%, transparent);
+        background: color-mix(in srgb, var(--green) 12%, transparent); }
+      .chip.dirty { color: var(--amber); border-color: color-mix(in srgb, var(--amber) 35%, transparent);
+        background: color-mix(in srgb, var(--amber) 12%, transparent); }
+      .chip.pr { color: var(--violet); border-color: color-mix(in srgb, var(--violet) 35%, transparent);
+        background: color-mix(in srgb, var(--violet) 12%, transparent); }
+      @media (max-width: 480px) { .repo-path, .chips .chip.opt { display: none; } }
+    </style>
+  </head>
+
+  <body class="font-sans antialiased min-h-screen">
+    <a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:px-3 focus:py-1.5 focus:rounded focus:bg-brand-600 focus:text-white">Skip to content</a>
+
+    <!-- NAV -->
+    <header class="sticky top-0 z-30 border-b hairline nav-surface">
+      <nav class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+        <a href="#top" class="flex items-center gap-2.5 group">
+          <span class="h-8 w-8 rounded-md grid place-items-center" style="background: color-mix(in srgb, var(--accent) 10%, var(--bg-elev)); box-shadow: 0 0 0 1px var(--border);">
+            <img src="./icon.svg" alt="" class="h-5 w-5" />
+          </span>
+          <span class="font-semibold tracking-tight">DevCenter</span>
+        </a>
+
+        <div class="hidden md:flex items-center gap-7 text-sm" style="color: var(--fg-muted)">
+          <a href="#features" class="nav-link hover:text-[color:var(--fg)] transition-colors">Features</a>
+          <a href="#domains" class="nav-link hover:text-[color:var(--fg)] transition-colors">How it works</a>
+          <a href="#faq" class="nav-link hover:text-[color:var(--fg)] transition-colors">FAQ</a>
+          <a href="#download" class="nav-link hover:text-[color:var(--fg)] transition-colors">Download</a>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button id="themeToggle" type="button" class="h-9 w-9 grid place-items-center rounded-md border hairline hover:bg-[color:var(--bg-soft)] transition-colors" title="Toggle theme" aria-label="Toggle color theme">
+            <svg class="h-4 w-4 hidden dark:block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+            <svg class="h-4 w-4 block dark:hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          </button>
+          <a href="https://github.com/BipulRaman/DevCenter" target="_blank" rel="noopener" class="hidden sm:inline-flex h-9 items-center gap-1.5 px-3 rounded-md border hairline hover:bg-[color:var(--bg-soft)] transition-colors text-sm">
+            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56v-2c-3.2.7-3.88-1.54-3.88-1.54-.52-1.34-1.28-1.7-1.28-1.7-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.09-.12-.29-.52-1.47.11-3.07 0 0 .97-.31 3.18 1.18.92-.26 1.91-.39 2.89-.39.98 0 1.97.13 2.89.39 2.21-1.49 3.18-1.18 3.18-1.18.63 1.6.23 2.78.11 3.07.74.8 1.19 1.83 1.19 3.09 0 4.42-2.7 5.39-5.26 5.68.41.35.78 1.05.78 2.12v3.14c0 .31.21.67.8.55C20.21 21.39 23.5 17.08 23.5 12 23.5 5.65 18.35.5 12 .5z"/></svg>
+            GitHub
+          </a>
+          <a href="#download" class="inline-flex h-9 items-center px-3 rounded-md bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium transition-colors">Download</a>
+        </div>
+      </nav>
+    </header>
+
+    <main id="main">
+      <!-- HERO -->
+      <section id="top" class="relative hero-glow">
+        <div class="aurora" aria-hidden="true"><span class="a1"></span><span class="a2"></span><span class="a3"></span></div>
+        <div class="max-w-7xl mx-auto px-6 pt-20 pb-10 md:pt-28 md:pb-14 text-center">
+          <a id="versionPill" href="https://github.com/BipulRaman/DevCenter/releases/latest" target="_blank" rel="noopener" class="new-pill">
+            <span class="new-badge"><span class="h-1.5 w-1.5 rounded-full" style="background: #10b981"></span> New</span>
+            <span id="versionPillText">Open source · built with Rust + Tauri</span>
+            <span class="new-arrow"><svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></span>
+          </a>
+
+          <h1 class="mt-7 text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight leading-[1.15] hero-headline">
+            Mission control for your<br />repos, PRs &amp; local apps.
+          </h1>
+
+          <p class="mt-6 max-w-2xl mx-auto text-base sm:text-lg leading-relaxed" style="color: var(--fg-muted)">
+            DevCenter is a fast, native desktop app that tracks your local Git
+            repositories and their pull requests across <strong>GitHub</strong> and
+            <strong>Azure DevOps</strong> — and builds, runs and monitors your
+            local apps with live logs. All in one window.
+          </p>
+
+          <div class="mt-9 flex flex-wrap items-center justify-center gap-3">
+            <a id="heroDownload" href="https://github.com/BipulRaman/DevCenter/releases/latest" target="_blank" rel="noopener" class="inline-flex items-center gap-2 px-5 py-3 rounded-md bg-brand-600 hover:bg-brand-700 text-white font-medium transition-colors shadow-card">
+              <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/></svg>
+              <span id="heroDownloadLabel">Download for Windows</span>
+            </a>
+            <a href="#domains" class="inline-flex items-center gap-2 px-5 py-3 rounded-md border hairline surface hover:bg-[color:var(--bg-soft)] transition-colors font-medium">
+              See how it works
+              <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+            </a>
+          </div>
+
+          <p class="mt-5 text-xs" style="color: var(--fg-subtle)">
+            Rust + Tauri · Signed auto-updates · Your data stays local · Created by
+            <a href="https://github.com/BipulRaman" target="_blank" rel="noopener" class="font-medium hover:underline" style="color: var(--fg-muted)">Bipul Raman</a>
+          </p>
+        </div>
+
+        <!-- App-window mockup -->
+        <div class="max-w-5xl mx-auto px-6 pb-20 md:pb-28">
+          <div class="appwin" role="img" aria-label="DevCenter app showing the Git Board with tracked repositories">
+            <div class="appwin-bar">
+              <span class="tl" style="background:#f87171"></span>
+              <span class="tl" style="background:#fbbf24"></span>
+              <span class="tl" style="background:#34d399"></span>
+              <span class="appwin-title">DevCenter — Git Board</span>
+            </div>
+            <div class="appwin-body">
+              <div class="rail">
+                <div class="ic active" title="Git Board"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M6 9v6"/><path d="M18 9a9 9 0 0 1-9 9"/><circle cx="18" cy="6" r="3"/></svg></div>
+                <div class="ic" title="Changes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M3 12h6"/><path d="M15 12h6"/></svg></div>
+                <div class="ic" title="Pull Requests"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M6 9v6"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><path d="m15 8-2-2 2-2"/><circle cx="18" cy="18" r="3"/></svg></div>
+                <div class="ic" title="App Center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="6" rx="1"/><rect x="3" y="14" width="18" height="6" rx="1"/><path d="M7 7h.01M7 17h.01"/></svg></div>
+                <div class="ic" title="Accounts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></div>
+              </div>
+              <div class="panel">
+                <div class="panel-head"><h4>Git Board</h4><span>4 watched repositories</span></div>
+
+                <div class="repo-row">
+                  <div class="repo-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M7 16l4-4 3 3 5-5"/></svg></div>
+                  <div class="repo-meta"><div class="repo-name">devcenter</div><div class="repo-path">D:\GitHub\DevCenter</div></div>
+                  <div class="chips"><span class="chip">main</span><span class="chip sync">↑2 ↓1</span><span class="chip dirty opt">Uncommitted</span></div>
+                </div>
+
+                <div class="repo-row">
+                  <div class="repo-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></div>
+                  <div class="repo-meta"><div class="repo-name">app-nest</div><div class="repo-path">D:\GitHub\AppNest</div></div>
+                  <div class="chips"><span class="chip">main</span><span class="chip pr opt">3 PRs</span></div>
+                </div>
+
+                <div class="repo-row">
+                  <div class="repo-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></svg></div>
+                  <div class="repo-meta"><div class="repo-name">latex-studio</div><div class="repo-path">D:\GitHub\LaTexStudio</div></div>
+                  <div class="chips"><span class="chip">release</span><span class="chip sync">↑1</span></div>
+                </div>
+
+                <div class="repo-row">
+                  <div class="repo-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg></div>
+                  <div class="repo-meta"><div class="repo-name">infra-tools</div><div class="repo-path">D:\work\infra-tools</div></div>
+                  <div class="chips"><span class="chip">develop</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- WORKS WITH -->
+      <section class="border-y hairline" style="background: var(--bg-soft)">
+        <div class="max-w-7xl mx-auto px-6 py-8 flex flex-wrap items-center justify-center gap-3 text-center">
+          <span class="text-xs font-mono uppercase tracking-widest w-full sm:w-auto mb-2 sm:mb-0 sm:mr-3" style="color: var(--fg-subtle)">Works with your stack</span>
+          <span class="stack-pill"><span class="dot"></span>GitHub</span>
+          <span class="stack-pill"><span class="dot"></span>Azure DevOps</span>
+          <span class="stack-pill"><span class="dot"></span>.NET</span>
+          <span class="stack-pill"><span class="dot"></span>Node.js</span>
+          <span class="stack-pill"><span class="dot"></span>React</span>
+          <span class="stack-pill"><span class="dot"></span>Next.js</span>
+          <span class="stack-pill"><span class="dot"></span>Angular</span>
+          <span class="stack-pill"><span class="dot"></span>Vue</span>
+          <span class="stack-pill"><span class="dot"></span>Express</span>
+        </div>
+      </section>
+
+      <!-- DOMAINS / HOW IT WORKS -->
+      <section id="domains" class="reveal max-w-7xl mx-auto px-6 py-20 md:py-28">
+        <div class="max-w-3xl">
+          <p class="eyebrow">How it works</p>
+          <h2 class="mt-3 text-3xl md:text-4xl font-bold tracking-tight">Three workspaces, one window.</h2>
+          <p class="mt-4 leading-relaxed" style="color: var(--fg-muted)">
+            DevCenter is organised around the three things you juggle every day —
+            your repositories, their pull requests, and the apps you run locally.
+          </p>
+        </div>
+
+        <div class="mt-12 grid gap-5 lg:grid-cols-3">
+          <article class="surface shadow-card rounded-xl p-7">
+            <div class="h-11 w-11 rounded-lg grid place-items-center mb-5" style="background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent)">
+              <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M6 9v6"/><path d="M18 9a9 9 0 0 1-9 9"/><circle cx="18" cy="6" r="3"/></svg>
+            </div>
+            <h3 class="text-lg font-semibold">Git Board</h3>
+            <p class="mt-2 text-sm leading-relaxed" style="color: var(--fg-muted)">
+              Discover, watch, fetch and clone your local repos. See branch,
+              ahead/behind and dirty status at a glance — then stage, diff,
+              commit, push, pull and browse history in a GitHub&nbsp;Desktop-style
+              Changes view.
+            </p>
+          </article>
+
+          <article class="surface shadow-card rounded-xl p-7">
+            <div class="h-11 w-11 rounded-lg grid place-items-center mb-5" style="background: color-mix(in srgb, var(--violet) 14%, transparent); color: var(--violet)">
+              <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M6 9v6"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><path d="m15 8-2-2 2-2"/><circle cx="18" cy="18" r="3"/></svg>
+            </div>
+            <h3 class="text-lg font-semibold">Pull Requests</h3>
+            <p class="mt-2 text-sm leading-relaxed" style="color: var(--fg-muted)">
+              Pull open PRs from every watched repo across GitHub and Azure
+              DevOps into one searchable list — with review state, comment
+              counts and additions/deletions. One click deep-links to the
+              provider for review.
+            </p>
+          </article>
+
+          <article class="surface shadow-card rounded-xl p-7">
+            <div class="h-11 w-11 rounded-lg grid place-items-center mb-5" style="background: color-mix(in srgb, var(--green) 14%, transparent); color: var(--green)">
+              <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="6" rx="1"/><rect x="3" y="14" width="18" height="6" rx="1"/><path d="M7 7h.01M7 17h.01"/></svg>
+            </div>
+            <h3 class="text-lg font-semibold">App Center</h3>
+            <p class="mt-2 text-sm leading-relaxed" style="color: var(--fg-muted)">
+              Build, run, stop and restart your local apps — each on its own
+              port — and watch their logs stream live. Framework presets, static
+              folder serving and an OpenAPI mock get any project up in seconds.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <!-- FEATURES -->
+      <section id="features" class="reveal max-w-7xl mx-auto px-6 pb-4 md:pb-8">
+        <div class="max-w-3xl">
+          <p class="eyebrow">Features</p>
+          <h2 class="mt-3 text-3xl md:text-4xl font-bold tracking-tight">Everything your dev machine needs.</h2>
+          <p class="mt-4 leading-relaxed" style="color: var(--fg-muted)">
+            Native speed, a quiet premium UI, and the plumbing handled for you —
+            from secure tokens to signed updates.
+          </p>
+        </div>
+
+        <div class="mt-12 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+          <article class="surface shadow-card rounded-xl p-6">
+            <div class="h-10 w-10 rounded-lg grid place-items-center mb-5" style="background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent)">
+              <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M7 16l4-4 3 3 5-5"/></svg>
+            </div>
+            <h3 class="font-semibold">Repo status at a glance</h3>
+            <p class="mt-2 text-sm leading-relaxed" style="color: var(--fg-muted)">
+              Branch, ahead/behind counts, and uncommitted changes are surfaced
+              on every row. Tag and group repos to keep big machines tidy.
+            </p>
+          </article>
+
+          <article class="surface shadow-card rounded-xl p-6">
+            <div class="h-10 w-10 rounded-lg grid place-items-center mb-5" style="background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent)">
+              <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M3 12h6"/><path d="M15 12h6"/></svg>
+            </div>
+            <h3 class="font-semibold">Commit like a pro</h3>
+            <p class="mt-2 text-sm leading-relaxed" style="color: var(--fg-muted)">
+              A GitHub&nbsp;Desktop-style Changes page with a file tree,
+              hunk-level diffs, selective staging, and a three-pane history
+              browser — plus push, pull and sync.
+            </p>
+          </article>
+
+          <article class="surface shadow-card rounded-xl p-6">
+            <div class="h-10 w-10 rounded-lg grid place-items-center mb-5" style="background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent)">
+              <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="m8 21 4-4 4 4"/><path d="M8 9l2 2 4-4"/></svg>
+            </div>
+            <h3 class="font-semibold">Framework presets</h3>
+            <p class="mt-2 text-sm leading-relaxed" style="color: var(--fg-muted)">
+              One-click build &amp; run for .NET, Node, React, Next, Angular, Vue
+              and Express — or serve a static folder, or stand up a Swagger /
+              OpenAPI <span class="kbd">API mock</span>.
+            </p>
+          </article>
+
+          <article class="surface shadow-card rounded-xl p-6">
+            <div class="h-10 w-10 rounded-lg grid place-items-center mb-5" style="background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent)">
+              <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 17 6-6-6-6"/><path d="M12 19h8"/></svg>
+            </div>
+            <h3 class="font-semibold">Live streamed logs</h3>
+            <p class="mt-2 text-sm leading-relaxed" style="color: var(--fg-muted)">
+              Every running app streams stdout/stderr straight into the UI, so
+              you can spot a crash or a port clash the moment it happens. Start
+              All / Stop All from the system tray.
+            </p>
+          </article>
+
+          <article class="surface shadow-card rounded-xl p-6">
+            <div class="h-10 w-10 rounded-lg grid place-items-center mb-5" style="background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent)">
+              <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+            </div>
+            <h3 class="font-semibold">Secure by default</h3>
+            <p class="mt-2 text-sm leading-relaxed" style="color: var(--fg-muted)">
+              Provider tokens are stored in your OS keychain — never in plain
+              text. Repos, settings and app state live locally in SQLite on your
+              machine.
+            </p>
+          </article>
+
+          <article class="surface shadow-card rounded-xl p-6">
+            <div class="h-10 w-10 rounded-lg grid place-items-center mb-5" style="background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent)">
+              <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m6 9 6 6 6-6"/><path d="M5 21h14"/></svg>
+            </div>
+            <h3 class="font-semibold">Signed auto-updates</h3>
+            <p class="mt-2 text-sm leading-relaxed" style="color: var(--fg-muted)">
+              New versions are minisign-signed in CI and delivered straight from
+              GitHub Releases. DevCenter verifies the signature, installs, and
+              relaunches — no installers to chase.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <!-- WHY / LOCAL-FIRST CALLOUT -->
+      <section class="reveal max-w-7xl mx-auto px-6 py-20 md:py-28">
+        <div class="surface shadow-card rounded-2xl p-8 md:p-12 grid lg:grid-cols-2 gap-10 items-center">
+          <div>
+            <p class="eyebrow">Native &amp; local-first</p>
+            <h2 class="mt-3 text-2xl md:text-3xl font-bold tracking-tight">A real desktop app, not a browser tab.</h2>
+            <p class="mt-4 leading-relaxed" style="color: var(--fg-muted)">
+              DevCenter is built in <strong>Rust</strong> with <strong>Tauri</strong>,
+              rendering through your OS WebView — so there's no bundled Chromium,
+              the install is small, and it starts fast. Your data stays on your
+              machine.
+            </p>
+            <ul class="mt-6 space-y-3 text-sm">
+              <li class="check-row"><svg class="h-4 w-4 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="color: var(--green)"><path d="M20 6 9 17l-5-5"/></svg><span style="color: var(--fg-muted)">Tiny footprint — uses WebView2 / WKWebView / WebKitGTK</span></li>
+              <li class="check-row"><svg class="h-4 w-4 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="color: var(--green)"><path d="M20 6 9 17l-5-5"/></svg><span style="color: var(--fg-muted)">Repos &amp; apps work fully offline; tokens only for PRs</span></li>
+              <li class="check-row"><svg class="h-4 w-4 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="color: var(--green)"><path d="M20 6 9 17l-5-5"/></svg><span style="color: var(--fg-muted)">Polished light &amp; dark themes, keyboard-friendly UI</span></li>
+            </ul>
+          </div>
+          <div class="grid grid-cols-2 gap-4">
+            <div class="surface-soft rounded-xl p-5 border hairline">
+              <div class="text-3xl font-extrabold tracking-tight" style="color: var(--accent)">2</div>
+              <div class="mt-1 text-sm" style="color: var(--fg-muted)">PR providers — GitHub &amp; Azure DevOps</div>
+            </div>
+            <div class="surface-soft rounded-xl p-5 border hairline">
+              <div class="text-3xl font-extrabold tracking-tight" style="color: var(--accent)">7+</div>
+              <div class="mt-1 text-sm" style="color: var(--fg-muted)">App framework presets, plus static &amp; API mock</div>
+            </div>
+            <div class="surface-soft rounded-xl p-5 border hairline">
+              <div class="text-3xl font-extrabold tracking-tight" style="color: var(--accent)">100%</div>
+              <div class="mt-1 text-sm" style="color: var(--fg-muted)">Local storage — SQLite + OS keychain</div>
+            </div>
+            <div class="surface-soft rounded-xl p-5 border hairline">
+              <div class="text-3xl font-extrabold tracking-tight" style="color: var(--accent)">0</div>
+              <div class="mt-1 text-sm" style="color: var(--fg-muted)">Bundled Chromium — native WebView</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- FAQ -->
+      <section id="faq" class="reveal max-w-4xl mx-auto px-6 py-20 md:py-24">
+        <div>
+          <p class="eyebrow">FAQ</p>
+          <h2 class="mt-3 text-3xl md:text-4xl font-bold tracking-tight">Frequently asked questions</h2>
+        </div>
+
+        <div class="mt-10 divide-y hairline border-y hairline">
+          <details class="py-5 group">
+            <summary class="flex items-center justify-between gap-4">
+              <span class="font-medium">What is DevCenter for?</span>
+              <svg class="h-4 w-4 chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+            </summary>
+            <p class="mt-3 text-sm leading-relaxed" style="color: var(--fg-muted)">
+              It's a single desktop dashboard for your local development: track
+              and operate your Git repositories, watch their pull requests across
+              GitHub and Azure DevOps, and build / run / monitor your local apps
+              with live logs — without juggling a terminal, a browser and three
+              other tools.
+            </p>
+          </details>
+
+          <details class="py-5 group">
+            <summary class="flex items-center justify-between gap-4">
+              <span class="font-medium">Which platforms are supported?</span>
+              <svg class="h-4 w-4 chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+            </summary>
+            <p class="mt-3 text-sm leading-relaxed" style="color: var(--fg-muted)">
+              A signed <strong>Windows</strong> installer (x64) is published for
+              every release. DevCenter is built with Rust + Tauri and is
+              cross-platform by design — macOS and Linux can be built from source
+              today, with prebuilt binaries planned.
+            </p>
+          </details>
+
+          <details class="py-5 group">
+            <summary class="flex items-center justify-between gap-4">
+              <span class="font-medium">Where is my data stored?</span>
+              <svg class="h-4 w-4 chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+            </summary>
+            <p class="mt-3 text-sm leading-relaxed" style="color: var(--fg-muted)">
+              Entirely on your machine. Repos, accounts and app definitions live
+              in a local SQLite database in your app-data folder, and provider
+              access tokens are kept in your operating system's keychain /
+              Credential Manager.
+            </p>
+          </details>
+
+          <details class="py-5 group">
+            <summary class="flex items-center justify-between gap-4">
+              <span class="font-medium">Do I need a GitHub or Azure account?</span>
+              <svg class="h-4 w-4 chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+            </summary>
+            <p class="mt-3 text-sm leading-relaxed" style="color: var(--fg-muted)">
+              Only for pull requests. Add a personal access token to pull PRs
+              from GitHub or Azure DevOps. Everything else — tracking repos,
+              committing, and running local apps — works without any account.
+            </p>
+          </details>
+
+          <details class="py-5 group">
+            <summary class="flex items-center justify-between gap-4">
+              <span class="font-medium">How do updates work?</span>
+              <svg class="h-4 w-4 chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+            </summary>
+            <p class="mt-3 text-sm leading-relaxed" style="color: var(--fg-muted)">
+              DevCenter checks for updates on launch and from
+              <em>Settings → Check for updates</em>. Releases are minisign-signed
+              in CI; the app verifies the signature before installing and
+              relaunching. See the
+              <a href="./auto-update-setup.md" class="font-medium hover:underline" style="color: var(--accent)">auto-update setup guide</a>.
+            </p>
+          </details>
+
+          <details class="py-5 group">
+            <summary class="flex items-center justify-between gap-4">
+              <span class="font-medium">How do I report a bug or request a feature?</span>
+              <svg class="h-4 w-4 chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+            </summary>
+            <p class="mt-3 text-sm leading-relaxed" style="color: var(--fg-muted)">
+              Open an issue on
+              <a href="https://github.com/BipulRaman/DevCenter/issues" target="_blank" rel="noopener" class="font-medium hover:underline" style="color: var(--accent)">GitHub</a>.
+              Contributions are welcome.
+            </p>
+          </details>
+        </div>
+      </section>
+
+      <!-- DOWNLOAD -->
+      <section id="download" class="reveal border-y hairline" style="background: var(--bg-soft)">
+        <div class="max-w-7xl mx-auto px-6 py-20 md:py-24 text-center">
+          <p class="eyebrow">Download</p>
+          <h2 class="mt-3 text-3xl md:text-4xl font-bold tracking-tight">Get DevCenter</h2>
+          <p class="mt-4 max-w-xl mx-auto leading-relaxed" style="color: var(--fg-muted)">
+            The Windows installer is built automatically from each release.
+            Other platforms can be built from source.
+          </p>
+
+          <div class="mt-10 grid gap-5 sm:grid-cols-2 max-w-3xl mx-auto text-left">
+            <div class="surface shadow-card rounded-xl p-6 flex flex-col">
+              <div class="flex items-center gap-3">
+                <svg class="h-7 w-7" viewBox="0 0 24 24" fill="currentColor" style="color: var(--accent)"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/></svg>
+                <div>
+                  <div class="text-xs font-mono uppercase tracking-wider" style="color: var(--fg-subtle)">Windows</div>
+                  <div class="font-semibold">Windows 10 / 11 · x64</div>
+                </div>
+              </div>
+              <p class="mt-4 text-sm leading-relaxed flex-1" style="color: var(--fg-muted)">
+                Signed NSIS installer (<code class="font-mono">.exe</code>) with
+                built-in auto-update.
+              </p>
+              <a id="winDownload" href="https://github.com/BipulRaman/DevCenter/releases/latest" target="_blank" rel="noopener" class="mt-5 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-md bg-brand-600 hover:bg-brand-700 text-white font-medium transition-colors">
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m6 9 6 6 6-6"/><path d="M5 21h14"/></svg>
+                Download for Windows
+              </a>
+            </div>
+
+            <div class="surface shadow-card rounded-xl p-6 flex flex-col">
+              <div class="flex items-center gap-3">
+                <svg class="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--fg-muted)"><path d="M16 18 22 12 16 6"/><path d="M8 6 2 12 8 18"/></svg>
+                <div>
+                  <div class="text-xs font-mono uppercase tracking-wider" style="color: var(--fg-subtle)">macOS &amp; Linux</div>
+                  <div class="font-semibold">Build from source</div>
+                </div>
+              </div>
+              <p class="mt-4 text-sm leading-relaxed flex-1" style="color: var(--fg-muted)">
+                Clone the repo and run <code class="font-mono">cargo tauri build</code>.
+                Rust + Tauri make a native bundle for your OS.
+              </p>
+              <a href="https://github.com/BipulRaman/DevCenter#readme" target="_blank" rel="noopener" class="mt-5 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-md border hairline surface hover:bg-[color:var(--bg)] transition-colors font-medium">
+                Build instructions
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+              </a>
+            </div>
+          </div>
+
+          <p class="mt-8 text-sm" style="color: var(--fg-subtle)">
+            Looking for an older build?
+            <a href="https://github.com/BipulRaman/DevCenter/releases" target="_blank" rel="noopener" class="font-medium hover:underline" style="color: var(--accent)">Browse all releases →</a>
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="max-w-7xl mx-auto px-6 py-12">
+      <div class="flex flex-col sm:flex-row items-center justify-between gap-5">
+        <div class="flex items-center gap-2.5">
+          <img src="./icon.svg" alt="" class="h-6 w-6" />
+          <span class="font-semibold tracking-tight">DevCenter</span>
+          <span class="text-sm" style="color: var(--fg-subtle)">· repos, PRs &amp; local apps</span>
+        </div>
+        <div class="flex items-center gap-6 text-sm" style="color: var(--fg-muted)">
+          <a href="#features" class="hover:text-[color:var(--fg)] transition-colors">Features</a>
+          <a href="#download" class="hover:text-[color:var(--fg)] transition-colors">Download</a>
+          <a href="https://github.com/BipulRaman/DevCenter" target="_blank" rel="noopener" class="hover:text-[color:var(--fg)] transition-colors">GitHub</a>
+        </div>
+      </div>
+      <div class="mt-8 pt-6 border-t hairline text-xs flex flex-col sm:flex-row items-center justify-between gap-2" style="color: var(--fg-subtle)">
+        <span>© <span id="year">2026</span> DevCenter · Created by
+          <a href="https://github.com/BipulRaman" target="_blank" rel="noopener" class="hover:underline" style="color: var(--fg-muted)">Bipul Raman</a>
+        </span>
+        <span>Built with Rust + Tauri · Local-first</span>
+      </div>
+    </footer>
+
+    <script>
+      (function () {
+        var root = document.documentElement;
+
+        // Theme toggle
+        var toggle = document.getElementById("themeToggle");
+        if (toggle) {
+          toggle.addEventListener("click", function () {
+            var dark = root.classList.toggle("dark");
+            root.dataset.theme = dark ? "dark" : "light";
+            try { localStorage.setItem("dc-theme", dark ? "dark" : "light"); } catch (e) {}
+          });
+        }
+
+        // Footer year
+        var yr = document.getElementById("year");
+        if (yr) yr.textContent = new Date().getFullYear();
+
+        // Scroll reveal
+        var reveals = document.querySelectorAll(".reveal");
+        if ("IntersectionObserver" in window) {
+          var io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) {
+              if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
+            });
+          }, { threshold: 0.12 });
+          reveals.forEach(function (el) { io.observe(el); });
+        } else {
+          reveals.forEach(function (el) { el.classList.add("in"); });
+        }
+
+        // Non-Windows hint on the hero button label
+        try {
+          var p = navigator.platform || "";
+          var label = document.getElementById("heroDownloadLabel");
+          if (label && !/win/i.test(p)) label.textContent = "Download";
+        } catch (e) {}
+
+        // Latest release: version pill + direct installer link
+        fetch("https://api.github.com/repos/BipulRaman/DevCenter/releases/latest")
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (rel) {
+            if (!rel) return;
+            var tag = rel.tag_name || "";
+            if (tag) {
+              var vt = document.getElementById("versionPillText");
+              if (vt) vt.textContent = tag + " · now available";
+            }
+            var exe = (rel.assets || []).filter(function (a) { return /\.exe$/i.test(a.name); })[0];
+            if (exe) {
+              ["heroDownload", "winDownload"].forEach(function (id) {
+                var el = document.getElementById(id);
+                if (el) el.href = exe.browser_download_url;
+              });
+            }
+          })
+          .catch(function () {});
+      })();
+    </script>
+  </body>
+</html>
