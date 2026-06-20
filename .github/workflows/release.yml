@@ -34,6 +34,10 @@ jobs:
       # Don't cancel the other OS builds if one fails — a partial release is
       # still useful and easier to diagnose.
       fail-fast: false
+      # Run the legs ONE AT A TIME. Each leg appends its platform entry to the
+      # release's latest.json; parallel uploads would race and drop entries, so
+      # serializing guarantees the final manifest lists every platform.
+      max-parallel: 1
       matrix:
         include:
           - platform: windows-latest
