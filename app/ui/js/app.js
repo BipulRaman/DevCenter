@@ -3178,7 +3178,8 @@ const ChangesPage = (() => {
     pushBtn.classList.toggle("primed", ahead > 0 || !hasUpstream);
     pullBtn.classList.toggle("primed", behind > 0);
     pushBtn.querySelector("span").textContent = hasUpstream ? "Push" : "Publish";
-    $("fetchSyncBtn").disabled = busy;
+    // Fetch is always available — it never depends on local ahead/behind state.
+    $("fetchSyncBtn").disabled = false;
   }
 
   async function doSync(kind) {
@@ -3191,7 +3192,9 @@ const ChangesPage = (() => {
     const prevIcon = iconEl ? iconEl.outerHTML : null;
     busy = true; btn.classList.add("busy");
     if (iconEl) iconEl.outerHTML = ICON.sync;
-    [$("pushBtn"), $("pullBtn"), $("fetchSyncBtn")].forEach((b) => (b.disabled = true));
+    // Disable Push/Pull while an op runs (Fetch stays available — the early
+    // `if (busy) return` guard already prevents overlapping operations).
+    [$("pushBtn"), $("pullBtn")].forEach((b) => (b.disabled = true));
     try {
       let cs;
       if (kind === "push") cs = await DC.gitPush(repoId);
@@ -3199,6 +3202,7 @@ const ChangesPage = (() => {
       else { await DC.fetchRepo(repoId); cs = await DC.gitChanges(repoId, null); }
       branch = cs.branch || branch;
       $("chgBranchLabel").textContent = branch;
+      busy = false;
       setChangeSet(cs);
     } catch (e) {
       console.error(kind + " failed", e);
