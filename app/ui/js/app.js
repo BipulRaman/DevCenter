@@ -3024,6 +3024,26 @@ const ChangesPage = (() => {
     }
   }
 
+  // Re-fetch the working tree WITHOUT the "Loading…" flash or dropping the open
+  // diff. Used by the focus auto-refresh so commits made outside DevCenter (e.g.
+  // from VS Code) update the Push/Pull counts and file list in place.
+  async function refreshChangesSilently() {
+    if (!repoId) return;
+    try {
+      const cs = await DC.gitChanges(repoId, null);
+      branch = cs.branch || branch;
+      $("chgBranchLabel").textContent = branch;
+      setChangeSet(cs);
+      // If the file whose diff is open was committed/removed externally, clear it.
+      if (activeFile && !staged.concat(unstaged).some((f) => f.path === activeFile)) {
+        activeFile = null; activeGroup = null;
+        showDiffEmpty("Select a file to view its diff.");
+      }
+    } catch (e) {
+      console.error("gitChanges (focus refresh) failed", e);
+    }
+  }
+
   // Apply a fresh ChangeSet to the Changes tab (used by load/stage/commit/sync).
   function setChangeSet(cs) {
     staged = cs.staged || [];
@@ -3780,6 +3800,26 @@ const ChangesPage = (() => {
     $("changesList").addEventListener("keydown", onTreeKey);
     $("detailFiles").addEventListener("keydown", onTreeKey);
     initResizers();
+
+    // Auto-refresh when the app window regains focus so commits/changes made
+    // outside DevCenter (VS Code, terminal, …) update the Push/Pull counts and
+    // file lists without a manual Refresh. Debounced because focus +
+    // visibilitychange can both fire when restoring the window.
+    let lastFocusRefresh = 0;
+    const refreshOnFocus = () => {
+      if (!DC || !DC.hasBackend || !repoId) return;
+      if (document.querySelector(".nav-item.active")?.dataset.page !== "changes") return;
+      const now = Date.now();
+      if (now - lastFocusRefresh < 400) return;
+      lastFocusRefresh = now;
+      if (tab === "history") loadHistory();
+      else if (tab === "pulls") loadRepoPulls();
+      else refreshChangesSilently();
+    };
+    window.addEventListener("focus", refreshOnFocus);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") refreshOnFocus();
+    });
   }
 
   init();
