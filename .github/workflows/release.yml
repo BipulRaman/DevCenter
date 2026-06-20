@@ -2,6 +2,9 @@ name: Release
 
 # Build & publish signed installers for Windows, macOS (Apple Silicon + Intel)
 # and Linux, plus the updater manifest (latest.json), to one GitHub Release.
+# The OS builds run in PARALLEL; a final job then assembles latest.json from
+# every platform's signature so auto-update covers all of them without the
+# parallel-upload race in tauri-action's own updater-JSON step.
 # Fires exactly ONCE when a GitHub Release is PUBLISHED (write your notes in the
 # UI, then click "Publish release"). Manual dispatch is supported for rebuilds.
 #
@@ -31,13 +34,9 @@ jobs:
   release:
     name: ${{ matrix.name }}
     strategy:
-      # Don't cancel the other OS builds if one fails — a partial release is
-      # still useful and easier to diagnose.
+      # Build every OS in PARALLEL. Don't cancel the others if one fails — a
+      # partial release is still useful and easier to diagnose.
       fail-fast: false
-      # Run the legs ONE AT A TIME. Each leg appends its platform entry to the
-      # release's latest.json; parallel uploads would race and drop entries, so
-      # serializing guarantees the final manifest lists every platform.
-      max-parallel: 1
       matrix:
         include:
           - platform: windows-latest
@@ -127,8 +126,9 @@ jobs:
           Set-Content -Path "app/updater.conf.json" -Value $json -NoNewline -Encoding utf8
           Write-Host "Wrote app/updater.conf.json with pubkey from secret."
 
-      # Builds the NSIS installer and signs the updater artifacts, then attaches
-      # them + latest.json to the published release.
+      # Builds this OS's bundles and signs the updater artifacts, then attaches
+      # them (+ their .sig signatures) to the release. latest.json is assembled
+      # separately by the updater-manifest job once all OS builds finish.
       - name: Build, sign & publish
         uses: tauri-apps/tauri-action@v0
         env:
@@ -147,11 +147,91 @@ jobs:
           releaseBody: 'Automated build for ${{ steps.tag.outputs.tag }}. Installer below; existing installs update automatically.'
           releaseDraft: false
           prerelease: false
-          # On Windows, point latest.json at the NSIS installer (not WiX/MSI).
-          updaterJsonPreferNsis: true
+          # Each leg uploads its OWN bundles + .sig signatures but does NOT write
+          # latest.json: tauri-action's updater-JSON step read-modify-writes the
+          # shared latest.json asset, which races when legs run in parallel and
+          # can drop a platform. The "updater-manifest" job below assembles it
+          # once, after all legs finish.
+          uploadUpdaterJson: false
+          # Retry transient upload failures (and the rare concurrent find-or-
+          # create of the release on a fresh workflow_dispatch tag).
+          retryAttempts: 3
           # Per-OS bundles + the CI-only --config override (pubkey +
-          # createUpdaterArtifacts) merged on top of tauri.conf.json. Every
-          # matrix leg uploads to the SAME release and tauri-action merges its
-          # platform entry into latest.json. Relative --config paths resolve
-          # against projectPath (app).
+          # createUpdaterArtifacts) merged on top of tauri.conf.json. Relative
+          # --config paths resolve against projectPath (app).
           args: ${{ matrix.args }}
+
+  # After every OS build finishes, assemble ONE latest.json from all the
+  # uploaded *.sig signatures and publish it. Doing this in a single job (rather
+  # than per-leg) means the parallel builds can never race and drop a platform
+  # from the updater manifest.
+  updater-manifest:
+    name: Publish updater manifest
+    needs: release
+    # Run even if some OS legs failed (fail-fast: false) so a partial release
+    # still gets a manifest for the platforms that did build.
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve tag
+        id: tag
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Assemble & upload latest.json
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+          work="$(mktemp -d)"
+
+          # One updater signature per successfully built platform.
+          mapfile -t sigs < <(gh release view "$TAG" --json assets -q '.assets[].name' | grep '\.sig$' || true)
+          if [ "${#sigs[@]}" -eq 0 ]; then
+            echo "::error::No '*.sig' updater signatures found on release $TAG." >&2
+            exit 1
+          fi
+
+          notes="$(gh release view "$TAG" --json body -q '.body' 2>/dev/null || true)"
+          platforms='{}'
+          for sig in "${sigs[@]}"; do
+            # Map each signature to the Tauri updater's {os}-{arch} key(s).
+            case "$sig" in
+              *-setup.exe.sig)                              keys="windows-x86_64"; bundle=nsis ;;
+              *aarch64.app.tar.gz.sig)                      keys="darwin-aarch64"; bundle=app ;;
+              *x64.app.tar.gz.sig | *x86_64.app.tar.gz.sig) keys="darwin-x86_64";  bundle=app ;;
+              *.AppImage.sig)                               keys="linux-x86_64";  bundle=appimage ;;
+              *) echo "Skipping unrecognized signature: $sig"; continue ;;
+            esac
+            asset="${sig%.sig}"
+            gh release download "$TAG" --pattern "$sig" --dir "$work" --clobber
+            signature="$(cat "$work/$sig")"
+            url="https://github.com/$GH_REPO/releases/download/$TAG/$asset"
+            entry="$(jq -n --arg s "$signature" --arg u "$url" '{signature:$s, url:$u}')"
+            for key in $keys; do
+              # Write the classic {os}-{arch} key plus the newer
+              # {os}-{arch}-{bundle} key so any updater version resolves it.
+              platforms="$(jq --arg k "$key" --arg kb "$key-$bundle" --argjson e "$entry" \
+                '.[$k]=$e | .[$kb]=$e' <<<"$platforms")"
+            done
+          done
+
+          jq -n \
+            --arg v "$version" \
+            --arg n "$notes" \
+            --arg d "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --argjson p "$platforms" \
+            '{version: $v, notes: $n, pub_date: $d, platforms: $p}' > "$work/latest.json"
+
+          echo "Assembled latest.json:"
+          cat "$work/latest.json"
+          gh release upload "$TAG" "$work/latest.json" --clobber
