@@ -2523,24 +2523,43 @@ if (DC && DC.hasBackend) {
     addRepoBtn.addEventListener("click", async () => {
       let dir;
       try {
-        dir = await window.__TAURI__.dialog.open({ directory: true, multiple: false, title: "Select a cloned repository folder" });
+        dir = await window.__TAURI__.dialog.open({ directory: true, multiple: false, title: "Select a repository folder (or a folder containing repositories)" });
       } catch (e) {
         console.error("folder picker failed", e);
         return;
       }
       if (!dir) return;
+      const originalLabel = addRepoBtn.innerHTML;
       addRepoBtn.disabled = true;
+      addRepoBtn.innerHTML = `<span class="spin">${ICON.sync}</span>Scanning…`;
       try {
-        const repo = await DC.addRepo(dir);
-        const exists = repos.some((r) => r.id === repo.id);
-        if (!exists) repos.push(repo);
-        rerenderGit();
-        if (exists) await Modal.alert({ title: "Already added", message: `“${repo.name}” is already in your list.` });
+        // First try the picked folder as a single repository.
+        let repo = null;
+        try { repo = await DC.addRepo(dir); } catch (_) { repo = null; }
+        if (repo) {
+          const exists = repos.some((r) => r.id === repo.id);
+          if (!exists) repos.push(repo);
+          rerenderGit();
+          if (exists) await Modal.alert({ title: "Already added", message: `“${repo.name}” is already in your list.` });
+        } else {
+          // Not a repo itself — scan it for repositories nested inside and add them all.
+          const before = new Set(repos.map((r) => r.id));
+          const all = await DC.scanRepos([dir]);
+          if (Array.isArray(all)) repos = all;
+          rerenderGit();
+          const added = repos.filter((r) => !before.has(r.id)).length;
+          if (added > 0) {
+            await Modal.alert({ title: "Repositories added", message: `Added ${added} ${added === 1 ? "repository" : "repositories"} from that folder.` });
+          } else {
+            await Modal.alert({ title: "No repositories found", message: "That folder isn’t a Git repository and doesn’t contain any." });
+          }
+        }
       } catch (e) {
         console.error("addRepo failed", e);
         await Modal.alert({ title: "Couldn't add repository", message: String(e) });
       } finally {
         addRepoBtn.disabled = false;
+        addRepoBtn.innerHTML = originalLabel;
       }
     });
   }
