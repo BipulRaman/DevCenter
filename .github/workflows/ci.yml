@@ -12,8 +12,18 @@ concurrency:
 
 jobs:
   build:
-    name: Build (Windows / MSVC)
-    runs-on: windows-latest
+    name: Build (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            name: Windows
+          - platform: macos-latest
+            name: macOS
+          - platform: ubuntu-22.04
+            name: Linux
+    runs-on: ${{ matrix.platform }}
     # Incremental compilation is useless in clean CI runs and only bloats the
     # shared cache, so turn it off.
     env:
@@ -22,24 +32,31 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Tauri on Linux links against the system WebKitGTK/GTK stack at build
+      # time, so those -dev packages must be present even for `cargo build`.
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev build-essential
+
       - name: Install Rust (stable)
         uses: dtolnay/rust-toolchain@stable
 
       # Caches the cargo registry, git deps and the target/ dir so subsequent
-      # runs only recompile what changed. The shared-key lets the release
-      # workflow restore this same registry/git cache; only main writes it so
-      # PR/branch runs don't thrash it.
+      # runs only recompile what changed. rust-cache keys per-OS automatically;
+      # only main writes the cache so PR/branch runs don't thrash it.
       - name: Cache Rust build
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: app/src-tauri -> target
-          shared-key: devcenter-rust
+          key: ${{ matrix.name }}
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
       # A plain `cargo build` runs the tauri-build script and the
       # `generate_context!` macro, which embed the frontend from ../ui — so this
-      # verifies the whole desktop app compiles (frontend + backend). No Tauri
-      # CLI or npm step is needed because the UI is static (vanilla JS).
+      # verifies the whole desktop app compiles (frontend + backend) on each OS.
+      # No Tauri CLI or npm step is needed because the UI is static (vanilla JS).
       - name: Build (verify it compiles)
         working-directory: app/src-tauri
         run: cargo build --locked

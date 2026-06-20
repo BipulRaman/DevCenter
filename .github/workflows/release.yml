@@ -1,6 +1,7 @@
 name: Release
 
-# Build & publish the signed Windows installer + updater manifest (latest.json).
+# Build & publish signed installers for Windows, macOS (Apple Silicon + Intel)
+# and Linux, plus the updater manifest (latest.json), to one GitHub Release.
 # Fires exactly ONCE when a GitHub Release is PUBLISHED (write your notes in the
 # UI, then click "Publish release"). Manual dispatch is supported for rebuilds.
 #
@@ -28,8 +29,26 @@ concurrency:
 
 jobs:
   release:
-    name: Build & publish installer
-    runs-on: windows-latest
+    name: ${{ matrix.name }}
+    strategy:
+      # Don't cancel the other OS builds if one fails — a partial release is
+      # still useful and easier to diagnose.
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            name: Windows installer
+            args: --bundles nsis --config updater.conf.json
+          - platform: macos-latest
+            name: macOS (Apple Silicon)
+            args: --target aarch64-apple-darwin --bundles app,dmg --config updater.conf.json
+          - platform: macos-latest
+            name: macOS (Intel)
+            args: --target x86_64-apple-darwin --bundles app,dmg --config updater.conf.json
+          - platform: ubuntu-22.04
+            name: Linux (AppImage + deb)
+            args: --bundles appimage,deb --config updater.conf.json
+    runs-on: ${{ matrix.platform }}
     # Incremental compilation is useless in clean CI runs and only bloats the
     # cache; add network retries for occasional flaky crate downloads.
     env:
@@ -38,6 +57,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # Tauri on Linux links against the system WebKitGTK/GTK stack, so those
+      # -dev packages must be installed before building the bundles.
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev build-essential
 
       # The tag is the single source of truth for the version. Strip the leading
       # "v" (v1.0.2 -> 1.0.2) and stamp it into tauri.conf.json for this build
@@ -60,17 +87,22 @@ jobs:
 
       - name: Install Rust (stable)
         uses: dtolnay/rust-toolchain@stable
+        with:
+          # Both macOS targets are installed on the macOS runners so either the
+          # Apple Silicon or the Intel matrix leg can (cross-)compile.
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - name: Cache Rust build
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: app/src-tauri -> target
-          # Same key as CI so this job restores the registry/git cache that the
-          # main-branch CI run keeps warm (profile-independent, always reusable).
-          shared-key: devcenter-rust
+          # Keyed per matrix leg so the OS/target builds don't overwrite each
+          # other's cache (rust-cache also segments by OS automatically).
+          key: ${{ matrix.name }}
       # Cache the NSIS bundler Tauri downloads on first build so later runs
-      # don't re-fetch nsis-3.11.zip every time.
+      # don't re-fetch nsis-3.11.zip every time (Windows only).
       - name: Cache Tauri NSIS bundler
+        if: runner.os == 'Windows'
         uses: actions/cache@v4
         with:
           path: ~\AppData\Local\tauri\NSIS
@@ -111,8 +143,11 @@ jobs:
           releaseBody: 'Automated build for ${{ steps.tag.outputs.tag }}. Installer below; existing installs update automatically.'
           releaseDraft: false
           prerelease: false
-          # Point latest.json at the NSIS installer (the only Windows bundle we build).
+          # On Windows, point latest.json at the NSIS installer (not WiX/MSI).
           updaterJsonPreferNsis: true
-          # Merge the CI-only override (pubkey + createUpdaterArtifacts) on top of
-          # tauri.conf.json. Relative --config paths resolve against projectPath (app).
-          args: --bundles nsis --config updater.conf.json
+          # Per-OS bundles + the CI-only --config override (pubkey +
+          # createUpdaterArtifacts) merged on top of tauri.conf.json. Every
+          # matrix leg uploads to the SAME release and tauri-action merges its
+          # platform entry into latest.json. Relative --config paths resolve
+          # against projectPath (app).
+          args: ${{ matrix.args }}

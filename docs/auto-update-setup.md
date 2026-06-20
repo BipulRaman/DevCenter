@@ -136,9 +136,13 @@ dispatch). The release tag drives the version (`v1.0.2` → `1.0.2`).
 
 Either way the workflow produces and attaches:
 
-- `DevCenter_<version>_x64-setup.exe` — the NSIS installer
-- a `.sig` file next to it — the update signature
-- `latest.json` — the manifest the in-app updater fetches
+Either way the workflow builds every OS in a matrix and attaches:
+
+- `DevCenter_<version>_x64-setup.exe` — Windows NSIS installer
+- `DevCenter_<version>_aarch64.dmg` / `…_x64.dmg` — macOS (Apple Silicon / Intel)
+- `DevCenter_<version>_amd64.AppImage` and `…_amd64.deb` — Linux
+- a `.sig` file next to each updater bundle — the update signature
+- `latest.json` — one manifest with a per-platform entry that the in-app updater fetches
 
 ---
 
