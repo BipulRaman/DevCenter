@@ -59,6 +59,7 @@ const pages = document.querySelectorAll(".page");
 function showPage(page) {
   navItems.forEach((n) => n.classList.toggle("active", n.dataset.page === page));
   pages.forEach((p) => p.classList.toggle("active", p.id === `page-${page}`));
+  try { localStorage.setItem("dc.page", page); } catch (e) {}
   if (page === "changes" && window.ChangesPage) window.ChangesPage.onShow();
 }
 
@@ -2064,6 +2065,20 @@ const Dropdown = (() => {
   return { open, close, isOpenFor, menu, context, closeContext };
 })();
 
+// Replace the WebView's default right-click menu (Save as, Print, Inspect…) with
+// a single useful action: Reload. App-specific context menus (branch, stash, …)
+// call preventDefault first, so they're left untouched here. Text fields keep
+// their native Cut/Copy/Paste menu.
+document.addEventListener("contextmenu", (e) => {
+  if (e.defaultPrevented) return;
+  const t = e.target;
+  if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+  e.preventDefault();
+  Dropdown.context(e.clientX, e.clientY, [
+    { label: "Reload", icon: ICON.sync, onClick: () => location.reload() },
+  ]);
+});
+
 // ---------- Initial render ----------
 renderAppStats();
 renderApps();
@@ -2098,6 +2113,10 @@ async function hydrateFromBackend() {
     if (Array.isArray(data)) {
       repos = data;
       rerenderGit();
+      // If the Changes page was restored across a reload, it now has repos to pick from.
+      if (window.ChangesPage && document.querySelector(".nav-item.active")?.dataset.page === "changes") {
+        window.ChangesPage.onShow();
+      }
     }
   } catch (e) {
     console.error("listRepos failed", e);
@@ -3695,3 +3714,11 @@ const ChangesPage = (() => {
   return { onShow, openRepoById };
 })();
 window.ChangesPage = ChangesPage;
+
+// Restore the last-viewed page across reloads (right-click → Reload keeps you here).
+try {
+  const savedPage = localStorage.getItem("dc.page");
+  if (savedPage && [...navItems].some((n) => n.dataset.page === savedPage)) {
+    showPage(savedPage);
+  }
+} catch (e) {}
