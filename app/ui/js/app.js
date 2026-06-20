@@ -46,6 +46,11 @@ const ICON = {
   grip: '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>',
 };
 
+// Provider glyph for a repo/account ("github" | "azure" | other).
+function providerIcon(p) {
+  return p === "github" ? ICON.github : p === "azure" ? ICON.azure : ICON.repo;
+}
+
 // ---------- Navigation ----------
 const navItems = document.querySelectorAll(".nav-item[data-page]");
 const pages = document.querySelectorAll(".page");
@@ -335,7 +340,7 @@ function renderRepos(filter = "") {
           : `<span class="chip branch">${ICON.branch}${r.branch}</span>`;
       return `
       <div class="repo-row ${dotClass}">
-        <div class="repo-icon">${ICON.repo}</div>
+        <div class="repo-icon">${providerIcon(r.provider)}</div>
         <div class="repo-main">
           <div class="repo-title-row">
             <span class="repo-name repo-open-link" data-open-changes="${i}" title="Open in Changes">${r.name}</span>
@@ -1754,7 +1759,7 @@ const Dropdown = (() => {
     return !!active && active.anchor === anchor;
   }
 
-  function open(anchor, { header, headerAction, options, current, emptyText, onSelect, onContext, search, searchPlaceholder, minWidth, optionKind }) {
+  function open(anchor, { header, headerAction, options, current, emptyText, onSelect, onContext, search, searchPlaceholder, minWidth, optionKind, optionIcon }) {
     close();
     const showSearch = search !== undefined ? search : options.length > 7;
     const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -1860,14 +1865,22 @@ const Dropdown = (() => {
           name.textContent = opt;
         }
         const meta = classifyOption(opt);
+        const parts = [check];
+        const iconHtml = optionIcon ? optionIcon(opt) : "";
+        if (iconHtml) {
+          const ico = document.createElement("span");
+          ico.className = "opt-ico";
+          ico.innerHTML = iconHtml;
+          parts.push(ico);
+        }
+        parts.push(name);
         if (meta) {
           const badge = document.createElement("span");
           badge.className = "opt-badge " + meta.tone;
           badge.textContent = meta.label;
-          row.append(check, name, badge);
-        } else {
-          row.append(check, name);
+          parts.push(badge);
         }
+        row.append(...parts);
         if (isCur) {
           // When a context menu is available, keep the current row clickable so it
           // can be right-clicked (disabled buttons swallow contextmenu events); mark
@@ -2753,6 +2766,10 @@ const ChangesPage = (() => {
       searchPlaceholder: "Filter repositories…",
       emptyText: "No repositories.",
       minWidth: Math.max(320, $("chgRepoBtn").offsetWidth),
+      optionIcon: (label) => {
+        const r = map.get(label);
+        return r ? providerIcon(r.provider) : "";
+      },
       onSelect: (label) => { const r = map.get(label); if (r) selectRepo(r); },
     });
   }
@@ -2761,7 +2778,11 @@ const ChangesPage = (() => {
     repoId = r.id;
     branch = r.branch || "main";
     try { localStorage.setItem("dc.changes.repoId", r.id); } catch (e) {}
-    $("chgRepoLabel").textContent = r.name;
+    const repoLabel = $("chgRepoLabel");
+    repoLabel.textContent = r.name;
+    repoLabel.title = r.name;
+    const repoIco = $("chgRepoIcon");
+    if (repoIco) repoIco.innerHTML = providerIcon(r.provider);
     $("chgBranchLabel").textContent = branch;
     activeSha = null; activeFile = null; activeGroup = null; navOrder = [];
     staged = []; unstaged = []; history = []; commitFiles = [];
