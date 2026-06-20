@@ -21,6 +21,8 @@
     openPath: (path) => (hasBackend ? invoke("open_path", { path }) : Promise.resolve()),
     openUrl: (url) => (hasBackend ? invoke("open_url", { url }) : Promise.resolve()),
     openTerminal: (path) => (hasBackend ? invoke("open_terminal", { path }) : Promise.resolve()),
+    vscodeAvailable: () => (hasBackend ? invoke("vscode_available") : Promise.resolve(false)),
+    openInVscode: (path) => (hasBackend ? invoke("open_in_vscode", { path }) : Promise.resolve()),
 
     // --- Git Board (Phase 1) ---
     listRepos: () => (hasBackend ? invoke("list_repos") : Promise.resolve(null)),

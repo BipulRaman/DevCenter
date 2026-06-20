@@ -442,6 +442,16 @@ svg { width: 16px; height: 16px; flex-shrink: 0; }
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
   display: grid; place-items: center; flex-shrink: 0;
 }
+.repo-icon.github {
+  background: color-mix(in srgb, #8b93a5 20%, transparent);
+  color: #5d6574;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #8b93a5 40%, transparent);
+}
+.repo-icon.azure {
+  background: color-mix(in srgb, #2f97f0 18%, transparent);
+  color: #2f97f0;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #2f97f0 36%, transparent);
+}
 .repo-main { min-width: 0; }
 .repo-title-row { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
 .repo-name { font-weight: 600; font-size: 14px; letter-spacing: -.2px; }
@@ -917,12 +927,12 @@ button.chip { font-family: var(--mono); font-size: 11px; font-weight: 500; }
 .account-icon svg { width: 18px; height: 18px; }
 .account-icon.github {
   background: color-mix(in srgb, #8b93a5 20%, transparent);
-  color: var(--text);
+  color: #5d6574;
   box-shadow: inset 0 0 0 1px color-mix(in srgb, #8b93a5 40%, transparent);
 }
 .account-icon.azure {
   background: color-mix(in srgb, #2f97f0 18%, transparent);
-  color: #5aa9e6;
+  color: #2f97f0;
   box-shadow: inset 0 0 0 1px color-mix(in srgb, #2f97f0 36%, transparent);
 }
 

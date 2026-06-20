@@ -62,6 +62,108 @@ pub fn open_terminal(path: String) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+/// Locate the VS Code executable if it's installed. Checks well-known install
+/// locations first, then falls back to a PATH lookup. Returns None when VS Code
+/// can't be found.
+fn vscode_path() -> Option<std::path::PathBuf> {
+    use std::path::PathBuf;
+
+    #[cfg(target_os = "windows")]
+    let known: Vec<PathBuf> = {
+        let mut v = Vec::new();
+        if let Ok(p) = std::env::var("LOCALAPPDATA") {
+            v.push(PathBuf::from(p).join(r"Programs\Microsoft VS Code\Code.exe"));
+        }
+        if let Ok(p) = std::env::var("ProgramFiles") {
+            v.push(PathBuf::from(p).join(r"Microsoft VS Code\Code.exe"));
+        }
+        if let Ok(p) = std::env::var("ProgramFiles(x86)") {
+            v.push(PathBuf::from(p).join(r"Microsoft VS Code\Code.exe"));
+        }
+        v
+    };
+    #[cfg(target_os = "macos")]
+    let known: Vec<PathBuf> = vec![PathBuf::from(
+        "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code",
+    )];
+    #[cfg(target_os = "linux")]
+    let known: Vec<PathBuf> = vec![
+        PathBuf::from("/usr/bin/code"),
+        PathBuf::from("/usr/local/bin/code"),
+        PathBuf::from("/snap/bin/code"),
+    ];
+
+    if let Some(p) = known.into_iter().find(|p| p.exists()) {
+        return Some(p);
+    }
+
+    // Fall back to a PATH lookup (`where code` on Windows, `which code` elsewhere).
+    let finder = if cfg!(target_os = "windows") {
+        "where"
+    } else {
+        "which"
+    };
+    let mut cmd = std::process::Command::new(finder);
+    cmd.arg("code");
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    let out = cmd.output().ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let first = stdout.lines().next()?.trim();
+    if first.is_empty() {
+        return None;
+    }
+    let p = std::path::PathBuf::from(first);
+    if p.exists() {
+        Some(p)
+    } else {
+        None
+    }
+}
+
+/// Whether VS Code appears to be installed on this machine (drives the optional
+/// "Open in VS Code" menu item).
+#[tauri::command]
+pub fn vscode_available() -> bool {
+    vscode_path().is_some()
+}
+
+/// Opens the given folder in VS Code. Errors if VS Code can't be located.
+#[tauri::command]
+pub fn open_in_vscode(path: String) -> Result<(), String> {
+    let exe = vscode_path().ok_or_else(|| "VS Code was not found on this machine.".to_string())?;
+    // `.cmd`/`.bat` wrappers can't be spawned directly on Windows — run via cmd.
+    let is_script = exe
+        .extension()
+        .map(|e| e.eq_ignore_ascii_case("cmd") || e.eq_ignore_ascii_case("bat"))
+        .unwrap_or(false);
+    let mut cmd = if is_script {
+        let mut c = std::process::Command::new("cmd");
+        c.arg("/C").arg(&exe).arg(&path);
+        c
+    } else {
+        let mut c = std::process::Command::new(&exe);
+        c.arg(&path);
+        c
+    };
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    cmd.spawn().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// Checks for an available update WITHOUT installing it. Installing restarts the
 /// app, so the UI asks the user first (see install_update).
 #[tauri::command]
