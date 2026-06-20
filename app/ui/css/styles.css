@@ -1219,7 +1219,7 @@ body.col-resizing * { cursor: col-resize !important; }
 .changes-head-actions .seg-btn svg { width: 14px; height: 14px; }
 .changes-head-actions .seg:not(.view-toggle) .seg-btn:hover:not(:disabled) { background: var(--bg-elev); color: var(--accent-hover); }
 .changes-head-actions .seg-btn:disabled { opacity: .4; cursor: default; }
-.changes-head-actions #changeRefreshBtn.busy svg { animation: spin .8s linear infinite; }
+.commit-filter .icon-mini.busy svg { animation: spin .8s linear infinite; }
 
 /* ---- file tree / list (VS Code explorer look-and-feel) ---- */
 .file-tree { flex: 1; overflow: auto; padding: 2px 0 8px; min-height: 0; outline: none; }

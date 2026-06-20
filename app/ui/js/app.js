@@ -3637,14 +3637,17 @@ const ChangesPage = (() => {
     $("changeFilter").addEventListener("input", renderChanges);
     $("historyFilter").addEventListener("input", renderHistory);
     $("pullFilter").addEventListener("input", () => renderRepoPulls($("pullFilter").value || ""));
-    $("pullRefreshBtn").addEventListener("click", () => { if (repoId) loadRepoPulls(); });
     $("changeStashBtn").addEventListener("click", openStashDialog);
-    $("changeRefreshBtn").addEventListener("click", async () => {
-      const b = $("changeRefreshBtn");
+    // Per-tab refresh buttons inside each filter box (spin while reloading).
+    const wireRefresh = (id, fn) => $(id).addEventListener("click", async () => {
+      const b = $(id);
       if (!repoId || b.classList.contains("busy")) return;
       b.classList.add("busy");
-      try { await loadChanges(); } finally { b.classList.remove("busy"); }
+      try { await fn(); } finally { b.classList.remove("busy"); }
     });
+    wireRefresh("changeRefreshBtn", loadChanges);
+    wireRefresh("historyRefreshBtn", loadHistory);
+    wireRefresh("pullRefreshBtn", loadRepoPulls);
     $("detailCollapseBtn").addEventListener("click", () => collapseAll(collapsedDetail, commitFiles, renderDetail));
     $("commitSummary").addEventListener("input", updateCommitBtn);
     $("commitBtn").addEventListener("click", doCommit);
