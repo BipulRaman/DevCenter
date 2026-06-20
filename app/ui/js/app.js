@@ -357,7 +357,7 @@ function renderRepos(filter = "") {
         </div>
         <div class="repo-actions">
           ${watchBtn}
-          <button class="btn btn-ghost btn-sm" data-fetch="${i}">${ICON.sync}Fetch</button>
+          <button class="btn btn-icon btn-sm" data-fetch="${i}" title="Fetch">${ICON.sync}</button>
           <button class="btn btn-icon btn-sm" data-menu="${i}" title="More actions">${ICON.more}</button>
         </div>
       </div>`;
@@ -422,24 +422,74 @@ function renderRepos(filter = "") {
       await Modal.alert({ title: "Couldn't remove repository", message: String(e) });
     }
   };
+
+  // Fetch from the remote, then refresh the affected row.
+  const fetchRepoAction = async (r) => {
+    if (!DC || !DC.hasBackend) return;
+    try {
+      const updated = await DC.fetchRepo(r.id);
+      const at = repos.findIndex((x) => x.id === updated.id);
+      if (at >= 0) repos[at] = updated;
+      renderRepos(document.getElementById("repoSearch").value);
+    } catch (e) {
+      console.error("fetchRepo failed", e);
+      await Modal.alert({ title: "Fetch failed", message: String(e) });
+    }
+  };
+
+  // Toggle PR watching for a repo and refresh dependent views.
+  const toggleWatch = (r) => {
+    const idx = repos.findIndex((x) => x.id === r.id);
+    if (idx < 0) return;
+    repos[idx].watched = !repos[idx].watched;
+    if (DC && DC.hasBackend) DC.setWatched(repos[idx].id, repos[idx].watched).catch((e) => console.error("setWatched failed", e));
+    renderRepos(document.getElementById("repoSearch").value);
+    refreshPrRepoFilter();
+    renderPrStats();
+    renderPulls(document.getElementById("prSearch").value);
+    if (DC && DC.hasBackend) hydratePulls();
+  };
+
+  // Open the repository in the Changes page.
+  const openInChanges = (r) => {
+    showPage("changes");
+    if (window.ChangesPage && typeof window.ChangesPage.openRepoById === "function") window.ChangesPage.openRepoById(r.id);
+  };
+
+  // The full set of repo actions, shared by the kebab and the right-click menu.
+  const repoMenuItems = (r) => {
+    const items = [{ label: "Open in Changes", icon: ICON.changes, onClick: () => openInChanges(r) }];
+    if (DC && DC.hasBackend) items.push({ label: "Fetch", icon: ICON.sync, onClick: () => fetchRepoAction(r) });
+    items.push({ label: r.watched ? "Stop watching PRs" : "Watch PRs", icon: r.watched ? ICON.eye : ICON.eyeOff, onClick: () => toggleWatch(r) });
+    items.push({ separator: true });
+    items.push({ label: "Edit tags", icon: ICON.tag, onClick: () => openTagEditor(r) });
+    if (DC && DC.hasBackend) {
+      items.push(
+        { label: "Open folder", icon: ICON.folder, onClick: () => DC.openPath(r.path).catch((e) => console.error("openPath failed", e)) },
+        { label: "Open terminal", icon: ICON.terminal, onClick: () => DC.openTerminal(r.path).catch((e) => console.error("openTerminal failed", e)) }
+      );
+      if (hasVscode) items.push({ label: "Open in VS Code", icon: ICON.vscode, onClick: () => DC.openInVscode(r.path).catch((e) => console.error("openInVscode failed", e)) });
+    }
+    items.push({ separator: true });
+    items.push({ label: "Remove from list", icon: ICON.trash, danger: true, onClick: () => removeRepo(r) });
+    return items;
+  };
   grid.querySelectorAll("[data-menu]").forEach((btn) => {
     btn.addEventListener("click", () => {
       if (Dropdown.isOpenFor(btn)) { Dropdown.close(); return; }
       const r = repos[Number(btn.dataset.menu)];
-      const items = [
-        { label: "Edit tags", icon: ICON.tag, onClick: () => openTagEditor(r) },
-      ];
-      if (DC && DC.hasBackend) {
-        items.push(
-          { label: "Open folder", icon: ICON.folder, onClick: () => DC.openPath(r.path).catch((e) => console.error("openPath failed", e)) },
-          { label: "Open terminal", icon: ICON.terminal, onClick: () => DC.openTerminal(r.path).catch((e) => console.error("openTerminal failed", e)) }
-        );
-        if (hasVscode) {
-          items.push({ label: "Open in VS Code", icon: ICON.vscode, onClick: () => DC.openInVscode(r.path).catch((e) => console.error("openInVscode failed", e)) });
-        }
-      }
-      items.push({ label: "Remove from list", icon: ICON.trash, danger: true, onClick: () => removeRepo(r) });
-      Dropdown.menu(btn, items);
+      Dropdown.menu(btn, repoMenuItems(r));
+    });
+  });
+
+  // Right-click anywhere on a repo card opens the same full actions menu.
+  grid.querySelectorAll(".repo-row").forEach((row, k) => {
+    row.addEventListener("contextmenu", (e) => {
+      const r = list[k];
+      if (!r) return;
+      e.preventDefault();
+      e.stopPropagation();
+      Dropdown.context(e.clientX, e.clientY, repoMenuItems(r));
     });
   });
 
@@ -449,7 +499,7 @@ function renderRepos(filter = "") {
       if (!DC || !DC.hasBackend) return;
       const r = repos[Number(btn.dataset.fetch)];
       btn.disabled = true;
-      btn.innerHTML = `<span class="spin">${ICON.sync}</span>Fetching…`;
+      btn.innerHTML = `<span class="spin">${ICON.sync}</span>`;
       try {
         const updated = await DC.fetchRepo(r.id);
         const at = repos.findIndex((x) => x.id === updated.id);
@@ -459,7 +509,7 @@ function renderRepos(filter = "") {
         console.error("fetchRepo failed", e);
         await Modal.alert({ title: "Fetch failed", message: String(e) });
         btn.disabled = false;
-        btn.innerHTML = `${ICON.sync}Fetch`;
+        btn.innerHTML = ICON.sync;
       }
     });
   });
@@ -1962,6 +2012,12 @@ const Dropdown = (() => {
     const el = document.createElement("div");
     el.className = "dropdown-menu menu";
     items.forEach((it) => {
+      if (it.separator) {
+        const sep = document.createElement("div");
+        sep.className = "menu-sep";
+        el.appendChild(sep);
+        return;
+      }
       const row = document.createElement("button");
       row.type = "button";
       row.className = "menu-item" + (it.danger ? " danger" : "");
