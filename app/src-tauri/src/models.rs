@@ -161,6 +161,38 @@ pub struct FileDiff {
     pub hunks: Vec<DiffHunk>,
 }
 
+/// State of an in-progress operation that left merge conflicts in a repo.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ConflictInfo {
+    /// "merge" | "rebase" | "cherry-pick" | "revert" | "none" (no conflicts).
+    pub kind: String,
+    /// The branch currently checked out ("ours" side of the conflict).
+    pub ours: String,
+    /// The branch/commit being merged/replayed ("theirs" side).
+    pub theirs: String,
+    /// Paths (forward slashes) of files with unresolved conflicts.
+    pub files: Vec<String>,
+}
+
+/// The three sides of a single conflicted file plus the marked working-tree
+/// content git wrote (with `<<<<<<<` / `=======` / `>>>>>>>` markers).
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ConflictFile {
+    pub path: String,
+    /// Common-ancestor content (empty for add/add conflicts).
+    pub base: String,
+    /// Our full version of the file.
+    pub ours: String,
+    /// Their full version of the file.
+    pub theirs: String,
+    /// Working-tree content with conflict markers.
+    pub merged: String,
+    /// True when any side is binary — the marker view isn't usable.
+    pub binary: bool,
+}
+
 /// One entry in a repository's commit history.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]

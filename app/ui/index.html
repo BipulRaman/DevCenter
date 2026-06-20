@@ -154,6 +154,11 @@
 
             <!-- Changes tab -->
             <div class="commit-pane" id="cpane-changes">
+              <button class="conflict-banner" id="conflictBanner" type="button" hidden>
+                <svg class="conflict-banner-ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                <span class="conflict-banner-text" id="conflictBannerText">Merge conflicts</span>
+                <span class="conflict-banner-go">Resolve →</span>
+              </button>
               <div class="commit-filter">
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                 <input type="text" id="changeFilter" placeholder="Filter files…" spellcheck="false" />
@@ -256,6 +261,31 @@
               <div class="diff-head" id="diffHead"></div>
               <div class="diff-body" id="diffBody"></div>
             </div>
+          </section>
+        </div>
+      </section>
+
+      <!-- ===== CONFLICT RESOLVER PAGE ===== -->
+      <section class="page" id="page-conflicts">
+        <header class="page-head">
+          <div class="conflict-head-main">
+            <button class="btn btn-icon btn-sm" id="conflictBackBtn" type="button" title="Back to Changes">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+            </button>
+            <div>
+              <h1>Resolve conflicts</h1>
+              <p class="page-desc" id="conflictContext">…</p>
+            </div>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-ghost btn-sm" id="conflictAbortBtn" type="button">Abort</button>
+            <button class="btn btn-primary btn-sm" id="conflictDoneBtn" type="button" disabled>Complete</button>
+          </div>
+        </header>
+        <div class="conflict-layout">
+          <aside class="conflict-files" id="conflictFiles"></aside>
+          <section class="conflict-main" id="conflictMain">
+            <div class="conflict-empty">Select a conflicted file to resolve.</div>
           </section>
         </div>
       </section>

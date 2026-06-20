@@ -4,7 +4,7 @@ use tauri::{AppHandle, Emitter, State};
 
 use crate::error::{AppError, AppResult};
 use crate::git;
-use crate::models::{ChangeSet, CommitInfo, FileDiff, Repo};
+use crate::models::{ChangeSet, CommitInfo, ConflictFile, ConflictInfo, FileDiff, Repo};
 use crate::state::AppState;
 use crate::store;
 
@@ -539,6 +539,104 @@ pub async fn git_pull(
     .await
     .map_err(|e| AppError::msg(e.to_string()))??;
 
+    let _ = app.emit("repos_updated", &repos);
+    Ok(changes)
+}
+
+/// Current merge-conflict state for a repo (kind, side labels, conflicted files).
+#[tauri::command]
+pub async fn git_conflicts(id: String) -> AppResult<ConflictInfo> {
+    tauri::async_runtime::spawn_blocking(move || git::conflict_state(Path::new(&id)))
+        .await
+        .map_err(|e| AppError::msg(e.to_string()))?
+}
+
+/// The three sides + marker content of one conflicted file.
+#[tauri::command]
+pub async fn git_conflict_file(id: String, path: String) -> AppResult<ConflictFile> {
+    tauri::async_runtime::spawn_blocking(move || git::conflict_file(Path::new(&id), &path))
+        .await
+        .map_err(|e| AppError::msg(e.to_string()))?
+}
+
+/// Resolve one conflicted file — by taking a whole side (`side` = "ours"|"theirs")
+/// or by writing explicit merged `content` — then return the refreshed conflict
+/// state. Emits `repos_updated`.
+#[tauri::command]
+pub async fn git_resolve_conflict(
+    id: String,
+    path: String,
+    side: Option<String>,
+    content: Option<String>,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> AppResult<ConflictInfo> {
+    let st = state.inner().clone();
+    let (info, repos) = tauri::async_runtime::spawn_blocking(
+        move || -> AppResult<(ConflictInfo, Vec<Repo>)> {
+            let p = Path::new(&id);
+            if let Some(c) = content {
+                git::resolve_conflict_content(p, &path, &c)?;
+            } else {
+                git::resolve_conflict_side(p, &path, side.as_deref().unwrap_or("ours"))?;
+            }
+            let info = git::conflict_state(p)?;
+            let repos = collect_repos(&st)?;
+            Ok((info, repos))
+        },
+    )
+    .await
+    .map_err(|e| AppError::msg(e.to_string()))??;
+    let _ = app.emit("repos_updated", &repos);
+    Ok(info)
+}
+
+/// Abort the in-progress merge/rebase/etc., returning refreshed working changes.
+/// Emits `repos_updated`.
+#[tauri::command]
+pub async fn git_conflict_abort(
+    id: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> AppResult<ChangeSet> {
+    let st = state.inner().clone();
+    let (changes, repos) = tauri::async_runtime::spawn_blocking(
+        move || -> AppResult<(ChangeSet, Vec<Repo>)> {
+            let p = Path::new(&id);
+            let kind = git::conflict_state(p)?.kind;
+            git::conflict_abort(p, &kind)?;
+            let changes = git::working_changes(p)?;
+            let repos = collect_repos(&st)?;
+            Ok((changes, repos))
+        },
+    )
+    .await
+    .map_err(|e| AppError::msg(e.to_string()))??;
+    let _ = app.emit("repos_updated", &repos);
+    Ok(changes)
+}
+
+/// Complete the in-progress operation (all conflicts must be staged first),
+/// returning refreshed working changes. Emits `repos_updated`.
+#[tauri::command]
+pub async fn git_conflict_continue(
+    id: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> AppResult<ChangeSet> {
+    let st = state.inner().clone();
+    let (changes, repos) = tauri::async_runtime::spawn_blocking(
+        move || -> AppResult<(ChangeSet, Vec<Repo>)> {
+            let p = Path::new(&id);
+            let kind = git::conflict_state(p)?.kind;
+            git::conflict_continue(p, &kind)?;
+            let changes = git::working_changes(p)?;
+            let repos = collect_repos(&st)?;
+            Ok((changes, repos))
+        },
+    )
+    .await
+    .map_err(|e| AppError::msg(e.to_string()))??;
     let _ = app.emit("repos_updated", &repos);
     Ok(changes)
 }

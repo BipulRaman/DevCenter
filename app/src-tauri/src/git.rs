@@ -6,7 +6,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use git2::{Delta, DiffOptions, Oid, Patch, Repository, Sort, StatusEntry, StatusOptions};
 
 use crate::error::{AppError, AppResult};
-use crate::models::{ChangeSet, CommitInfo, DiffHunk, DiffLine, FileChange, FileDiff, Repo, StashEntry};
+use crate::models::{
+    ChangeSet, CommitInfo, ConflictFile, ConflictInfo, DiffHunk, DiffLine, FileChange, FileDiff,
+    Repo, StashEntry,
+};
 
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -335,6 +338,220 @@ pub fn pull(path: &Path) -> AppResult<()> {
         return Err(AppError::msg(msg));
     }
     Ok(())
+}
+
+// ===================== Merge-conflict resolution =====================
+
+/// Run a git subcommand at `path`, mapping a non-zero exit to its stderr.
+fn run_git(path: &Path, args: &[&str]) -> AppResult<()> {
+    run_git_env(path, args, &[])
+}
+
+fn run_git_env(path: &Path, args: &[&str], env: &[(&str, &str)]) -> AppResult<()> {
+    let mut cmd = git_cmd();
+    cmd.arg("-C").arg(path).args(args);
+    for (k, v) in env {
+        cmd.env(k, v);
+    }
+    let output = cmd.output()?;
+    if !output.status.success() {
+        let err = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(AppError::msg(if err.is_empty() {
+            format!("git {} failed", args.join(" "))
+        } else {
+            err
+        }));
+    }
+    Ok(())
+}
+
+/// Conflicted paths from the index (sorted, deduped, forward slashes).
+fn conflicted_files(repo: &Repository) -> Vec<String> {
+    let mut files = Vec::new();
+    if let Ok(index) = repo.index() {
+        if let Ok(conflicts) = index.conflicts() {
+            for c in conflicts.flatten() {
+                let entry = c.our.or(c.their).or(c.ancestor);
+                if let Some(e) = entry {
+                    let p = String::from_utf8_lossy(&e.path).replace('\\', "/");
+                    if !files.contains(&p) {
+                        files.push(p);
+                    }
+                }
+            }
+        }
+    }
+    files.sort();
+    files
+}
+
+/// Extract the branch name from a "Merge branch 'X'" / "Merge remote-tracking
+/// branch 'origin/X'" message line.
+fn parse_merge_branch(msg: &str) -> Option<String> {
+    let start = msg.find('\'')? + 1;
+    let rest = &msg[start..];
+    let end = rest.find('\'')?;
+    let name = &rest[..end];
+    Some(name.rsplit('/').next().unwrap_or(name).to_string())
+}
+
+/// Best-effort human label for the "theirs" side of an in-progress operation.
+fn theirs_label(git_dir: &Path, kind: &str) -> String {
+    let read_first = |rel: &str| -> Option<String> {
+        std::fs::read_to_string(git_dir.join(rel))
+            .ok()
+            .and_then(|s| s.lines().next().map(|l| l.trim().to_string()))
+            .filter(|s| !s.is_empty())
+    };
+    match kind {
+        "rebase" => read_first("rebase-merge/head-name")
+            .map(|s| s.rsplit('/').next().unwrap_or(&s).to_string())
+            .unwrap_or_else(|| "rebase".to_string()),
+        "cherry-pick" => read_first("CHERRY_PICK_HEAD")
+            .map(|s| s.chars().take(7).collect())
+            .unwrap_or_else(|| "cherry-pick".to_string()),
+        "revert" => read_first("REVERT_HEAD")
+            .map(|s| s.chars().take(7).collect())
+            .unwrap_or_else(|| "revert".to_string()),
+        _ => {
+            if let Some(msg) = read_first("MERGE_MSG") {
+                if let Some(name) = parse_merge_branch(&msg) {
+                    return name;
+                }
+            }
+            read_first("MERGE_HEAD")
+                .map(|s| s.chars().take(7).collect())
+                .unwrap_or_else(|| "incoming".to_string())
+        }
+    }
+}
+
+/// Inspect a repo for an in-progress merge/rebase/cherry-pick/revert that left
+/// conflicts. `kind` is "none" when the index has no conflicts.
+pub fn conflict_state(path: &Path) -> AppResult<ConflictInfo> {
+    let repo = Repository::open(path)?;
+    let git_dir = repo.path().to_path_buf();
+    let files = conflicted_files(&repo);
+
+    let kind = if git_dir.join("MERGE_HEAD").exists() {
+        "merge"
+    } else if git_dir.join("rebase-merge").exists() || git_dir.join("rebase-apply").exists() {
+        "rebase"
+    } else if git_dir.join("CHERRY_PICK_HEAD").exists() {
+        "cherry-pick"
+    } else if git_dir.join("REVERT_HEAD").exists() {
+        "revert"
+    } else if files.is_empty() {
+        "none"
+    } else {
+        "merge"
+    };
+
+    let ours = repo
+        .head()
+        .ok()
+        .and_then(|h| h.shorthand().map(|s| s.to_string()))
+        .unwrap_or_else(|| "HEAD".to_string());
+    let theirs = theirs_label(&git_dir, kind);
+
+    Ok(ConflictInfo {
+        kind: kind.to_string(),
+        ours,
+        theirs,
+        files,
+    })
+}
+
+/// Read the three sides + the working-tree (marker) content of a conflicted file.
+pub fn conflict_file(path: &Path, file: &str) -> AppResult<ConflictFile> {
+    let repo = Repository::open(path)?;
+    let index = repo.index()?;
+    let target = file.replace('\\', "/");
+
+    let read_blob = |entry: &Option<git2::IndexEntry>| -> (String, bool) {
+        if let Some(e) = entry {
+            if let Ok(blob) = repo.find_blob(e.id) {
+                if blob.is_binary() {
+                    return (String::new(), true);
+                }
+                return (String::from_utf8_lossy(blob.content()).to_string(), false);
+            }
+        }
+        (String::new(), false)
+    };
+
+    let (mut base, mut ours, mut theirs, mut binary) =
+        (String::new(), String::new(), String::new(), false);
+    if let Ok(conflicts) = index.conflicts() {
+        for c in conflicts.flatten() {
+            let p = c
+                .our
+                .as_ref()
+                .or(c.their.as_ref())
+                .or(c.ancestor.as_ref())
+                .map(|e| String::from_utf8_lossy(&e.path).replace('\\', "/"));
+            if p.as_deref() == Some(target.as_str()) {
+                let (b, bb) = read_blob(&c.ancestor);
+                let (o, ob) = read_blob(&c.our);
+                let (t, tb) = read_blob(&c.their);
+                base = b;
+                ours = o;
+                theirs = t;
+                binary = bb || ob || tb;
+                break;
+            }
+        }
+    }
+    let merged = if binary {
+        String::new()
+    } else {
+        std::fs::read_to_string(path.join(&target)).unwrap_or_default()
+    };
+    Ok(ConflictFile {
+        path: target,
+        base,
+        ours,
+        theirs,
+        merged,
+        binary,
+    })
+}
+
+/// Resolve a conflicted file by taking one whole side ("ours"|"theirs"), then stage it.
+pub fn resolve_conflict_side(path: &Path, file: &str, side: &str) -> AppResult<()> {
+    let flag = if side == "theirs" { "--theirs" } else { "--ours" };
+    run_git(path, &["checkout", flag, "--", file])?;
+    run_git(path, &["add", "--", file])
+}
+
+/// Resolve a conflicted file with explicit merged content, then stage it.
+pub fn resolve_conflict_content(path: &Path, file: &str, content: &str) -> AppResult<()> {
+    std::fs::write(path.join(file), content)
+        .map_err(|e| AppError::msg(format!("Couldn't write {file}: {e}")))?;
+    run_git(path, &["add", "--", file])
+}
+
+/// Abort the in-progress merge/rebase/cherry-pick/revert, restoring the prior state.
+pub fn conflict_abort(path: &Path, kind: &str) -> AppResult<()> {
+    let op = match kind {
+        "rebase" => "rebase",
+        "cherry-pick" => "cherry-pick",
+        "revert" => "revert",
+        _ => "merge",
+    };
+    run_git(path, &[op, "--abort"])
+}
+
+/// Finish the in-progress operation once all conflicts are resolved (staged).
+pub fn conflict_continue(path: &Path, kind: &str) -> AppResult<()> {
+    let env = [("GIT_EDITOR", "true"), ("GIT_SEQUENCE_EDITOR", "true")];
+    match kind {
+        "rebase" => run_git_env(path, &["rebase", "--continue"], &env),
+        "cherry-pick" => run_git_env(path, &["cherry-pick", "--continue"], &env),
+        "revert" => run_git_env(path, &["revert", "--continue"], &env),
+        // A merge is completed by committing the prepared MERGE_MSG.
+        _ => run_git(path, &["commit", "--no-edit"]),
+    }
 }
 
 fn repo_name_from_url(url: &str) -> String {

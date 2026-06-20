@@ -58,6 +58,13 @@
       invoke("git_commit", { id, summary, description, all: !!all }),
     gitPush: (id) => invoke("git_push", { id }),
     gitPull: (id) => invoke("git_pull", { id }),
+    // --- Merge-conflict resolution ---
+    gitConflicts: (id) => invoke("git_conflicts", { id }),
+    gitConflictFile: (id, path) => invoke("git_conflict_file", { id, path }),
+    resolveConflict: (id, path, side, content) =>
+      invoke("git_resolve_conflict", { id, path, side: side || null, content: content ?? null }),
+    conflictAbort: (id) => invoke("git_conflict_abort", { id }),
+    conflictContinue: (id) => invoke("git_conflict_continue", { id }),
     gitLog: (id, limit) => invoke("git_log", { id, limit: limit ?? null }),
 
     // --- Pull Requests (Phase 3) ---
