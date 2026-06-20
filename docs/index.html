@@ -272,7 +272,7 @@
             <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56v-2c-3.2.7-3.88-1.54-3.88-1.54-.52-1.34-1.28-1.7-1.28-1.7-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.09-.12-.29-.52-1.47.11-3.07 0 0 .97-.31 3.18 1.18.92-.26 1.91-.39 2.89-.39.98 0 1.97.13 2.89.39 2.21-1.49 3.18-1.18 3.18-1.18.63 1.6.23 2.78.11 3.07.74.8 1.19 1.83 1.19 3.09 0 4.42-2.7 5.39-5.26 5.68.41.35.78 1.05.78 2.12v3.14c0 .31.21.67.8.55C20.21 21.39 23.5 17.08 23.5 12 23.5 5.65 18.35.5 12 .5z"/></svg>
             GitHub
           </a>
-          <a href="#download" class="inline-flex h-9 items-center px-3 rounded-md bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium transition-colors">Download</a>
+          <a id="navDownload" href="#download" class="inline-flex h-9 items-center px-3 rounded-md bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium transition-colors">Download</a>
         </div>
       </nav>
     </header>
@@ -301,8 +301,8 @@
 
           <div class="mt-9 flex flex-wrap items-center justify-center gap-3">
             <a id="heroDownload" href="https://github.com/BipulRaman/DevCenter/releases/latest" target="_blank" rel="noopener" class="inline-flex items-center gap-2 px-5 py-3 rounded-md bg-brand-600 hover:bg-brand-700 text-white font-medium transition-colors shadow-card">
-              <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/></svg>
-              <span id="heroDownloadLabel">Download for Windows</span>
+              <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m6 9 6 6 6-6"/><path d="M5 21h14"/></svg>
+              <span id="heroDownloadLabel">Download</span>
             </a>
             <a href="#domains" class="inline-flex items-center gap-2 px-5 py-3 rounded-md border hairline surface hover:bg-[color:var(--bg-soft)] transition-colors font-medium">
               See how it works
@@ -585,10 +585,13 @@
               <svg class="h-4 w-4 chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
             </summary>
             <p class="mt-3 text-sm leading-relaxed" style="color: var(--fg-muted)">
-              A signed <strong>Windows</strong> installer (x64) is published for
-              every release. DevCenter is built with Rust + Tauri and is
-              cross-platform by design — macOS and Linux can be built from source
-              today, with prebuilt binaries planned.
+              A signed installer is published for every release on
+              <strong>Windows</strong> (x64 <code class="font-mono">.exe</code>),
+              <strong>macOS</strong> (Apple Silicon &amp; Intel
+              <code class="font-mono">.dmg</code>) and <strong>Linux</strong>
+              (<code class="font-mono">.AppImage</code> &amp;
+              <code class="font-mono">.deb</code>) — each with built-in,
+              minisign-signed auto-updates.
             </p>
           </details>
 
@@ -651,11 +654,12 @@
           <p class="eyebrow">Download</p>
           <h2 class="mt-3 text-3xl md:text-4xl font-bold tracking-tight">Get DevCenter</h2>
           <p class="mt-4 max-w-xl mx-auto leading-relaxed" style="color: var(--fg-muted)">
-            The Windows installer is built automatically from each release.
-            Other platforms can be built from source.
+            Signed installers for Windows, macOS and Linux are built
+            automatically from every release.
           </p>
 
-          <div class="mt-10 grid gap-5 sm:grid-cols-2 max-w-3xl mx-auto text-left">
+          <div class="mt-10 grid gap-5 sm:grid-cols-3 max-w-5xl mx-auto text-left">
+            <!-- Windows -->
             <div class="surface shadow-card rounded-xl p-6 flex flex-col">
               <div class="flex items-center gap-3">
                 <svg class="h-7 w-7" viewBox="0 0 24 24" fill="currentColor" style="color: var(--accent)"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/></svg>
@@ -670,26 +674,54 @@
               </p>
               <a id="winDownload" href="https://github.com/BipulRaman/DevCenter/releases/latest" target="_blank" rel="noopener" class="mt-5 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-md bg-brand-600 hover:bg-brand-700 text-white font-medium transition-colors">
                 <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m6 9 6 6 6-6"/><path d="M5 21h14"/></svg>
-                Download for Windows
+                Download
               </a>
             </div>
 
+            <!-- macOS -->
             <div class="surface shadow-card rounded-xl p-6 flex flex-col">
               <div class="flex items-center gap-3">
-                <svg class="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--fg-muted)"><path d="M16 18 22 12 16 6"/><path d="M8 6 2 12 8 18"/></svg>
+                <svg class="h-7 w-7" viewBox="0 0 24 24" fill="currentColor" style="color: var(--accent)"><path d="M16.365 1.43c0 1.14-.493 2.27-1.177 3.08-.744.9-1.99 1.57-2.987 1.57-.12 0-.23-.02-.3-.03-.01-.06-.04-.22-.04-.39 0-1.15.572-2.27 1.206-2.98.804-.94 2.142-1.64 3.248-1.68.03.13.05.28.05.43zm4.565 15.71c-.03.07-.463 1.58-1.518 3.12-.945 1.34-1.94 2.71-3.43 2.71-1.517 0-1.9-.88-3.63-.88-1.698 0-2.302.91-3.67.91-1.377 0-2.332-1.26-3.428-2.8-1.287-1.82-2.323-4.63-2.323-7.28 0-4.28 2.797-6.55 5.552-6.55 1.448 0 2.675.95 3.6.95.865 0 2.222-1.01 3.902-1.01.613 0 2.886.06 4.374 2.19-.13.09-2.383 1.37-2.383 4.19 0 3.26 2.854 4.42 2.955 4.46z"/></svg>
                 <div>
-                  <div class="text-xs font-mono uppercase tracking-wider" style="color: var(--fg-subtle)">macOS &amp; Linux</div>
-                  <div class="font-semibold">Build from source</div>
+                  <div class="text-xs font-mono uppercase tracking-wider" style="color: var(--fg-subtle)">macOS</div>
+                  <div class="font-semibold">Apple Silicon &amp; Intel</div>
                 </div>
               </div>
               <p class="mt-4 text-sm leading-relaxed flex-1" style="color: var(--fg-muted)">
-                Clone the repo and run <code class="font-mono">cargo tauri build</code>.
-                Rust + Tauri make a native bundle for your OS.
+                Signed <code class="font-mono">.dmg</code> with built-in
+                auto-update.
               </p>
-              <a href="https://github.com/BipulRaman/DevCenter#readme" target="_blank" rel="noopener" class="mt-5 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-md border hairline surface hover:bg-[color:var(--bg)] transition-colors font-medium">
-                Build instructions
-                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-              </a>
+              <div class="mt-5 flex gap-2">
+                <a id="macDownloadArm" href="https://github.com/BipulRaman/DevCenter/releases/latest" target="_blank" rel="noopener" class="flex-1 inline-flex items-center justify-center px-3 py-2.5 rounded-md bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium transition-colors">
+                  Apple Silicon
+                </a>
+                <a id="macDownloadIntel" href="https://github.com/BipulRaman/DevCenter/releases/latest" target="_blank" rel="noopener" class="flex-1 inline-flex items-center justify-center px-3 py-2.5 rounded-md border hairline surface hover:bg-[color:var(--bg)] text-sm font-medium transition-colors">
+                  Intel
+                </a>
+              </div>
+            </div>
+
+            <!-- Linux -->
+            <div class="surface shadow-card rounded-xl p-6 flex flex-col">
+              <div class="flex items-center gap-3">
+                <svg class="h-7 w-7" viewBox="0 0 24 24" fill="currentColor" style="color: var(--accent)"><path d="M12.504 0c-.155 0-.315.008-.48.021-4.226.333-3.105 4.807-3.17 6.298-.076 1.092-.3 1.953-1.05 3.02-.885 1.051-2.127 2.75-2.716 4.521-.278.832-.41 1.684-.287 2.489a.424.424 0 00-.11.135c-.26.268-.45.6-.663.839-.199.199-.485.267-.797.4-.313.136-.658.269-.864.68-.09.189-.136.394-.132.602.004.199.027.4.055.536.058.399.116.728.04.97-.249.68-.28 1.145-.106 1.484.174.334.535.47.94.601.81.2 1.91.135 2.79.6.943.466 1.924.67 2.708.466.561-.135 1.044-.49 1.21-1.01.318-.002.638-.005.957-.006.32 0 .64.004.958.006.166.52.65.875 1.21 1.01.784.204 1.765 0 2.708-.466.881-.465 1.979-.4 2.789-.6.405-.131.766-.267.94-.601.174-.339.143-.804-.106-1.484-.076-.242-.018-.571.04-.97.028-.136.051-.337.055-.536.004-.208-.042-.413-.132-.602-.206-.411-.55-.544-.864-.68-.312-.133-.598-.201-.797-.4-.213-.239-.403-.571-.663-.839a.424.424 0 00-.11-.135c.123-.805-.009-1.657-.287-2.489-.589-1.771-1.831-3.47-2.716-4.521-.75-1.067-.974-1.928-1.05-3.02-.065-1.491 1.056-5.965-3.17-6.298A6.061 6.061 0 0012.504 0z"/></svg>
+                <div>
+                  <div class="text-xs font-mono uppercase tracking-wider" style="color: var(--fg-subtle)">Linux</div>
+                  <div class="font-semibold">AppImage &amp; .deb</div>
+                </div>
+              </div>
+              <p class="mt-4 text-sm leading-relaxed flex-1" style="color: var(--fg-muted)">
+                Portable <code class="font-mono">.AppImage</code> or a Debian
+                <code class="font-mono">.deb</code> package.
+              </p>
+              <div class="mt-5 flex gap-2">
+                <a id="linuxDownloadAppImage" href="https://github.com/BipulRaman/DevCenter/releases/latest" target="_blank" rel="noopener" class="flex-1 inline-flex items-center justify-center px-3 py-2.5 rounded-md bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium transition-colors">
+                  AppImage
+                </a>
+                <a id="linuxDownloadDeb" href="https://github.com/BipulRaman/DevCenter/releases/latest" target="_blank" rel="noopener" class="flex-1 inline-flex items-center justify-center px-3 py-2.5 rounded-md border hairline surface hover:bg-[color:var(--bg)] text-sm font-medium transition-colors">
+                  .deb
+                </a>
+              </div>
             </div>
           </div>
 
@@ -754,14 +786,26 @@
           reveals.forEach(function (el) { el.classList.add("in"); });
         }
 
-        // Non-Windows hint on the hero button label
+        // OS-aware hero download label.
+        var dcOS = (function () {
+          var ua = (navigator.userAgent || "") + " " + (navigator.platform || "");
+          if (/android/i.test(ua)) return "";
+          if (/mac|iphone|ipad|ipod/i.test(ua)) return "mac";
+          if (/linux|x11|ubuntu|debian|fedora|cros/i.test(ua)) return "linux";
+          if (/win/i.test(ua)) return "win";
+          return "";
+        })();
         try {
-          var p = navigator.platform || "";
           var label = document.getElementById("heroDownloadLabel");
-          if (label && !/win/i.test(p)) label.textContent = "Download";
+          if (label) {
+            label.textContent =
+              dcOS === "mac" ? "Download for macOS" :
+              dcOS === "linux" ? "Download for Linux" :
+              dcOS === "win" ? "Download for Windows" : "Download";
+          }
         } catch (e) {}
 
-        // Latest release: version pill + direct installer link
+        // Latest release: version pill + per-platform asset links.
         fetch("https://api.github.com/repos/BipulRaman/DevCenter/releases/latest")
           .then(function (r) { return r.ok ? r.json() : null; })
           .then(function (rel) {
@@ -771,13 +815,48 @@
               var vt = document.getElementById("versionPillText");
               if (vt) vt.textContent = tag + " · now available";
             }
-            var exe = (rel.assets || []).filter(function (a) { return /\.exe$/i.test(a.name); })[0];
-            if (exe) {
-              ["heroDownload", "winDownload"].forEach(function (id) {
-                var el = document.getElementById(id);
-                if (el) el.href = exe.browser_download_url;
-              });
+            var assets = rel.assets || [];
+            function find(re) {
+              var a = assets.filter(function (x) { return re.test(x.name); })[0];
+              return a ? a.browser_download_url : null;
             }
+            var url = {
+              win: find(/\.exe$/i),
+              macArm: find(/(aarch64|arm64)\.dmg$/i),
+              macIntel: find(/(x64|x86_64)\.dmg$/i),
+              linuxAppImage: find(/\.AppImage$/i),
+              linuxDeb: find(/\.deb$/i),
+            };
+            function set(id, href) {
+              if (!href) return;
+              var el = document.getElementById(id);
+              if (el) el.href = href;
+            }
+            set("winDownload", url.win);
+            set("macDownloadArm", url.macArm);
+            set("macDownloadIntel", url.macIntel);
+            set("linuxDownloadAppImage", url.linuxAppImage);
+            set("linuxDownloadDeb", url.linuxDeb);
+
+            // Point the primary CTAs (hero + nav) at the visitor's OS. macOS
+            // can't reveal its CPU arch from the UA, so send Mac visitors to the
+            // download cards to choose Apple Silicon vs Intel.
+            var primary =
+              dcOS === "win" ? url.win :
+              dcOS === "linux" ? (url.linuxAppImage || url.linuxDeb) : null;
+            ["heroDownload", "navDownload"].forEach(function (id) {
+              var el = document.getElementById(id);
+              if (!el) return;
+              if (dcOS === "mac") {
+                el.href = "#download";
+                el.removeAttribute("target");
+                el.removeAttribute("rel");
+              } else if (primary) {
+                el.href = primary;
+                el.setAttribute("target", "_blank");
+                el.setAttribute("rel", "noopener");
+              }
+            });
           })
           .catch(function () {});
       })();
