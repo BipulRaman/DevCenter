@@ -1,9 +1,17 @@
 name: CI
 
-# Verify the app compiles on every commit and pull request.
+# Verify the app compiles on every commit and pull request that touches the app.
+# `branches: ['**']` matches all branch pushes but NOT tag pushes, so creating a
+# release (which pushes a tag) doesn't trigger CI — the Release workflow already
+# builds every OS for that tag.
+# `paths` limits CI to changes under app/ — edits to docs, README, scripts or
+# other workflows don't affect compilation, so they skip the build.
 on:
   push:
+    branches: ['**']
+    paths: ['app/**']
   pull_request:
+    paths: ['app/**']
 
 # Cancel an in-progress run when new commits are pushed to the same ref.
 concurrency:
