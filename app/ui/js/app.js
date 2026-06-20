@@ -450,15 +450,22 @@ function renderRepos(filter = "") {
     if (DC && DC.hasBackend) hydratePulls();
   };
 
-  // Open the repository in the Changes page.
-  const openInChanges = (r) => {
+  // Open the repository in the Changes page on a specific tab ("changes" | "history" | "pulls").
+  const openInChanges = (r, tab) => {
     showPage("changes");
-    if (window.ChangesPage && typeof window.ChangesPage.openRepoById === "function") window.ChangesPage.openRepoById(r.id);
+    const cp = window.ChangesPage;
+    if (cp && typeof cp.openRepoTab === "function") cp.openRepoTab(r.id, tab || "changes");
+    else if (cp && typeof cp.openRepoById === "function") cp.openRepoById(r.id);
   };
 
   // The full set of repo actions, shared by the kebab and the right-click menu.
   const repoMenuItems = (r) => {
-    const items = [{ label: "Open in Changes", icon: ICON.changes, onClick: () => openInChanges(r) }];
+    const items = [
+      { label: "View Changes", icon: ICON.changes, onClick: () => openInChanges(r, "changes") },
+      { label: "View Commits", icon: ICON.clock, onClick: () => openInChanges(r, "history") },
+      { label: "View Pull Requests", icon: ICON.pr, onClick: () => openInChanges(r, "pulls") },
+    ];
+    items.push({ separator: true });
     if (DC && DC.hasBackend) items.push({ label: "Fetch", icon: ICON.sync, onClick: () => fetchRepoAction(r) });
     items.push({ label: r.watched ? "Stop watching PRs" : "Watch PRs", icon: r.watched ? ICON.eye : ICON.eyeOff, onClick: () => toggleWatch(r) });
     items.push({ separator: true });
@@ -2992,6 +2999,13 @@ const ChangesPage = (() => {
     return true;
   }
 
+  // Open a repo and jump straight to a specific tab ("changes" | "history" | "pulls").
+  function openRepoTab(id, tabName) {
+    if (!openRepoById(id)) return false;
+    switchTab(tabName || "changes");
+    return true;
+  }
+
   // ---- changes tab ----
   async function loadChanges() {
     if (!repoId) return;
@@ -3769,7 +3783,7 @@ const ChangesPage = (() => {
   }
 
   init();
-  return { onShow, openRepoById };
+  return { onShow, openRepoById, openRepoTab };
 })();
 window.ChangesPage = ChangesPage;
 

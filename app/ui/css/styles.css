@@ -649,7 +649,7 @@ button.chip { font-family: var(--mono); font-size: 11px; font-weight: 500; }
 .menu-item.danger:hover { background: var(--red-soft); }
 .menu-item:disabled { opacity: .4; cursor: default; }
 .menu-item:disabled:hover { background: transparent; }
-.menu-sep { height: 1px; margin: 5px 8px; background: var(--border); }
+.menu-sep { height: 0; flex-shrink: 0; margin: 5px 8px; border-top: 1px dashed color-mix(in srgb, var(--border) 45%, var(--text-faint)); }
 
 .repo-actions { display: flex; gap: 8px; }
 .repo-act {
@@ -1192,14 +1192,20 @@ body.col-resizing * { cursor: col-resize !important; }
 .commit-tabs { display: flex; padding: 6px; gap: 4px; border-bottom: 1px solid var(--border); flex-shrink: 0; container-type: inline-size; }
 .commit-tab {
   flex: 1; height: 34px; border: none; border-radius: 0; background: transparent;
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
   color: var(--text-dim); font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer;
   transition: background .14s, color .14s;
 }
+.commit-tab .ct-ico { display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px; flex-shrink: 0; }
+.commit-tab .ct-ico svg { width: 15px; height: 15px; }
 .commit-tab:hover { background: var(--bg-hover); color: var(--text); }
 .commit-tab.active { background: var(--accent-soft); color: var(--accent-hover); }
-/* Collapse "Pull Requests" → "PRs" when the side panel is narrowed. */
+/* Collapse "Pull Requests" → "PRs" when the side panel is narrowed.
+   Threshold accounts for the tab icons: all three full labels need a
+   ~326px content-box (icon 15 + gap 7 + "Pull Requests" ~84, ×3 + gaps);
+   collapse a touch above that so the label never clips. */
 .commit-tab .ct-short { display: none; }
-@container (max-width: 280px) {
+@container (max-width: 340px) {
   .commit-tab .ct-full { display: none; }
   .commit-tab .ct-short { display: inline; }
 }
