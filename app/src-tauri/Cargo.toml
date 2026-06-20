@@ -24,7 +24,12 @@ tauri-plugin-updater = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
-git2 = "0.19"
+# `vendored-openssl` makes libgit2/libssh2 compile OpenSSL from source for the
+# build target instead of probing for a system copy via pkg-config. Required to
+# cross-compile the x86_64 macOS bundle on the arm64 CI runner (pkg-config can't
+# find a prebuilt OpenSSL for the other arch), and it removes the reliance on a
+# system OpenSSL on Linux. No-op on Windows (libssh2 uses WinCNG, not OpenSSL).
+git2 = { version = "0.19", features = ["vendored-openssl"] }
 rusqlite = { version = "0.32", features = ["bundled"] }
 keyring = { version = "3", features = ["windows-native", "apple-native", "linux-native"] }
 ureq = { version = "2", features = ["json"] }
