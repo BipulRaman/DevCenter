@@ -18,7 +18,7 @@ const ICON = {
   sync: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>',
   terminal: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>',
   play: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>',
-  stop: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>',
+  stop: '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="5" y="5" width="14" height="14" rx="3"/></svg>',
   logs: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 2.5 2L7 13"/><line x1="12.5" y1="13" x2="16" y2="13"/></svg>',
   up: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>',
   down: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>',
@@ -654,7 +654,7 @@ function renderApps(filter = "") {
       const control = building
         ? `<button class="btn btn-ghost btn-sm" data-stop="${a.id}"><span class="spin">${ICON.sync}</span>Building…</button>`
         : running
-        ? `<button class="btn btn-ghost btn-sm" data-stop="${a.id}">${ICON.stop}Stop</button>
+        ? `<button class="btn btn-stop btn-sm" data-stop="${a.id}">${ICON.stop}Stop</button>
            <button class="btn btn-icon btn-sm" data-restart="${a.id}" title="Restart">${ICON.sync}</button>`
         : `<button class="btn btn-start btn-sm" data-start="${a.id}">${ICON.play}Start</button>`;
       return `
@@ -720,20 +720,38 @@ function setupAppListEvents() {
       else window.open(el.dataset.openurl, "_blank");
     }));
 
+  // Shared actions menu used by BOTH the kebab (click) and a right-click context
+  // menu on the card — mirroring the Git Board repo cards.
+  const appMenuItems = (a) => {
+    const items = [{ label: "Edit", icon: ICON.pencil, onClick: () => openAppForm(a) }];
+    if (DC && DC.hasBackend) {
+      items.push(
+        { label: "Open folder", icon: ICON.folder, onClick: () => DC.openPath(a.projectDir).catch((err) => console.error(err)) },
+        { label: "Open terminal", icon: ICON.terminal, onClick: () => DC.openTerminal(a.projectDir).catch((err) => console.error(err)) }
+      );
+    }
+    items.push({ separator: true });
+    items.push({ label: "Delete", icon: ICON.trash, danger: true, onClick: () => deleteApp(a) });
+    return items;
+  };
+
   listEl.querySelectorAll("[data-menu]").forEach((btn) =>
     btn.addEventListener("click", () => {
       if (Dropdown.isOpenFor(btn)) { Dropdown.close(); return; }
       const a = appById(btn.dataset.menu);
+      if (a) Dropdown.menu(btn, appMenuItems(a));
+    }));
+
+  // Right-click anywhere on a card opens the same actions menu (like Git Board).
+  // Direct per-row listener (delegated handlers can silently fail in WebView2);
+  // stopPropagation prevents the global "Reload" context menu from firing.
+  listEl.querySelectorAll(".app-row").forEach((row) =>
+    row.addEventListener("contextmenu", (e) => {
+      const a = appById(row.dataset.row);
       if (!a) return;
-      const items = [{ label: "Edit", icon: ICON.pencil, onClick: () => openAppForm(a) }];
-      if (DC && DC.hasBackend) {
-        items.push(
-          { label: "Open folder", icon: ICON.folder, onClick: () => DC.openPath(a.projectDir).catch((err) => console.error(err)) },
-          { label: "Open terminal", icon: ICON.terminal, onClick: () => DC.openTerminal(a.projectDir).catch((err) => console.error(err)) }
-        );
-      }
-      items.push({ label: "Delete", icon: ICON.trash, danger: true, onClick: () => deleteApp(a) });
-      Dropdown.menu(btn, items);
+      e.preventDefault();
+      e.stopPropagation();
+      Dropdown.context(e.clientX, e.clientY, appMenuItems(a));
     }));
 
   // Pointer-based reorder via the grip handle (no HTML5 `draggable`, which is
