@@ -93,6 +93,7 @@ pub fn run() {
             commands::os::install_update,
             commands::os::open_path,
             commands::os::open_url,
+            commands::os::write_text_file,
             commands::os::open_terminal,
             commands::os::vscode_available,
             commands::os::open_in_vscode,

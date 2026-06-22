@@ -978,33 +978,145 @@ function openAppLogs(a) {
     title: `Logs · ${a.name}`,
     wide: true,
     render: (body, foot, close, mkBtn) => {
+      const I = {
+        search: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>`,
+        wrap: `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><path d="M3 12h15a3 3 0 1 1 0 6h-4"/><polyline points="16 16 14 18 16 20"/><line x1="3" y1="18" x2="10" y2="18"/></svg>`,
+        copy: `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>`,
+        save: `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><polyline points="8 11 12 15 16 11"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>`,
+        pause: `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>`,
+        play: `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M7 5v14l12-7z"/></svg>`,
+      };
       body.innerHTML = `
-        <div class="log-toolbar">
-          <div class="search log-search"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input id="logFilter" placeholder="Filter…" /></div>
-          <label class="form-check inline"><input type="checkbox" id="logFollow" checked /> <span>Follow</span></label>
+        <div class="log-bar">
+          <div class="search log-search">${I.search}<input id="logFilter" placeholder="Filter logs…" spellcheck="false" /></div>
+          <div class="log-actions">
+            <button class="log-icon active" id="logWrapBtn" type="button" title="Toggle line wrapping">${I.wrap}</button>
+            <button class="log-icon" id="logCopyBtn" type="button" title="Copy logs">${I.copy}</button>
+            <button class="log-icon" id="logExportBtn" type="button" title="Export logs to a file">${I.save}</button>
+            <button class="log-pause" id="logPauseBtn" type="button" title="Pause auto-scroll"><span class="log-pause-ico">${I.pause}</span><span class="log-pause-label">Pause</span></button>
+          </div>
         </div>
-        <pre class="log-view" id="logView"></pre>`;
+        <pre class="log-view wrap" id="logView"></pre>
+        <div class="log-status">
+          <span class="log-live" id="logLive"></span>
+          <span id="logCount">0 lines</span>
+        </div>`;
       const view = body.querySelector("#logView");
       const filterEl = body.querySelector("#logFilter");
-      const followEl = body.querySelector("#logFollow");
+      const pauseBtn = body.querySelector("#logPauseBtn");
+      const pauseIco = pauseBtn.querySelector(".log-pause-ico");
+      const pauseLabel = pauseBtn.querySelector(".log-pause-label");
+      const liveEl = body.querySelector("#logLive");
+      const countEl = body.querySelector("#logCount");
       let lines = [];
+      let following = true; // auto-scroll while the view is pinned to the bottom
 
+      // Format each line once (ANSI colours + linkified URLs + semantic
+      // highlighting) and cache the HTML so live tailing doesn't re-run the
+      // regex work on every redraw.
       const lineHtml = (l) => {
-        const cls = l.level === "error" ? "log-err" : l.stream === "system" ? "log-sys" : "log-out";
-        return `<span class="log-line ${cls}"><span class="log-ts">${l.ts}</span>${escapeHtml(l.line)}</span>`;
+        if (l.__html == null) {
+          const det = window.LogFmt ? LogFmt.detectLevel(l.line) : null;
+          const lvl = det || (l.level === "error" ? "error" : l.stream === "system" ? "sys" : "out");
+          const text = window.LogFmt ? LogFmt.format(l.line) : escapeHtml(l.line);
+          const ts = l.ts ? `<span class="log-ts">${escapeHtml(l.ts)}</span>` : "";
+          l.__html = `<span class="log-line log-${lvl}">${ts}<span class="log-text">${text}</span></span>`;
+        }
+        return l.__html;
+      };
+      const visible = () => {
+        const q = filterEl.value.toLowerCase();
+        return q ? lines.filter((l) => l.line.toLowerCase().includes(q)) : lines;
+      };
+      const atBottom = () => view.scrollHeight - view.scrollTop - view.clientHeight < 28;
+
+      // Pause/Resume mirrors whether the view is following the tail. It's driven
+      // automatically by scrolling (scroll up = pause, return to the bottom =
+      // resume) and can also be toggled by clicking the button.
+      const setFollowing = (f) => {
+        following = f;
+        pauseBtn.classList.toggle("paused", !f);
+        pauseIco.innerHTML = f ? I.pause : I.play;
+        pauseLabel.textContent = f ? "Pause" : "Resume";
+        liveEl.className = "log-live" + (f ? "" : " paused");
+        liveEl.title = f ? "Following new output" : "Paused — scrolled up";
+      };
+      const updateCount = (shownN) => {
+        const total = lines.length;
+        if (shownN == null) shownN = visible().length;
+        countEl.textContent = filterEl.value
+          ? `${shownN} of ${total} line${total === 1 ? "" : "s"}`
+          : `${total} line${total === 1 ? "" : "s"}`;
       };
       const draw = () => {
-        const q = filterEl.value.toLowerCase();
-        const shown = q ? lines.filter((l) => l.line.toLowerCase().includes(q)) : lines;
-        view.innerHTML = shown.map(lineHtml).join("\n");
-        if (followEl.checked) view.scrollTop = view.scrollHeight;
+        const shown = visible();
+        const prevTop = view.scrollTop;
+        view.innerHTML = shown.length
+          ? shown.map(lineHtml).join("")
+          : `<span class="log-empty">No log output ${filterEl.value ? "matches the filter" : "yet"}.</span>`;
+        // Stick to the bottom while following; otherwise keep the reader's spot.
+        view.scrollTop = following ? view.scrollHeight : prevTop;
+        updateCount(shown.length);
       };
-      filterEl.addEventListener("input", draw);
+      filterEl.addEventListener("input", () => draw());
 
-      // Initial snapshot.
+      // Scrolling drives the follow state: at the bottom → follow, scrolled up →
+      // pause. rAF-debounced so rapid scroll events stay cheap.
+      let scrollRaf = 0;
+      view.addEventListener("scroll", () => {
+        if (scrollRaf) return;
+        scrollRaf = requestAnimationFrame(() => {
+          scrollRaf = 0;
+          const f = atBottom();
+          if (f !== following) setFollowing(f);
+        });
+      });
+
+      // Clicking a linkified URL opens it in the system browser.
+      view.addEventListener("click", (e) => {
+        const link = e.target.closest("a.lg-link");
+        if (!link) return;
+        e.preventDefault();
+        if (link.dataset.url && DC && DC.openUrl) DC.openUrl(link.dataset.url);
+      });
+
+      const flash = (btn) => { if (!btn) return; btn.classList.add("flash"); setTimeout(() => btn.classList.remove("flash"), 900); };
+
+      // Wrap toggle (on by default).
+      const wrapBtn = body.querySelector("#logWrapBtn");
+      wrapBtn.addEventListener("click", () => {
+        wrapBtn.classList.toggle("active", view.classList.toggle("wrap"));
+      });
+
+      // Copy / Export operate on ALL captured lines (not just the filtered view).
+      const asText = () => lines.map((l) => `${l.ts ? "[" + l.ts + "] " : ""}${l.line}`).join("\n");
+      const copyBtn = body.querySelector("#logCopyBtn");
+      copyBtn.addEventListener("click", async () => {
+        await copyToClipboard(asText());
+        flash(copyBtn);
+      });
+      const exportBtn = body.querySelector("#logExportBtn");
+      exportBtn.addEventListener("click", async () => {
+        try {
+          const dlg = window.__TAURI__ && window.__TAURI__.dialog;
+          if (!dlg || !dlg.save) return;
+          const fname = `${(a.name || "app").replace(/[^\w.-]+/g, "_")}-logs.txt`;
+          const path = await dlg.save({ title: "Export logs", defaultPath: fname, filters: [{ name: "Log file", extensions: ["txt", "log"] }] });
+          if (!path) return;
+          await DC.writeTextFile(path, asText());
+          flash(exportBtn);
+        } catch (err) { console.error("export failed", err); }
+      });
+
+      // Pause / resume auto-scroll. Resuming jumps straight to the latest output.
+      pauseBtn.addEventListener("click", () => {
+        if (following) setFollowing(false);
+        else { setFollowing(true); view.scrollTop = view.scrollHeight; }
+      });
+
+      // Initial snapshot + live tail.
       if (DC && DC.hasBackend) {
         DC.appLogs(Number(a.id)).then((snap) => { lines = snap || []; draw(); }).catch((e) => console.error(e));
-        // Live tail.
         DC.onAppLog((l) => {
           if (String(l.id) !== String(a.id)) return;
           lines.push(l);
@@ -1012,11 +1124,11 @@ function openAppLogs(a) {
           draw();
         }).then((un) => { appLogUnsub = un; });
       } else {
-        view.textContent = "Logs stream in the desktop app.";
+        view.innerHTML = `<span class="log-empty">Logs stream in the desktop app.</span>`;
       }
 
       const clear = mkBtn("btn-ghost", "Clear");
-      clear.addEventListener("click", () => { lines = []; draw(); });
+      clear.addEventListener("click", () => { lines = []; setFollowing(true); draw(); });
       const done = mkBtn("btn-primary", "Close");
       const stop = () => { if (appLogUnsub) { appLogUnsub(); appLogUnsub = null; } close(true); };
       done.addEventListener("click", stop);
@@ -2678,6 +2790,7 @@ const ChangesPage = (() => {
   let repoPulls = [];       // PRs for the selected repo [{id, title, branch, base, status, ...}]
   let pullsLoaded = false;  // whether the PR list has been fetched for the current repo
   let activePull = null;    // currently selected PR (drives the detail + diff panes)
+  let prFetch = null;       // in-flight `git fetch` so PR branches are available locally for diffs
 
   // Diff/navigation state.
   let activeFile = null;
@@ -2896,7 +3009,7 @@ const ChangesPage = (() => {
     $("chgBranchLabel").textContent = branch;
     activeSha = null; activeFile = null; activeGroup = null; navOrder = [];
     staged = []; unstaged = []; history = []; commitFiles = [];
-    repoPulls = []; pullsLoaded = false;
+    repoPulls = []; pullsLoaded = false; prFetch = null;
     showDiffEmpty("Select a file to view its diff.");
     if (tab === "history") loadHistory();
     else if (tab === "pulls") loadRepoPulls();
@@ -3051,7 +3164,6 @@ const ChangesPage = (() => {
     stashes = cs.stashes || [];
     renderSync(cs);
     renderChanges();
-    updateConflictBanner();
   }
 
   // Show a banner linking to the conflict resolver while the repo has conflicts.
@@ -3062,10 +3174,14 @@ const ChangesPage = (() => {
     [...staged, ...unstaged].forEach((f) => { if (f.status === "conflicted") set.add(f.path); });
     const n = set.size;
     banner.hidden = n === 0;
-    if (n) $("conflictBannerText").textContent = `${n} merge conflict${n === 1 ? "" : "s"} — resolve before committing`;
+    if (n) $("conflictBannerText").textContent = `${n} merge conflict${n === 1 ? "" : "s"}`;
   }
 
   function renderChanges() {
+    // Keep the conflict banner in sync with the live change set on every render
+    // (load, stage/unstage, discard, commit, filter) so it appears only while
+    // real conflicts remain and hides the moment they're resolved.
+    updateConflictBanner();
     const filter = ($("changeFilter").value || "").toLowerCase();
     const fStaged = filter ? staged.filter((f) => f.path.toLowerCase().includes(filter)) : staged;
     const fUnstaged = filter ? unstaged.filter((f) => f.path.toLowerCase().includes(filter)) : unstaged;
@@ -3554,6 +3670,7 @@ const ChangesPage = (() => {
   function renderDiff(d) {
     $("diffHead").innerHTML = diffHeadHtml(d.path, `+${d.additions}`, `−${d.deletions}`);
     wireDiffNav();
+    if (d.oldImage || d.newImage) { renderImageDiff(d); return; }
     if (d.binary) { $("diffBody").innerHTML = `<div class="diff-binary">Binary file — no text diff to display.</div>`; return; }
     if (!d.hunks.length) { $("diffBody").innerHTML = `<div class="diff-binary">No textual changes to display.</div>`; return; }
     const lang = (window.Highlighter && Highlighter.langForPath(d.path)) || "";
@@ -3573,6 +3690,22 @@ const ChangesPage = (() => {
     // line — keeps the add/del row tints spanning the full width when the diff
     // is scrolled horizontally.
     $("diffBody").innerHTML = `<div class="diff-code">${rows.join("")}</div>`;
+  }
+
+  // Render an image file as a visual before/after preview instead of a text diff.
+  // `src` is a backend-built data: URL for a whitelisted raster mime, so it's
+  // safe to inline; the alt text is escaped.
+  function renderImageDiff(d) {
+    const fig = (label, src) =>
+      `<figure class="diff-img-fig">` +
+        `<figcaption class="diff-img-cap">${label}</figcaption>` +
+        `<div class="diff-img-wrap"><img class="diff-img" src="${src}" alt="${esc(d.path)}" loading="lazy" /></div>` +
+      `</figure>`;
+    let inner;
+    if (d.oldImage && d.newImage) inner = fig("Before", d.oldImage) + fig("After", d.newImage);
+    else if (d.newImage) inner = fig("Added", d.newImage);
+    else inner = fig("Removed", d.oldImage);
+    $("diffBody").innerHTML = `<div class="diff-image">${inner}</div>`;
   }
 
   // ---- tabs / view mode ----
@@ -3613,6 +3746,13 @@ const ChangesPage = (() => {
     if (!repoId) return;
     pullsLoaded = false; activePull = null;
     $("repoPrList").innerHTML = `<div class="changes-empty">Loading pull requests…</div>`;
+    // Fetch in the background so the PR's head/base branches are present locally
+    // for the diff view (selectPull awaits this before the local base...head
+    // diff). Runs in parallel with the PR list load; non-fatal on failure
+    // (offline, no remote, auth, …).
+    prFetch = DC.hasBackend
+      ? DC.fetchRepo(repoId).catch((e) => console.warn("PR branch fetch failed", e))
+      : null;
     try {
       const data = await DC.listRepoPullRequests(repoId);
       repoPulls = Array.isArray(data) ? data : [];
@@ -3680,7 +3820,20 @@ const ChangesPage = (() => {
     showDiffEmpty("Loading pull request…");
     collapsedDetail = new Set();
     try {
-      const cs = await DC.prChanges(repoId, pr.base, pr.branch);
+      let cs;
+      try {
+        // Fast path: diff against the PR branches already present locally.
+        cs = await DC.prChanges(repoId, pr.base, pr.branch);
+      } catch (err) {
+        // Branches probably aren't fetched yet — wait for the in-flight background
+        // fetch (kicked off in loadRepoPulls) and retry once.
+        if (!prFetch) throw err;
+        if (activePull !== pr) return;
+        showDiffEmpty("Fetching pull request branches…");
+        await prFetch;
+        if (activePull !== pr) return;
+        cs = await DC.prChanges(repoId, pr.base, pr.branch);
+      }
       if (activePull !== pr) return; // a newer selection won
       commitFiles = cs.files || [];
       renderDetail();

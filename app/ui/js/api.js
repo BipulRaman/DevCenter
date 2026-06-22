@@ -20,6 +20,7 @@
     installUpdate: () => (hasBackend ? invoke("install_update") : Promise.resolve()),
     openPath: (path) => (hasBackend ? invoke("open_path", { path }) : Promise.resolve()),
     openUrl: (url) => (hasBackend ? invoke("open_url", { url }) : Promise.resolve()),
+    writeTextFile: (path, contents) => (hasBackend ? invoke("write_text_file", { path, contents }) : Promise.resolve()),
     openTerminal: (path) => (hasBackend ? invoke("open_terminal", { path }) : Promise.resolve()),
     vscodeAvailable: () => (hasBackend ? invoke("vscode_available") : Promise.resolve(false)),
     openInVscode: (path) => (hasBackend ? invoke("open_in_vscode", { path }) : Promise.resolve()),

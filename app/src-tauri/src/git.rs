@@ -5,6 +5,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use git2::{Delta, DiffOptions, Oid, Patch, Repository, Sort, StatusEntry, StatusOptions};
 
+use base64::Engine;
+
 use crate::error::{AppError, AppResult};
 use crate::models::{
     ChangeSet, CommitInfo, ConflictFile, ConflictInfo, DiffHunk, DiffLine, FileChange, FileDiff,
@@ -1296,8 +1298,52 @@ pub fn discard(path: &Path, files: &[String]) -> AppResult<()> {
     Ok(())
 }
 
-/// Convert a git2 `Diff` into our serializable `FileDiff` for one file.
-fn build_file_diff(diff: &git2::Diff, file: &str) -> AppResult<FileDiff> {
+/// MIME type for a path's image extension, or None when it isn't a raster image
+/// we can preview inline in the diff viewer.
+fn image_mime(path: &str) -> Option<&'static str> {
+    let ext = Path::new(path).extension()?.to_str()?.to_ascii_lowercase();
+    Some(match ext.as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" | "jfif" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "bmp" => "image/bmp",
+        "ico" | "cur" => "image/x-icon",
+        "avif" => "image/avif",
+        "tif" | "tiff" => "image/tiff",
+        _ => return None,
+    })
+}
+
+/// Raw bytes for one side of a diff: the stored blob when the side exists in the
+/// object database, otherwise the working-tree file on disk (the "after" side of
+/// an unstaged or untracked change isn't a committed blob yet).
+fn diff_side_bytes(repo: &Repository, f: &git2::DiffFile) -> Option<Vec<u8>> {
+    let oid = f.id();
+    if !oid.is_zero() {
+        if let Ok(blob) = repo.find_blob(oid) {
+            return Some(blob.content().to_vec());
+        }
+    }
+    let abs = repo.workdir()?.join(f.path()?);
+    std::fs::read(abs).ok()
+}
+
+/// Build a `data:` URL so the webview can render an image inline.
+fn image_data_url(mime: &str, bytes: &[u8]) -> String {
+    format!(
+        "data:{mime};base64,{}",
+        base64::engine::general_purpose::STANDARD.encode(bytes)
+    )
+}
+
+/// Convert a git2 `Diff` into our serializable `FileDiff` for one file. For image
+/// files the before/after bytes are attached as `data:` URLs so the UI can show a
+/// visual preview instead of an inert "binary file" message.
+fn build_file_diff(repo: &Repository, diff: &git2::Diff, file: &str) -> AppResult<FileDiff> {
+    // Don't base64 enormous images into the IPC payload; fall back to the binary
+    // message for anything bigger.
+    const MAX_IMAGE_BYTES: usize = 24 * 1024 * 1024;
     let want = file.replace('\\', "/");
     let mut result = FileDiff {
         path: want.clone(),
@@ -1305,6 +1351,8 @@ fn build_file_diff(diff: &git2::Diff, file: &str) -> AppResult<FileDiff> {
         additions: 0,
         deletions: 0,
         hunks: Vec::new(),
+        old_image: None,
+        new_image: None,
     };
     for (idx, delta) in diff.deltas().enumerate() {
         let dpath = delta
@@ -1315,46 +1363,61 @@ fn build_file_diff(diff: &git2::Diff, file: &str) -> AppResult<FileDiff> {
         if dpath.as_deref() != Some(want.as_str()) {
             continue;
         }
-        if delta.flags().is_binary() {
-            result.binary = true;
-            return Ok(result);
-        }
-        match Patch::from_diff(diff, idx)? {
-            Some(patch) => {
-                for h in 0..patch.num_hunks() {
-                    let (hunk, nlines) = patch.hunk(h)?;
-                    let header = String::from_utf8_lossy(hunk.header())
+
+        // A binary delta (images, etc.) has no usable text patch — when the patch
+        // is missing we fall through to the image/binary handling below.
+        let patch = if delta.flags().is_binary() {
+            None
+        } else {
+            Patch::from_diff(diff, idx)?
+        };
+
+        if let Some(patch) = patch {
+            for h in 0..patch.num_hunks() {
+                let (hunk, nlines) = patch.hunk(h)?;
+                let header = String::from_utf8_lossy(hunk.header())
+                    .trim_end_matches(['\n', '\r'])
+                    .to_string();
+                let mut lines = Vec::with_capacity(nlines);
+                for l in 0..nlines {
+                    let line = patch.line_in_hunk(h, l)?;
+                    let kind = match line.origin() {
+                        '+' => {
+                            result.additions += 1;
+                            "add"
+                        }
+                        '-' => {
+                            result.deletions += 1;
+                            "del"
+                        }
+                        _ => "ctx",
+                    };
+                    let content = String::from_utf8_lossy(line.content())
                         .trim_end_matches(['\n', '\r'])
                         .to_string();
-                    let mut lines = Vec::with_capacity(nlines);
-                    for l in 0..nlines {
-                        let line = patch.line_in_hunk(h, l)?;
-                        let kind = match line.origin() {
-                            '+' => {
-                                result.additions += 1;
-                                "add"
-                            }
-                            '-' => {
-                                result.deletions += 1;
-                                "del"
-                            }
-                            _ => "ctx",
-                        };
-                        let content = String::from_utf8_lossy(line.content())
-                            .trim_end_matches(['\n', '\r'])
-                            .to_string();
-                        lines.push(DiffLine {
-                            kind: kind.to_string(),
-                            content,
-                            old_lineno: line.old_lineno(),
-                            new_lineno: line.new_lineno(),
-                        });
-                    }
-                    result.hunks.push(DiffHunk { header, lines });
+                    lines.push(DiffLine {
+                        kind: kind.to_string(),
+                        content,
+                        old_lineno: line.old_lineno(),
+                        new_lineno: line.new_lineno(),
+                    });
                 }
+                result.hunks.push(DiffHunk { header, lines });
             }
-            None => result.binary = true,
+            return Ok(result);
         }
+
+        // Binary file. Attach before/after previews when it's a known image type.
+        result.binary = true;
+        if let Some(mime) = image_mime(&want) {
+            result.old_image = diff_side_bytes(repo, &delta.old_file())
+                .filter(|b| !b.is_empty() && b.len() <= MAX_IMAGE_BYTES)
+                .map(|b| image_data_url(mime, &b));
+            result.new_image = diff_side_bytes(repo, &delta.new_file())
+                .filter(|b| !b.is_empty() && b.len() <= MAX_IMAGE_BYTES)
+                .map(|b| image_data_url(mime, &b));
+        }
+        return Ok(result);
     }
     Ok(result)
 }
@@ -1375,7 +1438,7 @@ pub fn file_diff(path: &Path, file: &str, staged: bool) -> AppResult<FileDiff> {
             .show_untracked_content(true);
         repo.diff_index_to_workdir(None, Some(&mut opts))?
     };
-    build_file_diff(&diff, file)
+    build_file_diff(&repo, &diff, file)
 }
 
 /// Commit the staged index with `summary` (+ optional `description`) using the
@@ -1533,7 +1596,7 @@ pub fn commit_file_diff(path: &Path, sha: &str, file: &str) -> AppResult<FileDif
     let mut opts = DiffOptions::new();
     opts.context_lines(3).pathspec(file);
     let diff = repo.diff_tree_to_tree(parent_tree.as_ref(), Some(&tree), Some(&mut opts))?;
-    build_file_diff(&diff, file)
+    build_file_diff(&repo, &diff, file)
 }
 
 /// Convert a tree-to-tree diff into the normalized, path-sorted FileChange list.
@@ -1640,5 +1703,5 @@ pub fn pr_file_diff(path: &Path, base: &str, head: &str, file: &str) -> AppResul
     let mut opts = DiffOptions::new();
     opts.context_lines(3).pathspec(file);
     let diff = repo.diff_tree_to_tree(Some(&before), Some(&after), Some(&mut opts))?;
-    build_file_diff(&diff, file)
+    build_file_diff(&repo, &diff, file)
 }

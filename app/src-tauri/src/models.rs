@@ -159,6 +159,14 @@ pub struct FileDiff {
     pub additions: u32,
     pub deletions: u32,
     pub hunks: Vec<DiffHunk>,
+    /// For image files: `data:` URL of the previous version (None when the file
+    /// was added or isn't an image). Lets the UI show a visual preview.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub old_image: Option<String>,
+    /// For image files: `data:` URL of the new version (None when the file was
+    /// deleted or isn't an image).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub new_image: Option<String>,
 }
 
 /// State of an in-progress operation that left merge conflicts in a repo.

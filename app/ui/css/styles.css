@@ -1013,22 +1013,76 @@ select.modal-input { cursor: pointer; appearance: none; background-image: url("d
 .switch-opt-title { font-size: 13.5px; font-weight: 600; color: var(--text); }
 .switch-opt-desc { font-size: 12px; color: var(--text-faint); line-height: 1.45; }
 
-/* live log viewer */
-.log-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
-.log-search { flex: 1; height: 34px; }
+/* ===== Live log viewer (App Center) ===== */
+.log-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.log-search { flex: 1; height: 30px; min-width: 0; }
 .log-search input { width: 100%; }
-.log-view {
-  background: #0a0c11; color: #d6dbe6;
+.log-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.log-sep { width: 1px; height: 18px; background: var(--border); margin: 0 3px; }
+.log-icon {
+  width: 30px; height: 30px; display: grid; place-items: center; flex-shrink: 0;
   border: 1px solid var(--border); border-radius: var(--radius-sm);
-  padding: 12px 14px; height: 52vh; overflow: auto;
-  font-family: var(--mono); font-size: 12px; line-height: 1.6;
-  white-space: pre-wrap; word-break: break-word;
+  background: var(--bg-elev-2); color: var(--text-dim); cursor: pointer;
+  transition: background .14s, color .14s, border-color .14s;
 }
-[data-theme="light"] .log-view { background: #11151c; color: #dde2ec; }
-.log-line { display: block; }
-.log-line .log-ts { color: #5b647a; margin-right: 10px; }
-.log-line.log-err { color: #ff9a9a; }
-.log-line.log-sys { color: #8fb8ff; }
+.log-icon:hover { background: var(--bg-hover); color: var(--text); border-color: color-mix(in srgb, var(--text-faint) 40%, var(--border)); }
+.log-icon.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.log-icon.active:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+.log-icon.flash { background: var(--green-soft); color: var(--green); border-color: color-mix(in srgb, var(--green) 55%, var(--border)); }
+.log-pause {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: 30px; padding: 0 12px; margin-left: 3px; min-width: 106px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--bg-elev-2); color: var(--text-dim); font-size: 12px; font-weight: 500; cursor: pointer;
+  transition: background .14s, color .14s, border-color .14s;
+}
+.log-pause:hover { background: var(--bg-hover); color: var(--text); }
+.log-pause-ico { display: grid; place-items: center; }
+.log-pause.paused {
+  color: var(--amber); border-color: color-mix(in srgb, var(--amber) 55%, var(--border));
+  background: color-mix(in srgb, var(--amber) 14%, var(--bg-elev-2));
+}
+
+.log-view {
+  background: #0a0c11; color: #cdd3df;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 10px 0; height: 50vh; overflow: auto;
+  font-family: var(--mono); font-size: 12px; line-height: 1.65; tab-size: 4;
+  white-space: pre;
+}
+.log-view.wrap { white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; }
+[data-theme="light"] .log-view { background: #0d1016; color: #d3d9e4; }
+
+.log-line { display: block; padding: 0 14px 0 12px; border-left: 2px solid transparent; }
+.log-line:hover { background: rgba(255, 255, 255, 0.035); }
+.log-line.log-error { border-left-color: var(--red); }
+.log-line.log-warn { border-left-color: var(--amber); }
+.log-line.log-sys { border-left-color: #3f4a63; }
+.log-line.log-sys .log-text { color: #8da2c0; }
+.log-ts { color: #6f9aa6; margin-right: 12px; user-select: none; }
+.log-ts::before { content: "["; opacity: .6; }
+.log-ts::after { content: "]"; opacity: .6; }
+.log-text { white-space: inherit; }
+.log-empty { display: block; padding: 16px; color: #5b647a; }
+.log-status { display: flex; align-items: center; gap: 8px; margin-top: 9px; font-size: 11.5px; color: var(--text-faint); }
+.log-live { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--green); box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 20%, transparent); }
+.log-live.paused { background: var(--amber); box-shadow: 0 0 0 3px color-mix(in srgb, var(--amber) 20%, transparent); }
+
+/* Syntax tokens (whitelisted classes emitted by logfmt.js). */
+.lg-lvl { font-weight: 600; }
+.lg-info { color: #61afef; }
+.lg-warn { color: #e5c07b; }
+.lg-error { color: #e06c75; }
+.lg-debug { color: #c678dd; }
+.lg-trace { color: #8b93a7; }
+.lg-str { color: #98c379; }
+.lg-num { color: #d19a66; }
+.lg-b { font-weight: 600; }
+.lg-dim { opacity: 0.6; }
+.lg-i { font-style: italic; }
+.lg-u { text-decoration: underline; }
+.lg-link { color: #56b6c2; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.lg-link:hover { color: #7fdbe8; }
 
 /* ============ FOCUS & A11Y ============ */
 :focus-visible { outline: none; }
@@ -1524,6 +1578,24 @@ body.col-resizing * { cursor: col-resize !important; }
 .diff-line.del .diff-gutter { background: linear-gradient(var(--diff-del-gutter), var(--diff-del-gutter)), var(--code-bg); }
 .diff-binary { padding: 24px; text-align: center; color: var(--text-faint); font-size: 13px; background: var(--code-bg); }
 
+/* Image file preview (shown instead of a text diff for raster images). */
+.diff-image {
+  display: flex; flex-wrap: wrap; gap: 18px; align-content: flex-start;
+  height: 100%; padding: 20px; overflow: auto; background: var(--code-bg);
+}
+.diff-img-fig { margin: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.diff-img-cap {
+  font-size: 11px; font-weight: 600; letter-spacing: .4px; text-transform: uppercase;
+  color: var(--text-faint);
+}
+.diff-img-wrap {
+  display: inline-flex; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  /* Checkerboard so transparent PNGs read clearly. */
+  background:
+    repeating-conic-gradient(var(--bg-elev-2) 0% 25%, var(--bg-elev) 0% 50%) 0 0 / 18px 18px;
+}
+.diff-img { display: block; max-width: 100%; max-height: 60vh; width: auto; height: auto; object-fit: contain; }
+
 .changes-empty { padding: 30px 16px; text-align: center; color: var(--text-faint); font-size: 12.5px; }
 
 @media (max-width: 1100px) {
@@ -1651,20 +1723,31 @@ textarea,
 
 /* ============ Merge-conflict resolver ============ */
 
-/* Banner shown on the Changes pane when the selected repo has conflicts. */
+/* Banner shown on the Changes pane ONLY while the selected repo has conflicts.
+   The explicit [hidden] rule is required: this class sets `display`, which would
+   otherwise beat the UA `[hidden] { display:none }` and keep the banner always
+   visible (same pattern as .commit-pane[hidden] / .diff-empty[hidden]).
+   Inset margins match the .commit-filter below it so it lines up with the pane. */
 .conflict-banner {
-  display: flex; align-items: center; gap: 9px;
-  width: 100%; margin: 0 0 8px; padding: 9px 11px;
-  border: 1px solid color-mix(in srgb, var(--amber) 45%, var(--border));
+  display: flex; align-items: center; gap: 10px;
+  margin: 10px 12px 0; padding: 9px 12px;
+  border: 1px solid color-mix(in srgb, var(--amber) 40%, var(--border));
   border-radius: var(--radius-sm);
   background: var(--amber-soft);
-  color: var(--text); font-family: inherit; font-size: 13px; font-weight: 500;
-  text-align: left; cursor: pointer; transition: background .14s;
+  color: var(--text); font-family: inherit; font-size: 12.5px; font-weight: 500;
+  text-align: left; cursor: pointer; transition: background .14s, border-color .14s;
 }
-.conflict-banner:hover { background: color-mix(in srgb, var(--amber) 24%, var(--bg-elev)); }
-.conflict-banner-ico { color: var(--amber); flex-shrink: 0; }
+.conflict-banner[hidden] { display: none; }
+.conflict-banner:hover {
+  background: color-mix(in srgb, var(--amber) 18%, var(--bg-elev));
+  border-color: color-mix(in srgb, var(--amber) 58%, var(--border));
+}
+.conflict-banner-ico { color: var(--amber); flex-shrink: 0; display: grid; place-items: center; }
 .conflict-banner-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.conflict-banner-go { color: var(--amber); font-size: 12px; font-weight: 600; flex-shrink: 0; }
+.conflict-banner-go {
+  flex-shrink: 0; display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; font-weight: 600; color: var(--amber); white-space: nowrap;
+}
 
 /* Resolver page header + two-column layout. */
 .conflict-head-main { display: flex; align-items: center; gap: 12px; min-width: 0; }

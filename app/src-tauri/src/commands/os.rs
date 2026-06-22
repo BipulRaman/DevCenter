@@ -30,6 +30,13 @@ pub fn open_url(app: tauri::AppHandle, url: String) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
+/// Writes UTF-8 text to a file on disk. Backs the log viewer's "Export" action
+/// (the destination is chosen by the user via the save dialog on the frontend).
+#[tauri::command]
+pub fn write_text_file(path: String, contents: String) -> Result<(), String> {
+    std::fs::write(&path, contents).map_err(|e| e.to_string())
+}
+
 /// Opens a terminal at the given working directory.
 #[tauri::command]
 pub fn open_terminal(path: String) -> Result<(), String> {
