@@ -52,6 +52,17 @@ function providerIcon(p) {
   return p === "github" ? ICON.github : p === "azure" ? ICON.azure : ICON.repo;
 }
 
+// Turn a repo's cleaned remote (`host/path`, already stripped of scheme/.git/user
+// by the backend) into a browsable web URL. Handles the Azure DevOps SSH form
+// (ssh.dev.azure.com/v3/org/project/repo → dev.azure.com/org/project/_git/repo).
+function repoWebUrl(remote) {
+  const s = (remote || "").trim();
+  if (!s) return null;
+  const az = s.match(/^ssh\.dev\.azure\.com\/v3\/([^/]+)\/([^/]+)\/([^/]+)\/?$/i);
+  if (az) return `https://dev.azure.com/${az[1]}/${az[2]}/_git/${az[3]}`;
+  return "https://" + s.replace(/^\/+/, "");
+}
+
 // ---------- Navigation ----------
 const navItems = document.querySelectorAll(".nav-item[data-page]");
 const pages = document.querySelectorAll(".page");
@@ -476,6 +487,8 @@ function renderRepos(filter = "") {
         { label: "Open terminal", icon: ICON.terminal, onClick: () => DC.openTerminal(r.path).catch((e) => console.error("openTerminal failed", e)) }
       );
       if (hasVscode) items.push({ label: "Open in VS Code", icon: ICON.vscode, onClick: () => DC.openInVscode(r.path).catch((e) => console.error("openInVscode failed", e)) });
+      const web = repoWebUrl(r.remote);
+      if (web) items.push({ label: "Open in browser", icon: ICON.external, onClick: () => DC.openUrl(web).catch((e) => console.error("openUrl failed", e)) });
     }
     items.push({ separator: true });
     items.push({ label: "Remove from list", icon: ICON.trash, danger: true, onClick: () => removeRepo(r) });

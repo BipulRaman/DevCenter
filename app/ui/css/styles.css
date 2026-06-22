@@ -545,8 +545,9 @@ button.chip { font-family: var(--mono); font-size: 11px; font-weight: 500; }
 .dropdown-menu {
   position: fixed; z-index: 90;
   min-width: 240px; max-width: 380px;
-  max-height: 380px;
+  max-height: min(520px, calc(100vh - 16px));
   display: flex; flex-direction: column;
+  overflow-y: auto; overflow-x: hidden;
   background: var(--bg-elev);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -636,7 +637,7 @@ button.chip { font-family: var(--mono); font-size: 11px; font-weight: 500; }
 /* action menu (kebab) variant */
 .dropdown-menu.menu { min-width: 184px; padding: 5px; }
 .menu-item {
-  display: flex; align-items: center; gap: 10px; width: 100%;
+  display: flex; align-items: center; gap: 10px; width: 100%; flex-shrink: 0;
   padding: 9px 11px; border-radius: 7px; border: none; background: transparent;
   color: var(--text); font-family: inherit; font-size: 13px; font-weight: 500;
   text-align: left; cursor: pointer; transition: background .14s, color .14s;
