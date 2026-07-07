@@ -1904,7 +1904,7 @@ function renderPulls(filter = "") {
   document.querySelectorAll("#prList [data-pr-review]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const pr = pulls.find((p) => String(p.id) === btn.dataset.prReview && p.repoId === btn.dataset.prRepo);
-      if (pr && window.PrReviewer) window.PrReviewer.open(pr.repoId, pr);
+      if (pr && window.PrReviewer) window.PrReviewer.open(pr.repoId, pr, { returnTo: "pull-requests" });
     });
   });
 }
@@ -4990,7 +4990,7 @@ const ChangesPage = (() => {
     const vb = $("prViewBtn");
     if (vb) vb.addEventListener("click", () => openPrUrl(pr.url));
     const rb = $("prReviewBtn");
-    if (rb) rb.addEventListener("click", () => { if (window.PrReviewer) window.PrReviewer.open(repoId, pr); });
+    if (rb) rb.addEventListener("click", () => { if (window.PrReviewer) window.PrReviewer.open(repoId, pr, { returnTo: "changes" }); });
     $("detailFiles").innerHTML = `<div class="changes-empty">Loading…</div>`;
     $("detailCollapseBtn").hidden = true;
     showDiffEmpty("Loading pull request…");
@@ -5413,6 +5413,7 @@ const PrReviewer = (() => {
   let activeTab = "files"; // "files" | "conversation"
   let collapsed = new Set(); // collapsed folders in the file tree
   let busy = false;
+  let returnPage = "changes"; // page to go back to — wherever "Review" was clicked from
 
   function threadsFor(path) {
     return threads.filter((t) => t.path === path);
@@ -5421,9 +5422,10 @@ const PrReviewer = (() => {
     return threads.filter((t) => t.path == null);
   }
 
-  async function open(id, pullRequest) {
+  async function open(id, pullRequest, opts) {
     repoId = id;
     pr = pullRequest;
+    returnPage = (opts && opts.returnTo) || "changes";
     files = []; threads = []; activeFile = null; activeTab = "files"; collapsed = new Set();
     document.querySelectorAll(".page").forEach((p) => p.classList.toggle("active", p.id === "page-pr-review"));
     document.querySelectorAll(".prr-tab").forEach((t) => t.classList.toggle("active", t.dataset.prrtab === "files"));
@@ -5768,7 +5770,7 @@ const PrReviewer = (() => {
   }
 
   document.querySelectorAll(".prr-tab").forEach((t) => t.addEventListener("click", () => switchTab(t.dataset.prrtab)));
-  $("prrBackBtn") && $("prrBackBtn").addEventListener("click", () => showPage("changes"));
+  $("prrBackBtn") && $("prrBackBtn").addEventListener("click", () => showPage(returnPage));
   $("prrOpenBtn") && $("prrOpenBtn").addEventListener("click", () => { if (pr && pr.url) DC.openUrl(pr.url); });
   $("prrApproveBtn") && $("prrApproveBtn").addEventListener("click", () => openReviewDialog("approve"));
   $("prrChangesBtn") && $("prrChangesBtn").addEventListener("click", () => openReviewDialog("changes"));
