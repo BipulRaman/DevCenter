@@ -1,12 +1,13 @@
 //! GitHub REST client for pull requests.
 
+use std::collections::HashMap;
 use std::time::Duration;
 
-use serde_json::Value;
+use serde_json::{json, Value};
 
 use super::{short_date, RepoRef};
 use crate::error::{AppError, AppResult};
-use crate::models::PullRequest;
+use crate::models::{PrComment, PrThread, PullRequest};
 
 fn get(url: &str, token: &str) -> AppResult<Value> {
     match ureq::get(url)
@@ -31,6 +32,36 @@ fn get(url: &str, token: &str) -> AppResult<Value> {
     }
 }
 
+/// POST/PUT/PATCH a JSON body, returning the parsed JSON response (or `null`
+/// for endpoints that reply with an empty body).
+fn send(method: &str, url: &str, token: &str, body: &Value) -> AppResult<Value> {
+    let req = ureq::request(method, url)
+        .timeout(Duration::from_secs(20))
+        .set("Authorization", &format!("Bearer {token}"))
+        .set("Accept", "application/vnd.github+json")
+        .set("User-Agent", "DevCenter")
+        .set("X-GitHub-Api-Version", "2022-11-28");
+    match req.send_json(body.clone()) {
+        Ok(resp) => Ok(resp.into_json::<Value>().unwrap_or(Value::Null)),
+        Err(ureq::Error::Status(401, _)) | Err(ureq::Error::Status(403, _)) => {
+            Err(AppError::msg("GitHub authentication failed — check the token and its scopes."))
+        }
+        Err(ureq::Error::Status(404, _)) => {
+            Err(AppError::msg("GitHub resource not found (or no access)."))
+        }
+        Err(ureq::Error::Status(422, resp)) => {
+            let msg = resp
+                .into_json::<Value>()
+                .ok()
+                .and_then(|v| v.get("message").and_then(|m| m.as_str()).map(str::to_string))
+                .unwrap_or_else(|| "GitHub rejected the request.".to_string());
+            Err(AppError::msg(msg))
+        }
+        Err(ureq::Error::Status(code, _)) => Err(AppError::msg(format!("GitHub API error {code}"))),
+        Err(e) => Err(AppError::msg(e.to_string())),
+    }
+}
+
 /// Validate the token and return the authenticated login.
 pub fn verify(token: &str) -> AppResult<String> {
     let v = get("https://api.github.com/user", token)?;
@@ -40,7 +71,8 @@ pub fn verify(token: &str) -> AppResult<String> {
         .to_string())
 }
 
-pub fn fetch_pulls(r: &RepoRef, token: &str, display: &str) -> AppResult<Vec<PullRequest>> {
+
+pub fn fetch_pulls(r: &RepoRef, token: &str, display: &str, repo_id: &str) -> AppResult<Vec<PullRequest>> {
     // Only open (incl. draft) PRs are surfaced.
     let url = format!(
         "https://api.github.com/repos/{}/{}/pulls?state=open&per_page=50&sort=updated&direction=desc",
@@ -71,6 +103,7 @@ pub fn fetch_pulls(r: &RepoRef, token: &str, display: &str) -> AppResult<Vec<Pul
                 .unwrap_or("(untitled)")
                 .to_string(),
             repo: display.to_string(),
+            repo_id: repo_id.to_string(),
             author: p
                 .pointer("/user/login")
                 .and_then(|x| x.as_str())
@@ -101,3 +134,169 @@ pub fn fetch_pulls(r: &RepoRef, token: &str, display: &str) -> AppResult<Vec<Pul
     }
     Ok(out)
 }
+
+// ===================== PR review: comments + threads =====================
+
+fn comment_from(v: &Value) -> PrComment {
+    PrComment {
+        id: v.get("id").map(|x| x.to_string()).unwrap_or_default(),
+        author: v
+            .pointer("/user/login")
+            .and_then(|x| x.as_str())
+            .unwrap_or("unknown")
+            .to_string(),
+        body: v.get("body").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+        created: short_date(v.get("created_at").and_then(|x| x.as_str()).unwrap_or("")),
+    }
+}
+
+/// The PR's head commit SHA, required by the "create review comment" endpoint.
+fn head_sha(r: &RepoRef, pr_number: u64, token: &str) -> AppResult<String> {
+    let url = format!("https://api.github.com/repos/{}/{}/pulls/{pr_number}", r.owner, r.repo);
+    let v = get(&url, token)?;
+    Ok(v.pointer("/head/sha").and_then(|x| x.as_str()).unwrap_or("").to_string())
+}
+
+/// All comment threads for a PR: one synthesized "general" thread (issue
+/// comments + any review submissions that included a body, merged and sorted
+/// chronologically) plus one thread per root inline review comment (replies
+/// grouped under their `in_reply_to_id`).
+pub fn fetch_threads(r: &RepoRef, pr_number: u64, token: &str) -> AppResult<Vec<PrThread>> {
+    let mut general: Vec<(String, PrComment)> = Vec::new(); // (sort key, comment)
+
+    let issue_url = format!(
+        "https://api.github.com/repos/{}/{}/issues/{pr_number}/comments?per_page=100",
+        r.owner, r.repo
+    );
+    for c in get(&issue_url, token)?.as_array().cloned().unwrap_or_default() {
+        let sort_key = c.get("created_at").and_then(|x| x.as_str()).unwrap_or("").to_string();
+        general.push((sort_key, comment_from(&c)));
+    }
+
+    let reviews_url = format!(
+        "https://api.github.com/repos/{}/{}/pulls/{pr_number}/reviews?per_page=100",
+        r.owner, r.repo
+    );
+    for rv in get(&reviews_url, token)?.as_array().cloned().unwrap_or_default() {
+        let body = rv.get("body").and_then(|x| x.as_str()).unwrap_or("");
+        if body.trim().is_empty() {
+            continue; // approve/request-changes with no summary — nothing to show
+        }
+        let event = rv.get("state").and_then(|x| x.as_str()).unwrap_or("");
+        let prefix = match event {
+            "APPROVED" => "✓ Approved — ",
+            "CHANGES_REQUESTED" => "✗ Requested changes — ",
+            _ => "",
+        };
+        let sort_key = rv.get("submitted_at").and_then(|x| x.as_str()).unwrap_or("").to_string();
+        let mut comment = comment_from(&rv);
+        comment.body = format!("{prefix}{}", comment.body);
+        general.push((sort_key, comment));
+    }
+    general.sort_by(|a, b| a.0.cmp(&b.0));
+
+    let mut threads: Vec<PrThread> = Vec::new();
+    if !general.is_empty() {
+        threads.push(PrThread {
+            id: "general".to_string(),
+            path: None,
+            line: None,
+            resolved: false,
+            can_resolve: false,
+            comments: general.into_iter().map(|(_, c)| c).collect(),
+        });
+    }
+
+    // Inline review comments — group replies under their thread root.
+    let review_url = format!(
+        "https://api.github.com/repos/{}/{}/pulls/{pr_number}/comments?per_page=100",
+        r.owner, r.repo
+    );
+    let arr = get(&review_url, token)?.as_array().cloned().unwrap_or_default();
+    let mut roots: Vec<Value> = Vec::new();
+    let mut replies_by_root: HashMap<u64, Vec<Value>> = HashMap::new();
+    for c in arr {
+        match c.get("in_reply_to_id").and_then(|x| x.as_u64()) {
+            Some(root_id) => replies_by_root.entry(root_id).or_default().push(c),
+            None => roots.push(c),
+        }
+    }
+    for root in &roots {
+        let root_id = root.get("id").and_then(|x| x.as_u64()).unwrap_or(0);
+        let mut comments = vec![comment_from(root)];
+        if let Some(replies) = replies_by_root.get(&root_id) {
+            let mut sorted = replies.clone();
+            sorted.sort_by_key(|c| c.get("id").and_then(|x| x.as_u64()).unwrap_or(0));
+            comments.extend(sorted.iter().map(comment_from));
+        }
+        // A null `line` (superseded by later commits) falls back to `original_line`.
+        let line = root
+            .get("line")
+            .and_then(|x| x.as_u64())
+            .or_else(|| root.get("original_line").and_then(|x| x.as_u64()))
+            .map(|x| x as u32);
+        threads.push(PrThread {
+            id: root_id.to_string(),
+            path: root.get("path").and_then(|x| x.as_str()).map(str::to_string),
+            line,
+            resolved: false,
+            can_resolve: false,
+            comments,
+        });
+    }
+    Ok(threads)
+}
+
+/// Post a top-level (non-inline) PR/issue comment.
+pub fn post_general_comment(r: &RepoRef, pr_number: u64, body: &str, token: &str) -> AppResult<()> {
+    let url = format!(
+        "https://api.github.com/repos/{}/{}/issues/{pr_number}/comments",
+        r.owner, r.repo
+    );
+    send("POST", &url, token, &json!({ "body": body }))?;
+    Ok(())
+}
+
+/// Start a new inline review-comment thread anchored to a file/line.
+pub fn post_inline_comment(
+    r: &RepoRef,
+    pr_number: u64,
+    path: &str,
+    line: u32,
+    body: &str,
+    token: &str,
+) -> AppResult<()> {
+    let sha = head_sha(r, pr_number, token)?;
+    let url = format!(
+        "https://api.github.com/repos/{}/{}/pulls/{pr_number}/comments",
+        r.owner, r.repo
+    );
+    send(
+        "POST",
+        &url,
+        token,
+        &json!({ "body": body, "commit_id": sha, "path": path, "line": line, "side": "RIGHT" }),
+    )?;
+    Ok(())
+}
+
+/// Reply to an existing inline review-comment thread (by its root comment id).
+pub fn post_reply(r: &RepoRef, pr_number: u64, comment_id: &str, body: &str, token: &str) -> AppResult<()> {
+    let url = format!(
+        "https://api.github.com/repos/{}/{}/pulls/{pr_number}/comments/{comment_id}/replies",
+        r.owner, r.repo
+    );
+    send("POST", &url, token, &json!({ "body": body }))?;
+    Ok(())
+}
+
+/// Submit a review. `event` is one of "APPROVE" | "REQUEST_CHANGES" | "COMMENT".
+pub fn submit_review(r: &RepoRef, pr_number: u64, event: &str, body: &str, token: &str) -> AppResult<()> {
+    let url = format!(
+        "https://api.github.com/repos/{}/{}/pulls/{pr_number}/reviews",
+        r.owner, r.repo
+    );
+    send("POST", &url, token, &json!({ "body": body, "event": event }))?;
+    Ok(())
+}
+

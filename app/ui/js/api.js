@@ -111,6 +111,15 @@
     listRepoPullRequests: (repoId) =>
       hasBackend ? invoke("list_repo_pull_requests", { repoId }) : Promise.resolve(null),
 
+    // --- PR review: comments, inline threads, approve/request changes ---
+    fetchPrThreads: (repoId, prId) => invoke("fetch_pr_threads", { repoId, prId }),
+    postPrComment: (repoId, prId, body, threadId, path, line) =>
+      invoke("post_pr_comment", { repoId, prId, body, threadId: threadId || null, path: path || null, line: line ?? null }),
+    resolvePrThread: (repoId, prId, threadId, resolved) =>
+      invoke("resolve_pr_thread", { repoId, prId, threadId, resolved: !!resolved }),
+    submitPrReview: (repoId, prId, reviewType, body) =>
+      invoke("submit_pr_review", { repoId, prId, reviewType, body: body || "" }),
+
     // --- Accounts (Phase 3) ---
     listAccounts: () => (hasBackend ? invoke("list_accounts") : Promise.resolve(null)),
     addAccount: (opts) => invoke("add_account", opts),

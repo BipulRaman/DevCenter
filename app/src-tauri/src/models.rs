@@ -51,6 +51,36 @@ pub struct Account {
     pub status: String,
 }
 
+/// A single comment within a pull-request discussion or inline code thread.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct PrComment {
+    pub id: String,
+    pub author: String,
+    pub body: String,
+    /// Humanized/short relative time.
+    pub created: String,
+}
+
+/// A pull-request comment thread. `path`/`line` are `None` for a general
+/// (non-inline) discussion comment; `Some` when the thread is anchored to a
+/// specific line of a specific file's diff. GitHub's general (issue) comments
+/// have no native thread id, so they're all synthesized into one thread with
+/// `id: "general"`; Azure DevOps threads (general or inline) keep their real
+/// thread id either way.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct PrThread {
+    pub id: String,
+    pub path: Option<String>,
+    pub line: Option<u32>,
+    pub resolved: bool,
+    /// Whether this repo/provider supports toggling `resolved` for this thread
+    /// (GitHub's REST API has no resolve-thread endpoint — GraphQL-only).
+    pub can_resolve: bool,
+    pub comments: Vec<PrComment>,
+}
+
 /// A pull request normalized across providers for the UI.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -59,6 +89,9 @@ pub struct PullRequest {
     pub title: String,
     /// Display name of the repository this PR belongs to.
     pub repo: String,
+    /// The repository's DevCenter id (its path) — lets the UI open the PR
+    /// Review page (or the per-repo diff) without re-resolving the repo.
+    pub repo_id: String,
     pub author: String,
     pub branch: String,
     pub base: String,

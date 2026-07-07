@@ -1186,6 +1186,62 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
+// A small, dependency-free "markdown-lite" renderer for PR comment bodies
+// (headers, bold/italic, inline code, fenced code blocks, links, images,
+// lists, blockquotes, rules). Input is HTML-escaped FIRST, so nothing it
+// produces can introduce unescaped user HTML — only the whitelisted tags
+// built below ever appear, and link/image URLs are restricted to http(s).
+function mdInline(s) {
+  return s
+    .replace(/!\[([^\]]*)\]\((https?:\/\/[^\s)]+)\)/g, (_, alt, url) => `<img class="prr-md-img" src="${url}" alt="${alt}" loading="lazy">`)
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_, text, url) => `<a href="${url}" target="_blank" rel="noopener noreferrer">${text}</a>`)
+    .replace(/`([^`]+)`/g, (_, code) => `<code>${code}</code>`)
+    .replace(/\*\*([^*]+)\*\*|__([^_]+)__/g, (_, a, b) => `<strong>${a || b}</strong>`)
+    .replace(/\*([^*]+)\*|_([^_]+)_/g, (_, a, b) => `<em>${a || b}</em>`);
+}
+function mdLite(raw) {
+  if (!raw) return "";
+  const blocks = [];
+  let s = escapeHtml(raw)
+    .replace(/\r\n/g, "\n")
+    .replace(/```[a-zA-Z0-9]*\n([\s\S]*?)```/g, (_, code) => {
+      blocks.push(`<pre class="prr-md-pre"><code>${code.replace(/\n$/, "")}</code></pre>`);
+      return `\u0000${blocks.length - 1}\u0000`;
+    });
+
+  const out = [];
+  let para = [];
+  let list = null; // { tag, items }
+  const flushPara = () => { if (para.length) { out.push(`<p>${para.join("<br>")}</p>`); para = []; } };
+  const flushList = () => {
+    if (list) { out.push(`<${list.tag}>${list.items.map((i) => `<li>${i}</li>`).join("")}</${list.tag}>`); list = null; }
+  };
+  for (const line of s.split("\n")) {
+    if (!line.trim()) { flushPara(); flushList(); continue; }
+    let m;
+    if ((m = line.match(/^(#{1,6})\s+(.*)$/))) { flushPara(); flushList(); out.push(`<h4>${mdInline(m[2])}</h4>`); continue; }
+    if (/^(-{3,}|_{3,}|\*{3,})$/.test(line.trim())) { flushPara(); flushList(); out.push("<hr>"); continue; }
+    if ((m = line.match(/^\s*[-*]\s+(.*)$/))) {
+      flushPara();
+      if (!list || list.tag !== "ul") { flushList(); list = { tag: "ul", items: [] }; }
+      list.items.push(mdInline(m[1]));
+      continue;
+    }
+    if ((m = line.match(/^\s*\d+\.\s+(.*)$/))) {
+      flushPara();
+      if (!list || list.tag !== "ol") { flushList(); list = { tag: "ol", items: [] }; }
+      list.items.push(mdInline(m[1]));
+      continue;
+    }
+    if ((m = line.match(/^&gt;\s?(.*)$/))) { flushPara(); flushList(); out.push(`<blockquote>${mdInline(m[1])}</blockquote>`); continue; }
+    flushList();
+    para.push(mdInline(line));
+  }
+  flushPara();
+  flushList();
+  return out.join("").replace(/\u0000(\d+)\u0000/g, (_, i) => blocks[Number(i)]);
+}
+
 // ---------- New branch: validation + dialog ----------
 // Validate a branch name against the (subset of) git ref-name rules that matter
 // for a UI: no spaces, no special tokens, no `..`/`//`, no leading/trailing
@@ -1829,6 +1885,7 @@ function renderPulls(filter = "") {
           <span class="pr-diff"><span class="add">+${p.additions}</span> <span class="del">−${p.deletions}</span></span>
         </div>
         <div class="pr-actions">
+          ${p.repoId ? `<button class="btn btn-primary btn-sm" data-pr-review="${p.id}" data-pr-repo="${p.repoId}">Review</button>` : ""}
           <button class="btn btn-ghost btn-sm" data-pr-url="${p.url}">${ICON.external}View</button>
         </div>
       </div>`;
@@ -1842,6 +1899,12 @@ function renderPulls(filter = "") {
       if (!url) return;
       if (DC && DC.hasBackend) DC.openUrl(url).catch((e) => console.error("openUrl failed", e));
       else window.open(url, "_blank");
+    });
+  });
+  document.querySelectorAll("#prList [data-pr-review]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const pr = pulls.find((p) => String(p.id) === btn.dataset.prReview && p.repoId === btn.dataset.prRepo);
+      if (pr && window.PrReviewer) window.PrReviewer.open(pr.repoId, pr);
     });
   });
 }
@@ -3120,6 +3183,168 @@ if (DC && DC.hasBackend) {
 // folder compaction, VS Code style) or flat LIST; tri-state folder checkboxes;
 // keyboard navigation; and a 3-pane History view (commits | commit files | diff)
 // so multi-file commits are fully navigable.
+// Generic file-tree/list renderer shared by the Changes page (staged/unstaged/
+// history/PR file lists) and the PR Review page, so every file explorer in the
+// app looks and behaves identically (collapsible folders, VS Code-style single-
+// child compaction, tree/list toggle).
+const FOLDER_ICO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>';
+const TREE_CARET = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
+// Source-control row/group action icons (stage +, unstage −, discard ↩).
+const ACT_STAGE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+const ACT_UNSTAGE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+const ACT_DISCARD = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor"><path d="M3.00098 2.5C3.00098 2.22386 3.22483 2 3.50098 2C3.77712 2 4.00098 2.22386 4.00098 2.5V6.34262L7.17202 3.17157C8.73412 1.60948 11.2668 1.60948 12.8289 3.17157C14.391 4.73367 14.391 7.26633 12.8289 8.82843L7.80375 13.8536C7.60849 14.0488 7.2919 14.0488 7.09664 13.8536C6.90138 13.6583 6.90138 13.3417 7.09664 13.1464L12.1218 8.12132C13.2933 6.94975 13.2933 5.05025 12.1218 3.87868C10.9502 2.70711 9.0507 2.70711 7.87913 3.87868L4.75781 7H8.50098C8.77712 7 9.00098 7.22386 9.00098 7.5C9.00098 7.77614 8.77712 8 8.50098 8H3.60098C3.26961 8 3.00098 7.73137 3.00098 7.4V2.5Z"/></svg>';
+
+const statBadge = (s) =>
+  ({ new: "A", untracked: "U", modified: "M", deleted: "D", renamed: "R", conflicted: "C", typechange: "T" }[s] || "M");
+
+function buildTree(list) {
+  const root = { name: "", path: "", dirs: new Map(), files: [] };
+  for (const f of list) {
+    const parts = f.path.split("/");
+    const fname = parts.pop();
+    let node = root, prefix = "";
+    for (const part of parts) {
+      prefix = prefix ? prefix + "/" + part : part;
+      let child = node.dirs.get(part);
+      if (!child) { child = { name: part, path: prefix, dirs: new Map(), files: [] }; node.dirs.set(part, child); }
+      node = child;
+    }
+    node.files.push({ ...f, name: fname });
+  }
+  return root;
+}
+function collectFiles(node) {
+  let out = node.files.slice();
+  for (const d of node.dirs.values()) out = out.concat(collectFiles(d));
+  return out;
+}
+function allDirPaths(list) {
+  const s = new Set();
+  for (const f of list) {
+    const parts = f.path.split("/"); parts.pop();
+    let p = "";
+    for (const part of parts) { p = p ? p + "/" + part : part; s.add(p); }
+  }
+  return s;
+}
+
+/**
+ * Render a file tree/list into `container`.
+ * opts: { files, collapsed, viewMode, rerender, group, onAction, onFolderAction,
+ *         activeFile, activeGroup, onSelect, fileBadge }
+ *   group: "staged" | "unstaged" | null (null = history/PR/commit, no hover actions)
+ *   onSelect(path, group): called when a file row is clicked
+ *   fileBadge(path): optional extra HTML shown before the change-stat badge
+ *     (e.g. the PR Review page's comment-thread count)
+ * Returns the ordered list of visible { path, group } entries (for keyboard nav).
+ */
+function renderFileTree(container, opts) {
+  const order = [];
+  const rows = [];
+  const group = opts.group || null;
+  const withActions = group !== null;
+  const esc = escapeHtml;
+
+  // Hover action buttons for a file/folder row, scoped to the group.
+  const actionsHtml = (scope, key) => {
+    if (!withActions) return "";
+    const attr = scope === "folder" ? "data-act-folder" : "data-act-file";
+    const btn = (act, title, icon) =>
+      `<button class="scm-act" type="button" data-act="${act}" ${attr}="${esc(key)}" title="${title}">${icon}</button>`;
+    let inner = "";
+    if (group === "unstaged") inner = btn("discard", "Discard changes", ACT_DISCARD) + btn("stage", "Stage changes", ACT_STAGE);
+    else if (group === "staged") inner = btn("unstage", "Unstage changes", ACT_UNSTAGE);
+    return `<span class="scm-actions">${inner}</span>`;
+  };
+  const badgeHtml = (path) => (opts.fileBadge ? opts.fileBadge(path) : "");
+
+  const fileRow = (f, depth) => {
+    const on = opts.activeFile === f.path && (opts.activeGroup || null) === group;
+    order.push({ path: f.path, group });
+    return `<div class="tree-row tree-file${on ? " selected" : ""}" data-file="${esc(f.path)}" data-group="${group || ""}" style="--d:${depth}" title="${esc(f.path)}">
+      <span class="tree-twisty" style="visibility:hidden">${TREE_CARET}</span>
+      <span class="tree-name">${esc(f.name)}</span>
+      ${actionsHtml("file", f.path)}
+      ${badgeHtml(f.path)}
+      <span class="change-stat ${f.status}" title="${f.status}">${statBadge(f.status)}</span>
+    </div>`;
+  };
+
+  const walk = (node, depth) => {
+    const dirs = [...node.dirs.values()].sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+    for (const dir of dirs) {
+      // Compact single-child folder chains (a/b/c) like VS Code.
+      let label = dir.name, eff = dir;
+      while (eff.files.length === 0 && eff.dirs.size === 1) {
+        const only = [...eff.dirs.values()][0];
+        label += "/" + only.name; eff = only;
+      }
+      const isCollapsed = opts.collapsed.has(eff.path);
+      const desc = collectFiles(eff);
+      rows.push(`<div class="tree-row tree-folder" data-folder-row="${esc(eff.path)}" style="--d:${depth}">
+        <span class="tree-twisty ${isCollapsed ? "collapsed" : ""}" data-twisty="${esc(eff.path)}">${TREE_CARET}</span>
+        <span class="tree-ico">${FOLDER_ICO}</span>
+        <span class="tree-name" title="${esc(eff.path)}">${esc(label)}</span>
+        ${actionsHtml("folder", eff.path)}
+        <span class="tree-count">${desc.length}</span>
+      </div>`);
+      if (!isCollapsed) walk(eff, depth + 1);
+    }
+    const fs = node.files.slice().sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+    for (const f of fs) rows.push(fileRow(f, depth));
+  };
+
+  if (opts.viewMode === "list") {
+    opts.files.slice()
+      .sort((a, b) => a.path.toLowerCase().localeCompare(b.path.toLowerCase()))
+      .forEach((f) => {
+        const i = f.path.lastIndexOf("/");
+        const dir = i < 0 ? "" : f.path.slice(0, i + 1);
+        const name = i < 0 ? f.path : f.path.slice(i + 1);
+        const on = opts.activeFile === f.path && (opts.activeGroup || null) === group;
+        order.push({ path: f.path, group });
+        rows.push(`<div class="tree-row tree-file${on ? " selected" : ""}" data-file="${esc(f.path)}" data-group="${group || ""}" title="${esc(f.path)}" style="--d:0">
+          <span class="tree-name"><span class="change-dir">${esc(dir)}</span>${esc(name)}</span>
+          ${actionsHtml("file", f.path)}
+          ${badgeHtml(f.path)}
+          <span class="change-stat ${f.status}" title="${f.status}">${statBadge(f.status)}</span>
+        </div>`);
+      });
+  } else {
+    walk(buildTree(opts.files), 0);
+  }
+
+  container.innerHTML = rows.join("") || `<div class="changes-empty">No files.</div>`;
+
+  // Listeners (direct, re-attached each render — reliable in WebView2).
+  container.querySelectorAll("[data-twisty], .tree-folder").forEach((el) => {
+    const key = el.dataset.twisty || el.dataset.folderRow;
+    if (!key) return;
+    el.addEventListener("click", (e) => {
+      if (e.target.closest(".scm-act")) return;
+      e.stopPropagation();
+      if (opts.collapsed.has(key)) opts.collapsed.delete(key); else opts.collapsed.add(key);
+      opts.rerender();
+    });
+  });
+  if (withActions) {
+    container.querySelectorAll(".scm-act").forEach((b) =>
+      b.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const act = b.dataset.act;
+        if (b.dataset.actFile != null) opts.onAction(act, b.dataset.actFile);
+        else if (b.dataset.actFolder != null) opts.onFolderAction(act, b.dataset.actFolder);
+      }));
+  }
+  container.querySelectorAll(".tree-file").forEach((row) =>
+    row.addEventListener("click", (e) => {
+      if (e.target.closest(".scm-act")) return;
+      opts.onSelect(row.dataset.file, row.dataset.group || null);
+    }));
+
+  return order;
+}
+
 const ChangesPage = (() => {
   let repoId = null;        // selected repo path (== id)
   let branch = "main";
@@ -3166,14 +3391,8 @@ const ChangesPage = (() => {
   const $ = (id) => document.getElementById(id);
   const esc = escapeHtml;
 
-  const CARET = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
   const CHEV_UP = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>';
   const CHEV_DOWN = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
-  const FOLDER_ICO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>';
-  // Source-control row/group action icons (stage +, unstage −, discard ↩).
-  const ACT_STAGE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
-  const ACT_UNSTAGE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>';
-  const ACT_DISCARD = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor"><path d="M3.00098 2.5C3.00098 2.22386 3.22483 2 3.50098 2C3.77712 2 4.00098 2.22386 4.00098 2.5V6.34262L7.17202 3.17157C8.73412 1.60948 11.2668 1.60948 12.8289 3.17157C14.391 4.73367 14.391 7.26633 12.8289 8.82843L7.80375 13.8536C7.60849 14.0488 7.2919 14.0488 7.09664 13.8536C6.90138 13.6583 6.90138 13.3417 7.09664 13.1464L12.1218 8.12132C13.2933 6.94975 13.2933 5.05025 12.1218 3.87868C10.9502 2.70711 9.0507 2.70711 7.87913 3.87868L4.75781 7H8.50098C8.77712 7 9.00098 7.22386 9.00098 7.5C9.00098 7.77614 8.77712 8 8.50098 8H3.60098C3.26961 8 3.00098 7.73137 3.00098 7.4V2.5Z"/></svg>';
   // Restore-from-stash: an up-arrow lifting out of a tray.
   const ACT_RESTORE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/><polyline points="8 8 12 4 16 8"/><line x1="12" y1="4" x2="12" y2="15"/></svg>';
   // Pull-request review state → chip styling.
@@ -3187,150 +3406,6 @@ const ChangesPage = (() => {
     if (!url) return;
     if (DC && DC.hasBackend) DC.openUrl(url).catch((e) => console.error("openUrl failed", e));
     else window.open(url, "_blank");
-  }
-
-  const statBadge = (s) =>
-    ({ new: "A", untracked: "U", modified: "M", deleted: "D", renamed: "R", conflicted: "C", typechange: "T" }[s] || "M");
-
-  // ---- tree helpers ----
-  function buildTree(list) {
-    const root = { name: "", path: "", dirs: new Map(), files: [] };
-    for (const f of list) {
-      const parts = f.path.split("/");
-      const fname = parts.pop();
-      let node = root, prefix = "";
-      for (const part of parts) {
-        prefix = prefix ? prefix + "/" + part : part;
-        let child = node.dirs.get(part);
-        if (!child) { child = { name: part, path: prefix, dirs: new Map(), files: [] }; node.dirs.set(part, child); }
-        node = child;
-      }
-      node.files.push({ ...f, name: fname });
-    }
-    return root;
-  }
-  function collectFiles(node) {
-    let out = node.files.slice();
-    for (const d of node.dirs.values()) out = out.concat(collectFiles(d));
-    return out;
-  }
-  function allDirPaths(list) {
-    const s = new Set();
-    for (const f of list) {
-      const parts = f.path.split("/"); parts.pop();
-      let p = "";
-      for (const part of parts) { p = p ? p + "/" + part : part; s.add(p); }
-    }
-    return s;
-  }
-
-  /**
-   * Render a file tree/list into `container`.
-   * opts: { files, collapsed, viewMode, rerender, group, onAction, onFolderAction }
-   *   group: "staged" | "unstaged" | null (null = history commit, no actions)
-   * Returns the ordered list of visible { path, group } entries (for keyboard nav).
-   */
-  function renderFileTree(container, opts) {
-    const order = [];
-    const rows = [];
-    const group = opts.group || null;
-    const withActions = group !== null;
-
-    // Hover action buttons for a file/folder row, scoped to the group.
-    const actionsHtml = (scope, key) => {
-      if (!withActions) return "";
-      const attr = scope === "folder" ? "data-act-folder" : "data-act-file";
-      const btn = (act, title, icon) =>
-        `<button class="scm-act" type="button" data-act="${act}" ${attr}="${esc(key)}" title="${title}">${icon}</button>`;
-      let inner = "";
-      if (group === "unstaged") inner = btn("discard", "Discard changes", ACT_DISCARD) + btn("stage", "Stage changes", ACT_STAGE);
-      else if (group === "staged") inner = btn("unstage", "Unstage changes", ACT_UNSTAGE);
-      return `<span class="scm-actions">${inner}</span>`;
-    };
-
-    const fileRow = (f, depth) => {
-      const on = activeFile === f.path && activeGroup === group;
-      order.push({ path: f.path, group });
-      return `<div class="tree-row tree-file${on ? " selected" : ""}" data-file="${esc(f.path)}" data-group="${group || ""}" style="--d:${depth}" title="${esc(f.path)}">
-        <span class="tree-twisty" style="visibility:hidden">${CARET}</span>
-        <span class="tree-name">${esc(f.name)}</span>
-        ${actionsHtml("file", f.path)}
-        <span class="change-stat ${f.status}" title="${f.status}">${statBadge(f.status)}</span>
-      </div>`;
-    };
-
-    const walk = (node, depth) => {
-      const dirs = [...node.dirs.values()].sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
-      for (const dir of dirs) {
-        // Compact single-child folder chains (a/b/c) like VS Code.
-        let label = dir.name, eff = dir;
-        while (eff.files.length === 0 && eff.dirs.size === 1) {
-          const only = [...eff.dirs.values()][0];
-          label += "/" + only.name; eff = only;
-        }
-        const isCollapsed = opts.collapsed.has(eff.path);
-        const desc = collectFiles(eff);
-        rows.push(`<div class="tree-row tree-folder" data-folder-row="${esc(eff.path)}" style="--d:${depth}">
-          <span class="tree-twisty ${isCollapsed ? "collapsed" : ""}" data-twisty="${esc(eff.path)}">${CARET}</span>
-          <span class="tree-ico">${FOLDER_ICO}</span>
-          <span class="tree-name" title="${esc(eff.path)}">${esc(label)}</span>
-          ${actionsHtml("folder", eff.path)}
-          <span class="tree-count">${desc.length}</span>
-        </div>`);
-        if (!isCollapsed) walk(eff, depth + 1);
-      }
-      const fs = node.files.slice().sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
-      for (const f of fs) rows.push(fileRow(f, depth));
-    };
-
-    if (opts.viewMode === "list") {
-      opts.files.slice()
-        .sort((a, b) => a.path.toLowerCase().localeCompare(b.path.toLowerCase()))
-        .forEach((f) => {
-          const i = f.path.lastIndexOf("/");
-          const dir = i < 0 ? "" : f.path.slice(0, i + 1);
-          const name = i < 0 ? f.path : f.path.slice(i + 1);
-          const on = activeFile === f.path && activeGroup === group;
-          order.push({ path: f.path, group });
-          rows.push(`<div class="tree-row tree-file${on ? " selected" : ""}" data-file="${esc(f.path)}" data-group="${group || ""}" title="${esc(f.path)}" style="--d:0">
-            <span class="tree-name"><span class="change-dir">${esc(dir)}</span>${esc(name)}</span>
-            ${actionsHtml("file", f.path)}
-            <span class="change-stat ${f.status}" title="${f.status}">${statBadge(f.status)}</span>
-          </div>`);
-        });
-    } else {
-      walk(buildTree(opts.files), 0);
-    }
-
-    container.innerHTML = rows.join("") || `<div class="changes-empty">No files.</div>`;
-
-    // Listeners (direct, re-attached each render — reliable in WebView2).
-    container.querySelectorAll("[data-twisty], .tree-folder").forEach((el) => {
-      const key = el.dataset.twisty || el.dataset.folderRow;
-      if (!key) return;
-      el.addEventListener("click", (e) => {
-        if (e.target.closest(".scm-act")) return;
-        e.stopPropagation();
-        if (opts.collapsed.has(key)) opts.collapsed.delete(key); else opts.collapsed.add(key);
-        opts.rerender();
-      });
-    });
-    if (withActions) {
-      container.querySelectorAll(".scm-act").forEach((b) =>
-        b.addEventListener("click", (e) => {
-          e.stopPropagation();
-          const act = b.dataset.act;
-          if (b.dataset.actFile != null) opts.onAction(act, b.dataset.actFile);
-          else if (b.dataset.actFolder != null) opts.onFolderAction(act, b.dataset.actFolder);
-        }));
-    }
-    container.querySelectorAll(".tree-file").forEach((row) =>
-      row.addEventListener("click", (e) => {
-        if (e.target.closest(".scm-act")) return;
-        selectFile(row.dataset.file, row.dataset.group || null);
-      }));
-
-    return order;
   }
 
   // ---- repo picker ----
@@ -3606,6 +3681,9 @@ const ChangesPage = (() => {
         collapsed: groupKey === "staged" ? collapsedStaged : collapsedChanges,
         viewMode: changesView,
         group: groupKey,
+        activeFile,
+        activeGroup,
+        onSelect: selectFile,
         rerender: renderChanges,
         onAction: (act, path) => fileAction(act, path, groupKey),
         onFolderAction: (act, dirPath) => folderAction(act, dirPath, groupKey),
@@ -4661,7 +4739,8 @@ const ChangesPage = (() => {
       navOrder = []; return;
     }
     navOrder = renderFileTree($("detailFiles"), {
-      files: commitFiles, collapsed: collapsedDetail, viewMode: detailView, group: null, rerender: renderDetail,
+      files: commitFiles, collapsed: collapsedDetail, viewMode: detailView, group: null,
+      activeFile, activeGroup, onSelect: selectFile, rerender: renderDetail,
     });
   }
 
@@ -4896,9 +4975,11 @@ const ChangesPage = (() => {
     $("detailHead").innerHTML = `<div class="detail-msg">${esc(pr.title)}</div>
       <div class="detail-meta"><span class="avatar">${esc(initials)}</span><span class="detail-author" title="${esc(pr.author)}">${esc(pr.author)}</span><span class="hm-dot">·</span><span class="history-when">${esc(pr.updated)}</span><span class="pr-state ${esc(pr.status)}">${prStateLabel(pr.status)}</span></div>
       <div class="pr-detail-branch"><code title="${esc(pr.branch)}">${esc(pr.branch)}</code><span class="pr-arrow">→</span><code title="${esc(pr.base)}">${esc(pr.base)}</code></div>
-      <div class="pr-detail-stats"><span class="chip review ${rev.cls}">${rev.icon}${rev.label}</span><span class="chip">${ICON.comment}${pr.comments}</span><span class="pr-diff"><span class="add">+${pr.additions}</span> <span class="del">−${pr.deletions}</span></span><button class="btn btn-ghost btn-sm" id="prViewBtn">${ICON.external}View</button></div>`;
+      <div class="pr-detail-stats"><span class="chip review ${rev.cls}">${rev.icon}${rev.label}</span><span class="chip">${ICON.comment}${pr.comments}</span><span class="pr-diff"><span class="add">+${pr.additions}</span> <span class="del">−${pr.deletions}</span></span><button class="btn btn-primary btn-sm" id="prReviewBtn">Review</button><button class="btn btn-ghost btn-sm" id="prViewBtn">${ICON.external}View</button></div>`;
     const vb = $("prViewBtn");
     if (vb) vb.addEventListener("click", () => openPrUrl(pr.url));
+    const rb = $("prReviewBtn");
+    if (rb) rb.addEventListener("click", () => { if (window.PrReviewer) window.PrReviewer.open(repoId, pr); });
     $("detailFiles").innerHTML = `<div class="changes-empty">Loading…</div>`;
     $("detailCollapseBtn").hidden = true;
     showDiffEmpty("Loading pull request…");
@@ -5302,6 +5383,389 @@ const ConflictResolver = (() => {
   return { open };
 })();
 window.ConflictResolver = ConflictResolver;
+
+// ============================================================================
+// PR Review page — full-screen file list + diff (with inline comment threads)
+// + a Conversation tab (general discussion), plus Approve/Request changes/
+// Comment review submission. Opened from the Pull Requests tab's "Review"
+// button. Mirrors ConflictResolver's module shape (own `.page`, own `open()`).
+// ============================================================================
+const PrReviewer = (() => {
+  const $ = (id) => document.getElementById(id);
+  const esc = escapeHtml;
+
+  let repoId = null;
+  let pr = null;           // the PullRequest object passed in from the PR tab
+  let files = [];          // FileChange[] for the PR's base...head diff
+  let threads = [];        // PrThread[] — general + inline, refreshed after any mutation
+  let activeFile = null;
+  let activeTab = "files"; // "files" | "conversation"
+  let collapsed = new Set(); // collapsed folders in the file tree
+  let busy = false;
+
+  function threadsFor(path) {
+    return threads.filter((t) => t.path === path);
+  }
+  function generalThreads() {
+    return threads.filter((t) => t.path == null);
+  }
+
+  async function open(id, pullRequest) {
+    repoId = id;
+    pr = pullRequest;
+    files = []; threads = []; activeFile = null; activeTab = "files"; collapsed = new Set();
+    document.querySelectorAll(".page").forEach((p) => p.classList.toggle("active", p.id === "page-pr-review"));
+    document.querySelectorAll(".prr-tab").forEach((t) => t.classList.toggle("active", t.dataset.prrtab === "files"));
+    $("prrLayout").dataset.tab = "files";
+    $("prrFilesView").hidden = false;
+    $("prrConversationView").hidden = true;
+    renderHeader();
+    $("prrFiles").innerHTML = `<div class="changes-empty">Loading…</div>`;
+    showDiffEmpty("Loading…");
+    await Promise.all([loadFiles(), loadThreads()]);
+    if (files.length) selectFile(files[0].path);
+    else showDiffEmpty("This pull request has no file changes.");
+  }
+
+  function renderHeader() {
+    $("prrTitle").textContent = pr.title || `Pull request #${pr.id}`;
+    $("prrMeta").innerHTML = `${esc(pr.repo || "")} #${esc(String(pr.id))} · by ${esc(pr.author || "")} · <code>${esc(pr.branch)}</code> → <code>${esc(pr.base)}</code>`;
+  }
+
+  async function loadFiles() {
+    try {
+      const cs = await DC.prChanges(repoId, pr.base, pr.branch);
+      files = cs.files || [];
+    } catch (e) {
+      console.error("prChanges failed", e);
+      files = [];
+    }
+    renderFileList();
+  }
+
+  async function loadThreads() {
+    try {
+      threads = await DC.fetchPrThreads(repoId, pr.id);
+    } catch (e) {
+      console.error("fetchPrThreads failed", e);
+      threads = [];
+    }
+    renderFileList();
+    if (activeTab === "conversation") renderConversation();
+    else if (activeFile) renderCurrentDiff();
+  }
+
+  // Same tree/list file explorer as the Changes page (renderFileTree, global).
+  function renderFileList() {
+    const list = $("prrFiles");
+    if (!files.length) {
+      list.innerHTML = `<div class="changes-empty">No file changes.</div>`;
+      return;
+    }
+    renderFileTree(list, {
+      files,
+      collapsed,
+      viewMode: "tree",
+      group: null,
+      activeFile,
+      activeGroup: null,
+      onSelect: (path) => selectFile(path),
+      rerender: renderFileList,
+      fileBadge: (path) => {
+        const n = threadsFor(path).length;
+        return n ? `<span class="prr-thread-badge">${n}</span>` : "";
+      },
+    });
+  }
+
+  function showDiffEmpty(msg) {
+    $("prrDiffEmpty").textContent = msg;
+    $("prrDiffEmpty").hidden = false;
+    $("prrDiffContent").hidden = true;
+  }
+
+  async function selectFile(path) {
+    activeFile = path;
+    // Switch to the Files view directly (without going through switchTab,
+    // which would call back into selectFile via renderCurrentDiff).
+    if (activeTab !== "files") {
+      activeTab = "files";
+      document.querySelectorAll(".prr-tab").forEach((t) => t.classList.toggle("active", t.dataset.prrtab === "files"));
+      $("prrLayout").dataset.tab = "files";
+      $("prrFilesView").hidden = false;
+      $("prrConversationView").hidden = true;
+    }
+    renderFileList();
+    showDiffEmpty("Loading diff…");
+    try {
+      const d = await DC.prFileDiff(repoId, pr.base, pr.branch, path);
+      if (activeFile !== path) return; // a newer selection won
+      renderDiff(d);
+    } catch (e) {
+      if (activeFile !== path) return;
+      showDiffEmpty(String(e));
+    }
+  }
+
+  function renderCurrentDiff() {
+    if (!activeFile) return;
+    selectFile(activeFile);
+  }
+
+  function lang(path) { return (window.Highlighter && Highlighter.langForPath(path)) || ""; }
+  function hl(s, path) { return window.Highlighter ? Highlighter.line(s, lang(path)) : esc(s); }
+
+  function diffHeadHtml(d) {
+    return `<span class="diff-path" title="${esc(d.path)}">${esc(d.path)}</span><span class="diff-adds">+${d.additions}</span><span class="diff-dels">−${d.deletions}</span>`;
+  }
+
+  function renderDiff(d) {
+    $("prrDiffEmpty").hidden = true;
+    $("prrDiffContent").hidden = false;
+    $("prrDiffHead").innerHTML = diffHeadHtml(d);
+    const bodyEl = $("prrDiffBody");
+    if (d.oldImage || d.newImage) {
+      bodyEl.innerHTML = `<div class="diff-binary">Image file — open the Changes page to preview it.</div>`;
+      return;
+    }
+    if (d.binary) {
+      bodyEl.innerHTML = `<div class="diff-binary">Binary file — no text diff to display.</div>`;
+      return;
+    }
+    if (!d.hunks.length) {
+      bodyEl.innerHTML = `<div class="diff-binary">No textual changes to display.</div>`;
+      return;
+    }
+    const rows = [];
+    d.hunks.forEach((h) => {
+      rows.push(`<div class="diff-hunk-head">${esc(h.header)}</div>`);
+      h.lines.forEach((l) => {
+        const cls = l.kind === "add" ? "add" : l.kind === "del" ? "del" : "";
+        const oldN = l.oldLineno != null ? l.oldLineno : "";
+        const newN = l.newLineno != null ? l.newLineno : "";
+        const body = l.content ? hl(l.content, d.path) : "&nbsp;";
+        const canComment = l.newLineno != null;
+        rows.push(
+          `<div class="diff-line ${cls}"${canComment ? ` data-line="${l.newLineno}"` : ""}>` +
+            `<span class="diff-gutter"><span>${oldN}</span><span>${newN}</span>${canComment ? `<button class="prr-line-add" type="button" data-add-line="${l.newLineno}" title="Add a comment on this line">+</button>` : ""}</span>` +
+            `<span class="diff-text">${body}</span></div>`
+        );
+      });
+    });
+    bodyEl.innerHTML = `<div class="diff-code" id="prrDiffCode">${rows.join("")}</div>`;
+
+    // Second pass: inject existing threads + wire the "+" composer trigger.
+    const code = $("prrDiffCode");
+    threadsFor(d.path).forEach((t) => {
+      if (t.line == null) return;
+      const lineEl = code.querySelector(`.diff-line[data-line="${t.line}"]`);
+      if (lineEl) lineEl.insertAdjacentHTML("afterend", threadHtml(t));
+    });
+    wireThreadActions(code);
+    code.querySelectorAll(".prr-line-add").forEach((btn) =>
+      btn.addEventListener("click", () => openNewThreadComposer(code, d.path, Number(btn.dataset.addLine))));
+  }
+
+  function commentHtml(c) {
+    const initials = (c.author || "?").slice(0, 2).toUpperCase();
+    return `<div class="prr-comment">
+      <div class="prr-comment-meta"><span class="avatar">${esc(initials)}</span><span class="prr-comment-author">${esc(c.author)}</span><span>${esc(c.created)}</span></div>
+      <div class="prr-comment-body">${mdLite(c.body)}</div>
+    </div>`;
+  }
+
+  function threadHtml(t) {
+    const resolveBtn = t.canResolve
+      ? `<button class="btn btn-ghost btn-sm" data-resolve-thread="${esc(t.id)}" data-resolved="${t.resolved ? "0" : "1"}">${t.resolved ? "Reopen" : "Resolve"}</button>`
+      : "";
+    return `<div class="prr-thread${t.resolved ? " resolved" : ""}" data-thread-id="${esc(t.id)}">
+      <div class="prr-thread-head">
+        <span class="prr-thread-path">${t.path ? esc(t.path) + (t.line != null ? ":" + t.line : "") : "General discussion"}</span>
+        ${resolveBtn}
+      </div>
+      ${t.comments.map(commentHtml).join("")}
+      <div class="prr-composer">
+        <textarea placeholder="Reply…" data-reply-for="${esc(t.id)}"></textarea>
+        <div class="prr-composer-actions"><button class="btn btn-primary btn-sm" data-reply-submit="${esc(t.id)}">Reply</button></div>
+      </div>
+    </div>`;
+  }
+
+  function wireThreadActions(scope) {
+    scope.querySelectorAll("[data-resolve-thread]").forEach((btn) =>
+      btn.addEventListener("click", () => resolveThread(btn.dataset.resolveThread, btn.dataset.resolved === "1")));
+    scope.querySelectorAll("[data-reply-submit]").forEach((btn) =>
+      btn.addEventListener("click", () => {
+        const id = btn.dataset.replySubmit;
+        const ta = scope.querySelector(`textarea[data-reply-for="${CSS.escape(id)}"]`);
+        const body = (ta.value || "").trim();
+        if (!body) return;
+        postComment({ body, threadId: id });
+      }));
+  }
+
+  function openNewThreadComposer(code, path, line) {
+    const existing = code.querySelector(`.prr-new-composer[data-line="${line}"]`);
+    if (existing) { existing.querySelector("textarea").focus(); return; }
+    const lineEl = code.querySelector(`.diff-line[data-line="${line}"]`);
+    if (!lineEl) return;
+    // Insert after the line (and after any existing thread already anchored there).
+    let after = lineEl;
+    let next = after.nextElementSibling;
+    while (next && next.classList.contains("prr-thread")) { after = next; next = after.nextElementSibling; }
+    after.insertAdjacentHTML(
+      "afterend",
+      `<div class="prr-thread prr-new-composer" data-line="${line}">
+        <div class="prr-composer">
+          <textarea placeholder="Add a comment…" autofocus></textarea>
+          <div class="prr-composer-actions">
+            <button class="btn btn-ghost btn-sm" data-cancel-new>Cancel</button>
+            <button class="btn btn-primary btn-sm" data-submit-new>Comment</button>
+          </div>
+        </div>
+      </div>`
+    );
+    const box = code.querySelector(`.prr-new-composer[data-line="${line}"]`);
+    const ta = box.querySelector("textarea");
+    ta.focus();
+    box.querySelector("[data-cancel-new]").addEventListener("click", () => box.remove());
+    box.querySelector("[data-submit-new]").addEventListener("click", () => {
+      const body = (ta.value || "").trim();
+      if (!body) return;
+      postComment({ body, path, line });
+    });
+  }
+
+  // Unified comment submit — reply (threadId set), new inline thread (path+line
+  // set), or new general comment (neither set, used by the Conversation tab).
+  async function postComment({ body, threadId, path, line }) {
+    if (busy) return;
+    busy = true;
+    try {
+      threads = await DC.postPrComment(repoId, pr.id, body, threadId || null, path || null, line ?? null);
+      renderFileList();
+      if (activeTab === "conversation") renderConversation();
+      else if (activeFile) renderCurrentDiff();
+    } catch (e) {
+      console.error("postPrComment failed", e);
+      await Modal.alert({ title: "Couldn't post comment", message: String(e) });
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function resolveThread(threadId, resolved) {
+    if (busy) return;
+    busy = true;
+    try {
+      threads = await DC.resolvePrThread(repoId, pr.id, threadId, resolved);
+      renderFileList();
+      if (activeTab === "conversation") renderConversation();
+      else if (activeFile) renderCurrentDiff();
+    } catch (e) {
+      console.error("resolvePrThread failed", e);
+      await Modal.alert({ title: "Couldn't update thread", message: String(e) });
+    } finally {
+      busy = false;
+    }
+  }
+
+  function renderConversation() {
+    const gen = generalThreads();
+    const composer = `<div class="prr-thread-general">
+      <div class="prr-composer">
+        <textarea placeholder="Write a comment…" id="prrGeneralInput"></textarea>
+        <div class="prr-composer-actions"><button class="btn btn-primary btn-sm" id="prrGeneralSubmit">Comment</button></div>
+      </div>
+    </div>`;
+    const body = gen.length
+      ? gen.map((t) => `<div class="prr-thread-general">${t.comments.map(commentHtml).join("")}</div>`).join("")
+      : `<div class="changes-empty">No comments yet — start the discussion below.</div>`;
+    $("prrConversationView").innerHTML = `<div class="prr-conversation">${body}${composer}</div>`;
+    $("prrGeneralSubmit").addEventListener("click", () => {
+      const ta = $("prrGeneralInput");
+      const val = (ta.value || "").trim();
+      if (!val) return;
+      postComment({ body: val }).then(() => { if ($("prrGeneralInput")) $("prrGeneralInput").value = ""; });
+    });
+  }
+
+  function switchTab(tab) {
+    activeTab = tab;
+    document.querySelectorAll(".prr-tab").forEach((t) => t.classList.toggle("active", t.dataset.prrtab === tab));
+    $("prrLayout").dataset.tab = tab;
+    $("prrFilesView").hidden = tab !== "files";
+    $("prrConversationView").hidden = tab !== "conversation";
+    if (tab === "conversation") renderConversation();
+    else if (activeFile) renderCurrentDiff();
+    else showDiffEmpty("This pull request has no file changes.");
+  }
+
+  async function openReviewDialog(type) {
+    if (busy) return;
+    const titles = { approve: "Approve pull request", changes: "Request changes", comment: "Add a review comment" };
+    const confirmLabels = { approve: "Approve", changes: "Request changes", comment: "Submit" };
+    const requireBody = type === "comment";
+    const res = await openFieldsDialogArea({
+      title: titles[type],
+      label: requireBody ? "Comment (required)" : "Summary comment (optional)",
+      confirmText: confirmLabels[type],
+      danger: type === "changes",
+      required: requireBody,
+    });
+    if (res === null) return;
+    busy = true;
+    try {
+      threads = await DC.submitPrReview(repoId, pr.id, type, res);
+      renderFileList();
+      if (activeTab === "conversation") renderConversation();
+      await Modal.alert({ title: "Review submitted", message: titles[type] + " — done." });
+    } catch (e) {
+      console.error("submitPrReview failed", e);
+      await Modal.alert({ title: "Couldn't submit review", message: String(e) });
+    } finally {
+      busy = false;
+    }
+  }
+
+  // A single-textarea confirm dialog (Modal.custom has no built-in textarea
+  // prompt). Resolves to the trimmed text, or null if cancelled.
+  function openFieldsDialogArea({ title, label, confirmText, danger, required }) {
+    return Modal.custom({
+      title,
+      render: (body, foot, close, mkBtn) => {
+        body.innerHTML = `
+          <div class="form-row">
+            <label class="form-label" for="prrReviewBody">${esc(label)}</label>
+            <textarea class="modal-input" id="prrReviewBody" rows="4" spellcheck="true"></textarea>
+          </div>
+          <div class="modal-error" id="prrReviewErr"></div>`;
+        const ta = body.querySelector("#prrReviewBody");
+        const errEl = body.querySelector("#prrReviewErr");
+        const cancel = mkBtn("btn-ghost", "Cancel");
+        cancel.addEventListener("click", () => close(null));
+        const ok = mkBtn(danger ? "btn-danger" : "btn-primary", confirmText);
+        ok.addEventListener("click", () => {
+          const val = (ta.value || "").trim();
+          if (required && !val) { errEl.textContent = "Enter a comment."; return; }
+          close(val);
+        });
+        foot.append(cancel, ok);
+        setTimeout(() => ta.focus(), 40);
+      },
+    });
+  }
+
+  document.querySelectorAll(".prr-tab").forEach((t) => t.addEventListener("click", () => switchTab(t.dataset.prrtab)));
+  $("prrBackBtn") && $("prrBackBtn").addEventListener("click", () => showPage("changes"));
+  $("prrOpenBtn") && $("prrOpenBtn").addEventListener("click", () => { if (pr && pr.url) DC.openUrl(pr.url); });
+  $("prrApproveBtn") && $("prrApproveBtn").addEventListener("click", () => openReviewDialog("approve"));
+  $("prrChangesBtn") && $("prrChangesBtn").addEventListener("click", () => openReviewDialog("changes"));
+  $("prrCommentReviewBtn") && $("prrCommentReviewBtn").addEventListener("click", () => openReviewDialog("comment"));
+
+  return { open };
+})();
+window.PrReviewer = PrReviewer;
 
 // Restore the last-viewed page across reloads (right-click → Reload keeps you here).
 try {

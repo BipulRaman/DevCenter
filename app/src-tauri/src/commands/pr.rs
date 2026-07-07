@@ -4,7 +4,7 @@ use std::path::Path;
 use tauri::State;
 
 use crate::error::{AppError, AppResult};
-use crate::models::{Account, PullRequest, Repo};
+use crate::models::{Account, PrThread, PullRequest, Repo};
 use crate::state::AppState;
 use crate::{git, pr, store};
 
@@ -144,10 +144,132 @@ fn fetch_repo_prs(
             Some(t) => t,
             None => continue,
         };
-        match pr::fetch_for_repo(&rref, &token, &repo.name) {
+        match pr::fetch_for_repo(&rref, &token, &repo.name, &repo.id) {
             Ok(prs) => return (prs, None),
             Err(e) => last_err = Some(format!("{}: {}", repo.name, e)),
         }
     }
     (Vec::new(), last_err)
 }
+
+// ===================== PR review: comments + threads =====================
+
+/// Resolve a repo (by path id) to its provider ref + a working account/token,
+/// trying every candidate account until one succeeds.
+fn resolve_repo_account(
+    repo_id: &str,
+    all_accounts: &[Account],
+) -> AppResult<(pr::RepoRef, String)> {
+    let repo = git::repo_info(Path::new(repo_id), false, Vec::new())?;
+    let rref = pr::RepoRef::parse(&repo.remote, &repo.provider)
+        .ok_or_else(|| AppError::msg("Couldn't determine the provider repository from its remote."))?;
+    let candidates: Vec<Account> = match rref.provider.as_str() {
+        "github" => all_accounts.iter().filter(|a| a.provider == "github").cloned().collect(),
+        "azure" => {
+            let aid = rref.azure_account_id();
+            all_accounts.iter().filter(|a| a.id == aid).cloned().collect()
+        }
+        _ => Vec::new(),
+    };
+    if candidates.is_empty() {
+        return Err(AppError::msg(
+            "No connected account for this repository's provider. Add one in Accounts.",
+        ));
+    }
+    let mut last_err: Option<String> = None;
+    for account in &candidates {
+        match pr::resolve_token(account) {
+            Ok(token) => return Ok((rref, token)),
+            Err(e) => last_err = Some(e.to_string()),
+        }
+    }
+    Err(AppError::msg(last_err.unwrap_or_else(|| "Couldn't resolve a token for this account.".to_string())))
+}
+
+fn accounts(state: &AppState) -> AppResult<Vec<Account>> {
+    let conn = state.db.lock().unwrap();
+    store::list_accounts(&conn)
+}
+
+/// All comment threads (general discussion + inline code review) for a PR.
+#[tauri::command]
+pub async fn fetch_pr_threads(
+    repo_id: String,
+    pr_id: u64,
+    state: State<'_, AppState>,
+) -> AppResult<Vec<PrThread>> {
+    let st = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || -> AppResult<Vec<PrThread>> {
+        let all_accounts = accounts(&st)?;
+        let (rref, token) = resolve_repo_account(&repo_id, &all_accounts)?;
+        pr::fetch_threads(&rref, pr_id, &token)
+    })
+    .await
+    .map_err(|e| AppError::msg(e.to_string()))?
+}
+
+/// Post a comment — a reply to `thread_id` if given, else a new thread
+/// (inline when `path`/`line` are given, general otherwise). Returns the
+/// refreshed thread list.
+#[tauri::command]
+pub async fn post_pr_comment(
+    repo_id: String,
+    pr_id: u64,
+    body: String,
+    thread_id: Option<String>,
+    path: Option<String>,
+    line: Option<u32>,
+    state: State<'_, AppState>,
+) -> AppResult<Vec<PrThread>> {
+    let st = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || -> AppResult<Vec<PrThread>> {
+        let all_accounts = accounts(&st)?;
+        let (rref, token) = resolve_repo_account(&repo_id, &all_accounts)?;
+        pr::post_comment(&rref, pr_id, thread_id.as_deref(), path.as_deref(), line, &body, &token)?;
+        pr::fetch_threads(&rref, pr_id, &token)
+    })
+    .await
+    .map_err(|e| AppError::msg(e.to_string()))?
+}
+
+/// Resolve/reopen a thread. Returns the refreshed thread list.
+#[tauri::command]
+pub async fn resolve_pr_thread(
+    repo_id: String,
+    pr_id: u64,
+    thread_id: String,
+    resolved: bool,
+    state: State<'_, AppState>,
+) -> AppResult<Vec<PrThread>> {
+    let st = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || -> AppResult<Vec<PrThread>> {
+        let all_accounts = accounts(&st)?;
+        let (rref, token) = resolve_repo_account(&repo_id, &all_accounts)?;
+        pr::resolve_thread(&rref, pr_id, &thread_id, resolved, &token)?;
+        pr::fetch_threads(&rref, pr_id, &token)
+    })
+    .await
+    .map_err(|e| AppError::msg(e.to_string()))?
+}
+
+/// Submit a review (`review_type` = "approve" | "changes" | "comment").
+/// Returns the refreshed thread list.
+#[tauri::command]
+pub async fn submit_pr_review(
+    repo_id: String,
+    pr_id: u64,
+    review_type: String,
+    body: String,
+    state: State<'_, AppState>,
+) -> AppResult<Vec<PrThread>> {
+    let st = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || -> AppResult<Vec<PrThread>> {
+        let all_accounts = accounts(&st)?;
+        let (rref, token) = resolve_repo_account(&repo_id, &all_accounts)?;
+        pr::submit_review(&rref, pr_id, &review_type, &body, &token)?;
+        pr::fetch_threads(&rref, pr_id, &token)
+    })
+    .await
+    .map_err(|e| AppError::msg(e.to_string()))?
+}
+
