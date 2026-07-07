@@ -3448,9 +3448,20 @@ const ChangesPage = (() => {
     const repoIco = $("chgRepoIcon");
     if (repoIco) repoIco.innerHTML = providerIcon(r.provider);
     $("chgBranchLabel").textContent = branch;
-    activeSha = null; activeFile = null; activeGroup = null; navOrder = [];
-    staged = []; unstaged = []; history = []; commitFiles = [];
+    // Fully reset every piece of state carried over from the previous repo —
+    // otherwise a leftover value (stashes, sync counts, collapse state, …)
+    // can flash/act stale until the new repo's data finishes loading.
+    activeSha = null; activeFile = null; activeGroup = null; activePull = null; navOrder = [];
+    staged = []; unstaged = []; stashes = []; history = []; commitFiles = [];
+    collapsedChanges = new Set(); collapsedStaged = new Set(); collapsedGroups = new Set(); collapsedDetail = new Set();
     repoPulls = []; pullsLoaded = false; prFetch = null;
+    syncAhead = 0; syncBehind = 0; syncHasUpstream = false;
+    renderSync({ ahead: 0, behind: 0, hasUpstream: false });
+    // Clear all three list panes immediately, regardless of which tab is
+    // active, so switching tabs mid-load can never reveal the old repo's data.
+    $("changesList").innerHTML = `<div class="changes-empty">Loading…</div>`;
+    $("historyList").innerHTML = `<div class="changes-empty">Loading…</div>`;
+    $("repoPrList").innerHTML = `<div class="changes-empty">Loading…</div>`;
     showDiffEmpty("Select a file to view its diff.");
     if (tab === "history") loadHistory();
     else if (tab === "pulls") loadRepoPulls();
@@ -3657,7 +3668,7 @@ const ChangesPage = (() => {
       const head = document.createElement("div");
       head.className = "scm-group-head";
       head.innerHTML =
-        `<span class="tree-twisty${isCollapsed ? " collapsed" : ""}">${CARET}</span>` +
+        `<span class="tree-twisty${isCollapsed ? " collapsed" : ""}">${TREE_CARET}</span>` +
         `<span class="scm-group-title">${title}</span>` +
         `<span class="scm-group-actions">${bulkActions}</span>` +
         `<span class="scm-group-count">${fileList.length}</span>`;
@@ -3720,7 +3731,7 @@ const ChangesPage = (() => {
     const head = document.createElement("div");
     head.className = "scm-group-head";
     head.innerHTML =
-      `<span class="tree-twisty${isCollapsed ? " collapsed" : ""}">${CARET}</span>` +
+      `<span class="tree-twisty${isCollapsed ? " collapsed" : ""}">${TREE_CARET}</span>` +
       `<span class="scm-group-title">Stashes</span>` +
       `<span class="scm-group-count">${stashes.length}</span>`;
     section.appendChild(head);
