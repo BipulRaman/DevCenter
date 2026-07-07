@@ -652,6 +652,12 @@ button.chip { font-family: var(--mono); font-size: 11px; font-weight: 500; }
 .menu-item:disabled:hover { background: transparent; }
 .menu-sep { height: 0; flex-shrink: 0; margin: 5px 8px; border-top: 1px dashed color-mix(in srgb, var(--border) 45%, var(--text-faint)); }
 
+/* nested flyout menu (Git actions "gear" menu + category submenus) */
+.menu-item .menu-label { flex: 1; min-width: 0; }
+.menu-item.has-submenu .menu-arrow { display: inline-grid; place-items: center; width: 14px; height: 14px; flex-shrink: 0; color: var(--text-faint); }
+.menu-item.has-submenu .menu-arrow svg { width: 14px; height: 14px; }
+.flyout-level { z-index: 95; }
+
 .repo-actions { display: flex; gap: 8px; }
 .repo-act {
   width: 34px; height: 34px; padding: 0; display: grid; place-items: center;
@@ -1141,7 +1147,17 @@ select.modal-input { cursor: pointer; appearance: none; background-image: url("d
 .modal-msg { font-size: 13.5px; color: var(--text-dim); line-height: 1.55; word-break: break-word; }
 .modal-error { margin-top: 9px; min-height: 16px; font-size: 12.5px; color: var(--red); }
 
+/* raw text output (Show Git Output / View Stash) — always a fixed dark
+   terminal-style box, independent of the light/dark app theme (--code-bg
+   flips to white in light theme, which would wash out the light-gray text). */
+.git-output-pre {
+  max-height: 55vh; overflow: auto; margin: 0;
+  padding: 12px 14px; background: #1e1e1e; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  color: #d4d4d4; font-family: var(--mono); font-size: 12px; line-height: 1.6; white-space: pre-wrap; word-break: break-word;
+}
+
 .modal-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 18px 20px 20px; }
+.modal-foot[hidden] { display: none; }
 
 /* About dialog (Settings -> About) */
 .modal-title .about-head { display: flex; align-items: center; gap: 13px; }
@@ -1443,34 +1459,27 @@ body.col-resizing * { cursor: col-resize !important; }
 .commit-branch-btn[aria-expanded="true"] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .commit-branch-btn[aria-expanded="true"] .caret { transform: rotate(180deg); }
 
-/* sync bar (Pull / Push / Fetch) at the top of the commit box */
-.sync-bar { display: flex; gap: 6px; container-type: inline-size; }
-.sync-btn {
-  flex: 1; min-width: 0; overflow: hidden; display: inline-flex; align-items: center; justify-content: center; gap: 4px;
-  height: 32px; padding: 0 6px;
-  background: var(--bg-elev-2); border: 1px solid var(--border); border-radius: 0;
-  color: var(--text); font-family: inherit; font-size: 12.5px; font-weight: 500; cursor: pointer;
-  transition: background .14s, border-color .14s, color .14s, opacity .14s;
+/* branch dropdown button + "gear" git-actions menu, side by side */
+.branch-row { display: flex; align-items: stretch; gap: 6px; }
+.branch-row .commit-branch-btn { flex: 1; min-width: 0; width: auto; }
+.git-menu-btn {
+  position: relative; flex-shrink: 0;
+  width: 34px; height: 34px; padding: 0; display: grid; place-items: center;
+  background: var(--bg-elev-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  color: var(--text-dim); cursor: pointer;
+  transition: background .14s, border-color .14s, color .14s, box-shadow .14s;
 }
-.sync-btn:hover:not(:disabled) { background: var(--bg-hover); border-color: color-mix(in srgb, var(--text-faint) 45%, var(--border)); }
-.sync-btn:disabled { opacity: .45; cursor: not-allowed; }
-#fetchSyncBtn { flex: 1; color: var(--text); padding: 0 6px; }
-.sync-btn svg { opacity: .9; }
-.sync-btn.busy svg { animation: spin .8s linear infinite; }
+.git-menu-btn:hover:not(:disabled) { background: var(--bg-hover); color: var(--text); border-color: color-mix(in srgb, var(--text-faint) 45%, var(--border)); }
+.git-menu-btn svg { width: 17px; height: 17px; }
+.git-menu-btn.busy svg { animation: spin .8s linear infinite; }
+.git-menu-btn.dropdown-open { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); color: var(--text); }
+.git-menu-btn .sync-count { position: absolute; top: -5px; right: -5px; }
 .sync-count {
   display: inline-grid; place-items: center; min-width: 15px; height: 16px; padding: 0 3px;
   border-radius: 8px; background: var(--accent); color: #fff;
   font-size: 10.5px; font-weight: 600; font-variant-numeric: tabular-nums;
 }
-.sync-btn#pullBtn .sync-count { background: var(--amber); }
-.sync-btn.primed { border-color: color-mix(in srgb, var(--accent) 50%, var(--border)); color: var(--accent-hover); }
-.sync-btn#pullBtn.primed { border-color: color-mix(in srgb, var(--amber) 50%, var(--border)); color: var(--amber); }
-.sync-btn > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* Narrow commit panel: collapse Pull/Push/Fetch to icon-only buttons */
-@container (max-width: 268px) {
-  #fetchSyncBtn, .sync-btn { padding: 0; }
-  .sync-btn > span { display: none; }
-}
+
 .commit-input, .commit-textarea {
   width: 100%; background: var(--bg-elev-2); border: 1px solid var(--border); border-radius: 0;
   color: var(--text); font-family: inherit; outline: none; transition: border-color .16s var(--ease), box-shadow .16s var(--ease), background .16s var(--ease);

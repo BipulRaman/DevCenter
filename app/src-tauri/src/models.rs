@@ -101,6 +101,55 @@ pub struct StashEntry {
     pub when: String,
 }
 
+/// A git tag (lightweight or annotated).
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct GitTagInfo {
+    pub name: String,
+    /// Short SHA of the commit the tag points at.
+    pub target: String,
+    /// Annotation message, if this is an annotated tag.
+    pub message: Option<String>,
+}
+
+/// One configured remote (`git remote -v`).
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteInfo {
+    pub name: String,
+    pub url: String,
+}
+
+/// One entry from `git worktree list` (a linked checkout of the same repository).
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct WorktreeInfo {
+    /// Folder name (last path segment) — used as a display label.
+    pub name: String,
+    /// Absolute path to the worktree's working directory.
+    pub path: String,
+    /// Checked-out branch, if any (detached worktrees have none).
+    pub branch: Option<String>,
+    /// True for the repository's original/main working directory.
+    pub is_main: bool,
+    pub locked: bool,
+}
+
+/// One recorded action in the "Show Git Output" activity log.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct GitLogEntry {
+    /// Clock time the action completed (`HH:MM:SS`, UTC).
+    pub time: String,
+    /// Repository folder name the action ran against.
+    pub repo: String,
+    /// Human-readable description of the action (e.g. `git push`).
+    pub action: String,
+    pub ok: bool,
+    /// Error message when `ok` is false.
+    pub detail: Option<String>,
+}
+
 /// The set of changes shown on the Changes page — either the working tree
 /// (`branch` set) or a single commit (`summary`/`author`/`when` set).
 #[derive(Serialize, Deserialize, Clone, Debug)]

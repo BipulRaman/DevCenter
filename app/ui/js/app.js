@@ -45,6 +45,10 @@ const ICON = {
   more: '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>',
   vscode: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M23.15 2.587 18.21.21a1.494 1.494 0 0 0-1.705.29l-9.46 8.63-4.12-3.128a.999.999 0 0 0-1.276.057L.327 7.261A1 1 0 0 0 .326 8.74L3.899 12 .326 15.26a1 1 0 0 0 .001 1.479L1.65 17.94a.999.999 0 0 0 1.276.057l4.12-3.128 9.46 8.63a1.492 1.492 0 0 0 1.704.29l4.942-2.377A1.5 1.5 0 0 0 24 20.06V3.939a1.5 1.5 0 0 0-.85-1.352zm-5.146 14.861L10.826 12l7.178-5.448v10.896z"/></svg>',
   grip: '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>',
+  gear: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>',
+  chevronRight: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>',
+  swap: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3v14"/><polyline points="3 13 7 17 11 13"/><path d="M17 21V7"/><polyline points="13 11 17 7 21 11"/></svg>',
+  mergeGit: '<svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M13.2731 7.73055C12.8027 7.26291 12.1664 7.00048 11.5031 7.00057C11.009 7.00024 10.5258 7.14639 10.1147 7.42049C9.70352 7.69458 9.38283 8.08436 9.19309 8.54061C9.13474 8.68241 9.09117 8.8298 9.06308 8.98055C8.04074 8.86836 7.08726 8.41091 6.36002 7.68367C5.63278 6.95643 5.17527 6.00289 5.06308 4.98055C5.21383 4.95246 5.36128 4.90889 5.50308 4.85054C5.95933 4.6608 6.34911 4.34017 6.6232 3.92903C6.8973 3.51789 7.04339 3.03474 7.04306 2.54061C7.05044 2.19765 6.9857 1.85696 6.85306 1.54061C6.72839 1.23755 6.54492 0.962142 6.3132 0.730425C6.08149 0.498708 5.80614 0.31518 5.50308 0.190508C5.18673 0.0578651 4.84604 -0.00680644 4.50308 0.00056644C4.00895 0.000236947 3.5258 0.146394 3.11466 0.420488C2.70352 0.694583 2.38283 1.08436 2.19309 1.54061C2.00508 1.9984 1.95607 2.50141 2.0521 2.98689C2.14813 3.47238 2.38493 3.91884 2.73307 4.27059C3.08357 4.61279 3.52396 4.84851 4.00308 4.95052V10.0506C3.68453 10.1128 3.3818 10.2386 3.11307 10.4206C2.7053 10.6979 2.38595 11.0867 2.19309 11.5406C2.00221 11.998 1.9516 12.5017 2.04764 12.9879C2.14368 13.4741 2.38202 13.9208 2.73245 14.2712C3.08289 14.6216 3.52959 14.86 4.01578 14.956C4.50197 15.052 5.00575 15.0015 5.46311 14.8106C5.91935 14.6209 6.30913 14.3001 6.58322 13.889C6.85732 13.4779 7.00341 12.9947 7.00308 12.5006C7.01046 12.1576 6.94572 11.8169 6.81308 11.5006C6.68841 11.1975 6.50494 10.9222 6.27323 10.6905C6.04151 10.4588 5.76616 10.2753 5.46311 10.1506C5.31476 10.0889 5.16065 10.042 5.00308 10.0106V7.61055C5.51974 8.34075 6.2061 8.93443 7.00308 9.34053C7.65433 9.67397 8.36417 9.87772 9.09311 9.94051C9.16543 10.3031 9.31723 10.6452 9.53763 10.942C9.75803 11.2388 10.0415 11.483 10.3676 11.6571C10.6938 11.8311 11.0545 11.9307 11.4237 11.9486C11.793 11.9665 12.1616 11.9023 12.5031 11.7606C12.9593 11.5708 13.3491 11.2501 13.6232 10.8389C13.8973 10.4278 14.0434 9.94465 14.0431 9.45052C14.0195 8.79894 13.7434 8.18211 13.2731 7.73055V7.73055ZM5.07309 11.1106C5.34915 11.2275 5.58535 11.4221 5.75308 11.6706C5.9453 11.9591 6.03162 12.3052 5.99741 12.6502C5.96319 12.9952 5.81055 13.3178 5.5654 13.5629C5.32026 13.8081 4.9978 13.9607 4.6528 13.995C4.30781 14.0292 3.96159 13.9428 3.67307 13.7506C3.42456 13.5828 3.23004 13.3466 3.11307 13.0705C3.00208 12.798 2.97429 12.4988 3.03311 12.2105C3.08958 11.9185 3.23212 11.6502 3.44242 11.4399C3.65271 11.2296 3.92112 11.0871 4.21311 11.0306C4.50138 10.9718 4.80061 10.9996 5.07309 11.1106V11.1106ZM4.50308 4.00057C4.20784 4.00073 3.9191 3.91377 3.67307 3.75057C3.42456 3.58283 3.23004 3.34657 3.11307 3.07051C3.00208 2.79803 2.97429 2.49881 3.03311 2.21053C3.08958 1.91854 3.23212 1.65019 3.44242 1.4399C3.65271 1.22961 3.92112 1.08706 4.21311 1.0306C4.50138 0.971769 4.80061 0.999561 5.07309 1.11055C5.34915 1.22752 5.58535 1.42211 5.75308 1.67061C5.90323 1.89662 5.98924 2.15909 6.00199 2.43013C6.01473 2.70117 5.95375 2.97057 5.82547 3.20967C5.6972 3.44878 5.50646 3.64865 5.27359 3.78792C5.04073 3.92719 4.77442 4.00067 4.50308 4.00057V4.00057ZM12.5631 10.5606C12.3184 10.8055 11.9965 10.9582 11.652 10.9929C11.3075 11.0275 10.9616 10.9419 10.6731 10.7506C10.4246 10.5828 10.23 10.3466 10.1131 10.0705C10.0021 9.79803 9.97429 9.49881 10.0331 9.21053C10.0896 8.91854 10.2321 8.65019 10.4424 8.4399C10.6527 8.22961 10.9211 8.08706 11.2131 8.0306C11.5014 7.97177 11.8006 7.99956 12.0731 8.11055C12.3491 8.22752 12.5853 8.42211 12.7531 8.67061C12.9444 8.95917 13.03 9.30501 12.9954 9.64949C12.9608 9.99398 12.808 10.3159 12.5631 10.5606V10.5606Z" fill="currentColor"/></svg>',
 };
 
 // Provider glyph for a repo/account ("github" | "azure" | other).
@@ -1266,6 +1270,37 @@ function openNewBranchDialog({ branches, current, onCreate }) {
   });
 }
 
+// Open the "Merge into <current>" dialog. `branches` are the candidate source
+// branches (current already excluded). `onMerge(source)` runs on confirm.
+function openMergeBranchDialog({ branches, current, onMerge }) {
+  Modal.custom({
+    title: `Merge into “${current}”`,
+    render: (body, foot, close, mkBtn) => {
+      body.innerHTML = `
+        <div class="form-row">
+          <label class="form-label" for="mbSource">Branch to merge</label>
+          <select class="modal-input" id="mbSource"></select>
+          <div class="form-hint">Merges the selected branch's history into “${escapeHtml(current)}”. If both branches changed the same lines, you'll be asked to resolve conflicts.</div>
+        </div>`;
+      const sel = body.querySelector("#mbSource");
+      branches.forEach((b) => {
+        const o = document.createElement("option");
+        o.value = b;
+        o.textContent = b;
+        sel.appendChild(o);
+      });
+      const cancel = mkBtn("btn-ghost", "Cancel");
+      cancel.addEventListener("click", () => close(null));
+      const merge = mkBtn("btn-primary", "Merge branch");
+      merge.addEventListener("click", () => close(sel.value));
+      foot.append(cancel, merge);
+      setTimeout(() => sel.focus(), 40);
+    },
+  }).then((source) => {
+    if (source) onMerge(source);
+  });
+}
+
 // Copy text to the clipboard, with a textarea fallback for non-secure contexts.
 async function copyToClipboard(text) {
   try {
@@ -1291,6 +1326,78 @@ async function copyToClipboard(text) {
   } catch (e) {
     return false;
   }
+}
+
+// Generic multi-field text-input dialog — used by several git-menu flows
+// (Add Remote, Pull from…, Push to…, Create Tag…). `fields` is an array of
+// { label, placeholder, value }. Resolves to an array of trimmed values (same
+// order as `fields`), or null if cancelled.
+function openFieldsDialog({ title, message, fields, confirmText, validate }) {
+  return Modal.custom({
+    title,
+    render: (body, foot, close, mkBtn) => {
+      body.innerHTML =
+        (message ? `<p class="modal-msg">${escapeHtml(message)}</p>` : "") +
+        fields
+          .map(
+            (f, i) => `
+          <div class="form-row">
+            <label class="form-label" for="fd${i}">${escapeHtml(f.label)}</label>
+            <input class="modal-input" id="fd${i}" type="text" placeholder="${escapeHtml(f.placeholder || "")}" value="${escapeHtml(f.value || "")}" spellcheck="false" autocomplete="off" />
+          </div>`
+          )
+          .join("") + `<div class="modal-error" id="fdErr"></div>`;
+      const inputs = fields.map((_, i) => body.querySelector(`#fd${i}`));
+      const errEl = body.querySelector("#fdErr");
+      const submit = () => {
+        const values = inputs.map((el) => el.value.trim());
+        const msg = validate ? validate(values) : null;
+        if (msg) {
+          errEl.textContent = msg;
+          return;
+        }
+        close(values);
+      };
+      inputs.forEach((el) =>
+        el.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") submit();
+        })
+      );
+      const cancel = mkBtn("btn-ghost", "Cancel");
+      cancel.addEventListener("click", () => close(null));
+      const ok = mkBtn("btn-primary", confirmText || "OK");
+      ok.addEventListener("click", submit);
+      foot.append(cancel, ok);
+      setTimeout(() => inputs[0] && inputs[0].focus(), 40);
+    },
+  });
+}
+
+// Generic "pick one item from a list, then confirm" dialog — used by several
+// git-menu flows (choose a stash/tag/remote/branch to act on). `items` is a
+// plain array; `label(item)` returns the option's display text. Resolves to
+// the chosen item, or null if cancelled.
+function openPickDialog({ title, message, items, label, confirmText, danger }) {
+  return Modal.custom({
+    title,
+    render: (body, foot, close, mkBtn) => {
+      body.innerHTML =
+        (message ? `<p class="modal-msg">${escapeHtml(message)}</p>` : "") +
+        `<div class="form-row"><select class="modal-input" id="pickSel"></select></div>`;
+      const sel = body.querySelector("#pickSel");
+      items.forEach((it, i) => {
+        const o = document.createElement("option");
+        o.value = String(i);
+        o.textContent = label(it);
+        sel.appendChild(o);
+      });
+      const cancel = mkBtn("btn-ghost", "Cancel");
+      cancel.addEventListener("click", () => close(null));
+      const ok = mkBtn(danger ? "btn-danger" : "btn-primary", confirmText || "OK");
+      ok.addEventListener("click", () => close(items[Number(sel.value)]));
+      foot.append(cancel, ok);
+    },
+  });
 }
 
 // Rename dialog for a branch. `existing` is the full branch list (for dup check).
@@ -2269,7 +2376,120 @@ const Dropdown = (() => {
     window.addEventListener("resize", onScroll, true);
   }
 
-  return { open, close, isOpenFor, menu, context, closeContext };
+  // Nested flyout menu (e.g. the Git actions "gear" menu): a top-level menu
+  // anchored to a button, where some rows open a submenu flyout on hover/click
+  // instead of running an action. `items` is an array of
+  // { label, icon, onClick, disabled, danger, submenu: items } or { separator }.
+  // Submenus can nest arbitrarily deep; each level is its own floating panel so
+  // deeper levels stay open while a shallower one is still visible.
+  let flyoutAnchor = null;
+  let flyoutLevels = []; // [{ el }] outermost first
+  let flyoutOnDoc = null, flyoutOnKey = null, flyoutOnScroll = null;
+
+  function closeFlyoutFrom(depth) {
+    while (flyoutLevels.length > depth) flyoutLevels.pop().el.remove();
+  }
+  function closeFlyout() {
+    if (!flyoutAnchor && !flyoutLevels.length) return;
+    closeFlyoutFrom(0);
+    document.removeEventListener("mousedown", flyoutOnDoc, true);
+    document.removeEventListener("keydown", flyoutOnKey, true);
+    window.removeEventListener("scroll", flyoutOnScroll, true);
+    window.removeEventListener("resize", flyoutOnScroll, true);
+    if (flyoutAnchor) flyoutAnchor.classList.remove("dropdown-open");
+    flyoutAnchor = null;
+  }
+
+  function buildFlyoutLevel(items, depth) {
+    const el = document.createElement("div");
+    el.className = "dropdown-menu menu context-menu flyout-level";
+    items.forEach((it) => {
+      if (it.separator) {
+        const sep = document.createElement("div");
+        sep.className = "menu-sep";
+        el.appendChild(sep);
+        return;
+      }
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "menu-item" + (it.danger ? " danger" : "") + (it.submenu ? " has-submenu" : "");
+      if (it.disabled) row.disabled = true;
+      row.innerHTML =
+        `<span class="menu-ico">${it.icon || ""}</span><span class="menu-label">${it.label}</span>` +
+        (it.submenu ? `<span class="menu-arrow">${ICON.chevronRight}</span>` : "");
+      if (!it.disabled) {
+        if (it.submenu) {
+          let timer = null;
+          row.addEventListener("mouseenter", () => {
+            closeFlyoutFrom(depth + 1);
+            clearTimeout(timer);
+            timer = setTimeout(() => openFlyoutSubmenu(row, it.submenu, depth), 80);
+          });
+          row.addEventListener("mouseleave", () => clearTimeout(timer));
+          row.addEventListener("click", () => openFlyoutSubmenu(row, it.submenu, depth));
+        } else {
+          row.addEventListener("mouseenter", () => closeFlyoutFrom(depth + 1));
+          row.addEventListener("click", () => {
+            closeFlyout();
+            it.onClick();
+          });
+        }
+      }
+      el.appendChild(row);
+    });
+    document.body.appendChild(el);
+    return el;
+  }
+
+  function openFlyoutSubmenu(anchorRow, items, parentDepth) {
+    closeFlyoutFrom(parentDepth + 1);
+    const r = anchorRow.getBoundingClientRect();
+    const el = buildFlyoutLevel(items, parentDepth + 1);
+    const mw = el.offsetWidth, mh = el.offsetHeight;
+    let left = r.right - 3;
+    if (left + mw > window.innerWidth - 8) left = Math.max(8, r.left - mw + 3);
+    let top = r.top - 6;
+    if (top + mh > window.innerHeight - 8) top = window.innerHeight - 8 - mh;
+    if (top < 8) top = 8;
+    el.style.left = Math.round(left) + "px";
+    el.style.top = Math.round(top) + "px";
+    flyoutLevels.push({ el });
+  }
+
+  function flyout(anchor, items) {
+    closeFlyout();
+    close();
+    closeContext();
+    flyoutAnchor = anchor;
+    const r = anchor.getBoundingClientRect();
+    const el = buildFlyoutLevel(items, 0);
+    const mw = el.offsetWidth, mh = el.offsetHeight;
+    let left = r.right - mw;
+    let top = r.bottom + 6;
+    if (left < 8) left = 8;
+    if (left + mw > window.innerWidth - 8) left = window.innerWidth - 8 - mw;
+    if (top + mh > window.innerHeight - 8 && r.top - 6 - mh > 8) top = r.top - 6 - mh;
+    if (top + mh > window.innerHeight - 8) top = window.innerHeight - 8 - mh;
+    if (top < 8) top = 8;
+    el.style.left = Math.round(left) + "px";
+    el.style.top = Math.round(top) + "px";
+    flyoutLevels = [{ el }];
+    anchor.classList.add("dropdown-open");
+
+    flyoutOnDoc = (e) => {
+      if (flyoutLevels.some((l) => l.el.contains(e.target))) return;
+      if (anchor.contains(e.target) || e.target === anchor) return;
+      closeFlyout();
+    };
+    flyoutOnKey = (e) => { if (e.key === "Escape") closeFlyout(); };
+    flyoutOnScroll = () => closeFlyout();
+    document.addEventListener("mousedown", flyoutOnDoc, true);
+    document.addEventListener("keydown", flyoutOnKey, true);
+    window.addEventListener("scroll", flyoutOnScroll, true);
+    window.addEventListener("resize", flyoutOnScroll, true);
+  }
+
+  return { open, close, isOpenFor, menu, context, closeContext, flyout, closeFlyout };
 })();
 
 // Replace the WebView's default right-click menu (Save as, Print, Inspect…) with
@@ -3453,50 +3673,41 @@ const ChangesPage = (() => {
     return list.filter((f) => f.path === dirPath || f.path.startsWith(pref)).map((f) => f.path);
   }
 
-  // ---- sync bar (pull / push / fetch) ----
+  // ---- git actions ("gear" menu: pull / push / fetch / sync / merge / branch / stash / commit) ----
+  let syncAhead = 0, syncBehind = 0, syncHasUpstream = false;
+
   function renderSync(cs) {
-    const ahead = cs.ahead || 0;
-    const behind = cs.behind || 0;
-    const hasUpstream = !!cs.hasUpstream;
-    const pushBtn = $("pushBtn"), pullBtn = $("pullBtn");
-    const pushCount = $("pushCount"), pullCount = $("pullCount");
-
-    pushCount.hidden = ahead === 0;
-    pushCount.textContent = ahead;
-    pullCount.hidden = behind === 0;
-    pullCount.textContent = behind;
-
-    // Push is enabled when there are local commits to publish (or no upstream
-    // yet → first publish). Pull is enabled when the remote is ahead.
-    const canPush = !busy && (ahead > 0 || !hasUpstream);
-    const canPull = !busy && hasUpstream && behind > 0;
-    pushBtn.disabled = !canPush;
-    pullBtn.disabled = !canPull;
-    pushBtn.classList.toggle("primed", ahead > 0 || !hasUpstream);
-    pullBtn.classList.toggle("primed", behind > 0);
-    pushBtn.querySelector("span").textContent = hasUpstream ? "Push" : "Publish";
-    // Fetch is always available — it never depends on local ahead/behind state.
-    $("fetchSyncBtn").disabled = false;
+    syncAhead = cs.ahead || 0;
+    syncBehind = cs.behind || 0;
+    syncHasUpstream = !!cs.hasUpstream;
+    const total = syncAhead + syncBehind;
+    const badge = $("gitMenuBadge");
+    badge.hidden = total === 0;
+    badge.textContent = total;
+    $("gitMenuBtn").title = syncHasUpstream
+      ? `${syncAhead} to push · ${syncBehind} to pull`
+      : "Branch has no upstream yet — Publish to create one";
   }
 
+  // Runs a pull/push/fetch/sync op with the gear button spinning; refreshes the
+  // Changes tab with the resulting ChangeSet.
   async function doSync(kind) {
     if (busy || !repoId) return;
-    const btn = kind === "push" ? $("pushBtn") : kind === "pull" ? $("pullBtn") : $("fetchSyncBtn");
-    // Swap the directional arrow for the circular spinner while the operation
-    // runs so the in-progress state is unmistakable (Fetch already uses this
-    // icon). `.sync-btn.busy svg` rotates it. Restored in `finally`.
-    const iconEl = btn.querySelector("svg");
-    const prevIcon = iconEl ? iconEl.outerHTML : null;
+    const btn = $("gitMenuBtn");
     busy = true; btn.classList.add("busy");
-    if (iconEl) iconEl.outerHTML = ICON.sync;
-    // Disable Push/Pull while an op runs (Fetch stays available — the early
-    // `if (busy) return` guard already prevents overlapping operations).
-    [$("pushBtn"), $("pullBtn")].forEach((b) => (b.disabled = true));
     try {
       let cs;
       if (kind === "push") cs = await DC.gitPush(repoId);
-      else if (kind === "pull") cs = await DC.gitPull(repoId);
-      else { await DC.fetchRepo(repoId); cs = await DC.gitChanges(repoId, null); }
+      else if (kind === "pull") cs = await DC.gitPull(repoId, false);
+      else if (kind === "sync") {
+        // Combined pull-then-push: fetch to get current ahead/behind, pull
+        // (fast-forward) if the remote is ahead, then push local commits
+        // (or publish, if the branch has no upstream yet).
+        await DC.fetchRepo(repoId);
+        cs = await DC.gitChanges(repoId, null);
+        if (cs.hasUpstream && cs.behind > 0) cs = await DC.gitPull(repoId, false);
+        if (cs.ahead > 0 || !cs.hasUpstream) cs = await DC.gitPush(repoId);
+      } else { await DC.fetchRepo(repoId); cs = await DC.gitChanges(repoId, null); }
       branch = cs.branch || branch;
       $("chgBranchLabel").textContent = branch;
       busy = false;
@@ -3506,10 +3717,678 @@ const ChangesPage = (() => {
       await Modal.alert({ title: `${kind[0].toUpperCase() + kind.slice(1)} failed`, message: String(e) });
     } finally {
       busy = false; btn.classList.remove("busy");
-      const cur = btn.querySelector("svg");
-      if (cur && prevIcon) cur.outerHTML = prevIcon;
       updateCommitBtn();
     }
+  }
+
+  // Generic wrapper for a one-shot git action that returns a ChangeSet: spins
+  // the gear button, applies the result, and surfaces errors. Used by most
+  // "gear" menu actions beyond doSync/doMerge (which have their own flow).
+  async function runGitAction(label, fn) {
+    if (busy || !repoId) return null;
+    const btn = $("gitMenuBtn");
+    busy = true; btn.classList.add("busy");
+    try {
+      const cs = await fn();
+      branch = cs.branch || branch;
+      $("chgBranchLabel").textContent = branch;
+      busy = false;
+      setChangeSet(cs);
+      return cs;
+    } catch (e) {
+      console.error(label + " failed", e);
+      await Modal.alert({ title: `${label} failed`, message: String(e) });
+      return null;
+    } finally {
+      busy = false; btn.classList.remove("busy");
+      updateCommitBtn();
+    }
+  }
+
+  // After a merge-like op (merge/rebase/pull --rebase), open the conflict
+  // resolver if it left conflicts in progress, else confirm success.
+  async function afterMergeLike(cs, doneMessage) {
+    if (!cs || !repoId) return;
+    const info = await DC.gitConflicts(repoId).catch(() => null);
+    if (info && info.kind !== "none") {
+      if (window.ConflictResolver) window.ConflictResolver.open(repoId);
+    } else if (doneMessage) {
+      await Modal.alert({ title: "Done", message: doneMessage });
+    }
+  }
+
+  async function pullRebaseFlow() {
+    const cs = await runGitAction("Pull (rebase)", () => DC.gitPull(repoId, true));
+    await afterMergeLike(cs, `Rebased “${branch}” on the latest from upstream.`);
+  }
+
+  async function pullFromFlow() {
+    if (!repoId || busy) return;
+    const res = await openFieldsDialog({
+      title: "Pull from…",
+      fields: [
+        { label: "Remote", placeholder: "origin", value: "origin" },
+        { label: "Branch", placeholder: "main" },
+      ],
+      confirmText: "Pull",
+      validate: ([remote, br]) => (!remote || !br ? "Enter a remote and a branch." : null),
+    });
+    if (!res) return;
+    const cs = await runGitAction("Pull from", () => DC.gitPullFrom(repoId, res[0], res[1]));
+    await afterMergeLike(cs, `Pulled “${res[1]}” from “${res[0]}”.`);
+  }
+
+  async function pushToFlow() {
+    if (!repoId || busy) return;
+    const res = await openFieldsDialog({
+      title: "Push to…",
+      fields: [
+        { label: "Remote", placeholder: "origin", value: "origin" },
+        { label: "Branch", placeholder: branch, value: branch },
+      ],
+      confirmText: "Push",
+      validate: ([remote, br]) => (!remote || !br ? "Enter a remote and a branch." : null),
+    });
+    if (!res) return;
+    runGitAction("Push to", () => DC.gitPushTo(repoId, res[0], res[1]));
+  }
+
+  // ---- merge / rebase another branch into the current branch ----
+  async function pickOtherBranch(purpose) {
+    if (!repoId || !DC || !DC.hasBackend || busy) return null;
+    let branches;
+    try {
+      branches = await DC.listBranches(repoId);
+    } catch (e) {
+      console.error("listBranches failed", e);
+      await Modal.alert({ title: "Couldn't load branches", message: String(e) });
+      return null;
+    }
+    const candidates = (branches || []).filter((b) => b !== branch);
+    if (!candidates.length) {
+      await Modal.alert({ title: "No other branches", message: `There are no other local branches to ${purpose}.` });
+      return null;
+    }
+    return candidates;
+  }
+
+  async function openMergeDialog() {
+    const candidates = await pickOtherBranch(`merge into “${branch}”`);
+    if (!candidates) return;
+    openMergeBranchDialog({ branches: candidates, current: branch, onMerge: (source) => doMerge(source) });
+  }
+
+  async function doMerge(source) {
+    const cs = await runGitAction("Merge", () => DC.mergeBranch(repoId, source));
+    await afterMergeLike(cs, `Merged “${source}” into “${branch}”.`);
+  }
+
+  async function rebaseBranchFlow() {
+    const candidates = await pickOtherBranch(`rebase “${branch}” onto`);
+    if (!candidates) return;
+    const onto = await openPickDialog({
+      title: "Rebase branch",
+      message: `Rebase “${branch}” onto the selected branch. If both changed the same lines, you'll be asked to resolve conflicts.`,
+      items: candidates,
+      label: (b) => b,
+      confirmText: "Rebase",
+    });
+    if (!onto) return;
+    const cs = await runGitAction("Rebase", () => DC.rebaseBranch(repoId, onto));
+    await afterMergeLike(cs, `Rebased “${branch}” onto “${onto}”.`);
+  }
+
+  // ---- new branch (standalone, from the git actions menu) ----
+  async function newBranchFlow() {
+    if (!repoId || !DC || !DC.hasBackend || busy) return;
+    let branches;
+    try {
+      branches = await DC.listBranches(repoId);
+    } catch (e) {
+      console.error("listBranches failed", e);
+      await Modal.alert({ title: "Couldn't load branches", message: String(e) });
+      return;
+    }
+    openNewBranchDialog({
+      branches,
+      current: branch,
+      onCreate: async (name, base) => {
+        try {
+          const updated = await DC.createBranch(repoId, name, base);
+          const at = repos.findIndex((x) => x.id === updated.id);
+          if (at >= 0) repos[at] = updated;
+          branch = updated.branch || name;
+          $("chgBranchLabel").textContent = branch;
+          if (tab === "history") loadHistory(); else loadChanges();
+        } catch (e) {
+          console.error("createBranch failed", e);
+          await Modal.alert({ title: "Couldn't create branch", message: String(e) });
+        }
+      },
+    });
+  }
+
+  async function renameCurrentBranchFlow() {
+    if (!repoId || busy) return;
+    let branches;
+    try {
+      branches = await DC.listBranches(repoId);
+    } catch (e) {
+      console.error("listBranches failed", e);
+      await Modal.alert({ title: "Couldn't load branches", message: String(e) });
+      return;
+    }
+    openRenameBranchDialog({
+      branch,
+      existing: branches || [],
+      onRename: async (newName) => {
+        try {
+          const updated = await DC.renameBranch(repoId, branch, newName);
+          const at = repos.findIndex((x) => x.id === updated.id);
+          if (at >= 0) repos[at] = updated;
+          branch = updated.branch || newName;
+          $("chgBranchLabel").textContent = branch;
+        } catch (e) {
+          console.error("renameBranch failed", e);
+          await Modal.alert({ title: "Rename failed", message: String(e) });
+        }
+      },
+    });
+  }
+
+  async function deleteBranchPickerFlow() {
+    const candidates = await pickOtherBranch("delete");
+    if (!candidates) return;
+    const target = await openPickDialog({
+      title: "Delete branch",
+      items: candidates,
+      label: (b) => b,
+      confirmText: "Delete",
+      danger: true,
+    });
+    if (!target) return;
+    deleteBranchFlow({
+      repoId,
+      branch: target,
+      onChanged: (updated) => {
+        const at = repos.findIndex((x) => x.id === updated.id);
+        if (at >= 0) repos[at] = updated;
+        if (tab === "history") loadHistory(); else loadChanges();
+      },
+    });
+  }
+
+  async function deleteRemoteBranchFlow() {
+    if (!repoId || busy) return;
+    const name = await Modal.prompt({
+      title: "Delete remote branch",
+      label: "Branch name (on origin)",
+      value: branch,
+      confirmText: "Delete",
+      validate: (v) => (v ? null : "Enter a branch name."),
+    });
+    if (!name) return;
+    const ok = await Modal.confirm({
+      title: "Delete remote branch",
+      message: `Delete “${name}” from origin? This cannot be undone.`,
+      confirmText: "Delete",
+      danger: true,
+    });
+    if (!ok) return;
+    runGitAction("Delete remote branch", () => DC.deleteRemoteBranch(repoId, name));
+  }
+
+  // ---- remotes ----
+  async function addRemoteFlow() {
+    if (!repoId || busy) return;
+    const res = await openFieldsDialog({
+      title: "Add remote",
+      fields: [
+        { label: "Name", placeholder: "origin" },
+        { label: "URL", placeholder: "https://github.com/owner/repo.git" },
+      ],
+      confirmText: "Add",
+      validate: ([name, url]) => (!name || !url ? "Enter a remote name and URL." : null),
+    });
+    if (!res) return;
+    runGitAction("Add remote", () => DC.gitAddRemote(repoId, res[0], res[1]));
+  }
+
+  async function removeRemoteFlow() {
+    if (!repoId || busy) return;
+    let remotes;
+    try {
+      remotes = await DC.gitListRemotes(repoId);
+    } catch (e) {
+      console.error("listRemotes failed", e);
+      await Modal.alert({ title: "Couldn't load remotes", message: String(e) });
+      return;
+    }
+    if (!remotes || !remotes.length) {
+      await Modal.alert({ title: "No remotes", message: "This repository has no remotes configured." });
+      return;
+    }
+    const target = await openPickDialog({
+      title: "Remove remote",
+      items: remotes,
+      label: (r) => `${r.name} — ${r.url}`,
+      confirmText: "Remove",
+      danger: true,
+    });
+    if (!target) return;
+    runGitAction("Remove remote", () => DC.gitRemoveRemote(repoId, target.name));
+  }
+
+  // ---- undo the most recent commit / abort a rebase (from the gear menu) ----
+  async function undoLastCommitFromMenu() {
+    if (!repoId || busy) return;
+    let latest;
+    try {
+      latest = await DC.gitLog(repoId, 1);
+    } catch (e) {
+      console.error("gitLog failed", e);
+      await Modal.alert({ title: "Couldn't load commit history", message: String(e) });
+      return;
+    }
+    if (!latest || !latest.length) {
+      await Modal.alert({ title: "Nothing to undo", message: "This repository has no commits yet." });
+      return;
+    }
+    undoCommit(latest[0]);
+  }
+
+  function abortRebaseFlow() {
+    runGitAction("Abort rebase", () => DC.conflictAbort(repoId));
+  }
+
+  // ---- commit variants (plain / staged / all, each optionally amend / signed off) ----
+  async function doCommitVariant({ all, amend, signoff }) {
+    if (busy) return;
+    const summary = ($("commitSummary").value || "").trim();
+    const desc = $("commitDesc").value || "";
+    if (!summary) {
+      await Modal.alert({ title: "Enter a summary", message: "Type a commit summary in the box before committing." });
+      return;
+    }
+    busy = true; updateCommitBtn();
+    try {
+      const cs = await DC.gitCommit(repoId, summary, desc, all, amend, signoff);
+      $("commitSummary").value = ""; $("commitDesc").value = "";
+      branch = cs.branch || branch;
+      $("chgBranchLabel").textContent = branch;
+      activeFile = null; activeGroup = null;
+      showDiffEmpty("Commit created. Select a file to view its diff.");
+      setChangeSet(cs);
+    } catch (e) {
+      console.error("commit failed", e);
+      await Modal.alert({ title: "Commit failed", message: String(e) });
+    } finally {
+      busy = false; updateCommitBtn();
+    }
+  }
+
+  // Main Commit button: staged-only if anything is staged, else stage + commit
+  // everything. Swaps the button label for a spinner while committing.
+  async function doCommit() {
+    if (busy) return;
+    const summary = ($("commitSummary").value || "").trim();
+    if (!summary || (staged.length === 0 && unstaged.length === 0)) return;
+    const btn = $("commitBtn");
+    const prev = btn.innerHTML;
+    btn.innerHTML = `<span class="spin">${ICON.sync}</span>Committing…`;
+    try {
+      await doCommitVariant({ all: staged.length === 0, amend: false, signoff: false });
+    } finally {
+      btn.innerHTML = prev;
+      updateCommitBtn();
+    }
+  }
+
+  // ---- stash: pick-one flows ----
+  function stashLabel(st) {
+    return `${st.message || "(no message)"} — ${st.branch} · ${st.when}`;
+  }
+
+  async function pickStashFlow({ title, confirmText, danger }) {
+    if (!stashes.length) {
+      await Modal.alert({ title: "No stashes", message: "There are no stashes to pick from." });
+      return null;
+    }
+    return openPickDialog({ title, items: stashes, label: stashLabel, confirmText, danger });
+  }
+
+  async function applyStashPickerFlow() {
+    const st = await pickStashFlow({ title: "Apply stash", confirmText: "Apply" });
+    if (st) stashApply(st);
+  }
+  async function popStashPickerFlow() {
+    const st = await pickStashFlow({ title: "Pop stash", confirmText: "Pop" });
+    if (st) stashRestore(st);
+  }
+  async function dropStashPickerFlow() {
+    const st = await pickStashFlow({ title: "Drop stash", confirmText: "Drop", danger: true });
+    if (st) stashDrop(st);
+  }
+  async function dropAllStashesFlow() {
+    if (!stashes.length) {
+      await Modal.alert({ title: "No stashes", message: "There are no stashes to drop." });
+      return;
+    }
+    const ok = await Modal.confirm({
+      title: "Drop all stashes",
+      message: `Delete all ${stashes.length} stash${stashes.length === 1 ? "" : "es"}? This cannot be undone.`,
+      confirmText: "Drop all",
+      danger: true,
+    });
+    if (ok) runStaging(() => DC.gitStashClear(repoId));
+  }
+  async function viewStashPickerFlow() {
+    const st = await pickStashFlow({ title: "View stash", confirmText: "View" });
+    if (st) viewStashDialog(st);
+  }
+  async function viewStashDialog(st) {
+    let text;
+    try {
+      text = await DC.gitStashShow(repoId, st.index);
+    } catch (e) {
+      console.error("stashShow failed", e);
+      await Modal.alert({ title: "Couldn't load stash", message: String(e) });
+      return;
+    }
+    Modal.custom({
+      title: stashLabel(st),
+      wide: true,
+      render: (body, foot) => {
+        body.innerHTML = `<pre class="git-output-pre">${escapeHtml(text || "(empty diff)")}</pre>`;
+        foot.hidden = true;
+      },
+    });
+  }
+
+  // ---- tags ----
+  async function createTagFlow() {
+    if (!repoId || busy) return;
+    const res = await openFieldsDialog({
+      title: "Create tag",
+      fields: [
+        { label: "Tag name", placeholder: "v1.0.0" },
+        { label: "Target (optional, defaults to HEAD)", placeholder: branch },
+        { label: "Message (optional — creates an annotated tag)", placeholder: "" },
+      ],
+      confirmText: "Create",
+      validate: ([name]) => (!name ? "Enter a tag name." : null),
+    });
+    if (!res) return;
+    runGitAction("Create tag", () => DC.gitCreateTag(repoId, res[0], res[1], res[2]));
+  }
+
+  async function pickTagFlow({ title, confirmText, danger }) {
+    let tags;
+    try {
+      tags = await DC.gitListGitTags(repoId);
+    } catch (e) {
+      console.error("listGitTags failed", e);
+      await Modal.alert({ title: "Couldn't load tags", message: String(e) });
+      return null;
+    }
+    if (!tags || !tags.length) {
+      await Modal.alert({ title: "No tags", message: "This repository has no tags." });
+      return null;
+    }
+    return openPickDialog({ title, items: tags, label: (t) => (t.message ? `${t.name} — ${t.message}` : t.name), confirmText, danger });
+  }
+  async function deleteTagFlow() {
+    const t = await pickTagFlow({ title: "Delete tag", confirmText: "Delete", danger: true });
+    if (t) runGitAction("Delete tag", () => DC.gitDeleteTag(repoId, t.name));
+  }
+  async function deleteRemoteTagFlow() {
+    const t = await pickTagFlow({ title: "Delete remote tag", confirmText: "Delete", danger: true });
+    if (t) runGitAction("Delete remote tag", () => DC.gitDeleteRemoteTag(repoId, t.name));
+  }
+  function pushTagsFlow() {
+    runGitAction("Push tags", () => DC.gitPushTags(repoId));
+  }
+
+  // ---- worktrees ----
+  async function addWorktreeFlow() {
+    if (!repoId || busy) return;
+    let dir;
+    try {
+      dir = await window.__TAURI__.dialog.open({ directory: true, multiple: false, title: "Choose a folder for the new worktree" });
+    } catch (e) {
+      console.error("folder picker failed", e);
+      return;
+    }
+    if (!dir) return;
+    let branches = [];
+    try { branches = (await DC.listBranches(repoId)) || []; } catch (e) { /* non-fatal */ }
+    const res = await openFieldsDialog({
+      title: "Add worktree",
+      message: `Folder: ${dir}`,
+      fields: [{ label: "Branch (existing, or new)", placeholder: branch }],
+      confirmText: "Add",
+      validate: ([b]) => (!b ? "Enter a branch name." : null),
+    });
+    if (!res) return;
+    const br = res[0];
+    const createBranch = !branches.includes(br);
+    runGitAction("Add worktree", () => DC.gitAddWorktree(repoId, dir, br, createBranch));
+  }
+
+  async function removeWorktreeFlow() {
+    if (!repoId || busy) return;
+    let list;
+    try {
+      list = await DC.gitListWorktrees(repoId);
+    } catch (e) {
+      console.error("listWorktrees failed", e);
+      await Modal.alert({ title: "Couldn't load worktrees", message: String(e) });
+      return;
+    }
+    const candidates = (list || []).filter((w) => !w.isMain);
+    if (!candidates.length) {
+      await Modal.alert({ title: "No worktrees", message: "There are no linked worktrees to remove." });
+      return;
+    }
+    const target = await openPickDialog({
+      title: "Remove worktree",
+      items: candidates,
+      label: (w) => (w.branch ? `${w.name} (${w.branch})` : w.name),
+      confirmText: "Remove",
+      danger: true,
+    });
+    if (!target) return;
+    runGitAction("Remove worktree", () => DC.gitRemoveWorktree(repoId, target.path, false));
+  }
+
+  // ---- Show Git Output ----
+  async function showGitOutputFlow() {
+    let entries = [];
+    try { entries = (await DC.gitActionLog()) || []; } catch (e) { /* ignore */ }
+    Modal.custom({
+      title: "Git Output",
+      wide: true,
+      render: (body, foot) => {
+        if (!entries.length) {
+          body.innerHTML = `<p class="modal-msg">No git actions have run yet this session.</p>`;
+        } else {
+          const lines = entries.map((e) => `[${e.time}] ${e.repo} — ${e.action} — ${e.ok ? "OK" : "ERROR: " + (e.detail || "")}`);
+          body.innerHTML = `<pre class="git-output-pre">${escapeHtml(lines.join("\n"))}</pre>`;
+        }
+        foot.hidden = true;
+      },
+    });
+  }
+
+  // ---- clone (top-level "Clone" action) ----
+  async function cloneRepoFlow() {
+    const url = await Modal.prompt({
+      title: "Clone repository",
+      label: "Repository URL",
+      placeholder: "https://github.com/owner/repo.git",
+      confirmText: "Choose folder…",
+      validate: (v) => (v ? null : "Enter a repository URL."),
+    });
+    if (!url) return;
+    let dir;
+    try {
+      dir = await window.__TAURI__.dialog.open({ directory: true, multiple: false, title: "Choose a folder to clone into" });
+    } catch (e) {
+      console.error("folder picker failed", e);
+      return;
+    }
+    if (!dir) return;
+    try {
+      const repo = await DC.cloneRepo(url, dir);
+      if (repo && !repos.some((r) => r.id === repo.id)) repos.push(repo);
+      rerenderGit();
+      if (repo) openRepoById(repo.id);
+    } catch (e) {
+      console.error("cloneRepo failed", e);
+      await Modal.alert({ title: "Clone failed", message: String(e) });
+    }
+  }
+
+  // ---- Git actions "gear" menu (strictly mirrors the reference layout) ----
+  function gitMenuItems(conflictKind) {
+    const hasStaged = staged.length > 0;
+    const hasUnstaged = unstaged.length > 0;
+    const hasChanges = hasStaged || hasUnstaged;
+    const hasStashes = stashes.length > 0;
+    const hasSummary = !!($("commitSummary").value || "").trim();
+    const pushLabel = syncHasUpstream ? "Push" : "Publish";
+    const isRebasing = conflictKind === "rebase";
+
+    return [
+      { label: "Pull", icon: ICON.down, onClick: () => doSync("pull") },
+      { label: pushLabel, icon: ICON.up, onClick: () => doSync("push") },
+      { label: "Fetch", icon: ICON.sync, onClick: () => doSync("fetch") },
+      { label: "Checkout to…", icon: ICON.branch, onClick: openBranchPicker },
+      { label: "Clone", icon: ICON.copy, onClick: cloneRepoFlow },
+      { separator: true },
+      {
+        label: "Commit",
+        icon: ICON.check,
+        submenu: [
+          { label: "Commit", icon: ICON.check, disabled: !hasChanges || !hasSummary, onClick: () => doCommitVariant({ all: !hasStaged, amend: false, signoff: false }) },
+          { label: "Commit Staged", icon: ICON.check, disabled: !hasStaged || !hasSummary, onClick: () => doCommitVariant({ all: false, amend: false, signoff: false }) },
+          { label: "Commit All", icon: ICON.check, disabled: !hasChanges || !hasSummary, onClick: () => doCommitVariant({ all: true, amend: false, signoff: false }) },
+          { label: "Undo Last Commit", icon: ACT_DISCARD, onClick: undoLastCommitFromMenu },
+          { label: "Abort Rebase", icon: ICON.x, danger: true, disabled: !isRebasing, onClick: abortRebaseFlow },
+          { separator: true },
+          { label: "Commit (Amend)", icon: ICON.pencil, disabled: !hasSummary, onClick: () => doCommitVariant({ all: !hasStaged, amend: true, signoff: false }) },
+          { label: "Commit Staged (Amend)", icon: ICON.pencil, disabled: !hasStaged || !hasSummary, onClick: () => doCommitVariant({ all: false, amend: true, signoff: false }) },
+          { label: "Commit All (Amend)", icon: ICON.pencil, disabled: !hasSummary, onClick: () => doCommitVariant({ all: true, amend: true, signoff: false }) },
+          { separator: true },
+          { label: "Commit (Signed Off)", icon: ICON.check, disabled: !hasChanges || !hasSummary, onClick: () => doCommitVariant({ all: !hasStaged, amend: false, signoff: true }) },
+          { label: "Commit Staged (Signed Off)", icon: ICON.check, disabled: !hasStaged || !hasSummary, onClick: () => doCommitVariant({ all: false, amend: false, signoff: true }) },
+          { label: "Commit All (Signed Off)", icon: ICON.check, disabled: !hasChanges || !hasSummary, onClick: () => doCommitVariant({ all: true, amend: false, signoff: true }) },
+        ],
+      },
+      {
+        label: "Changes",
+        icon: ICON.changes,
+        submenu: [
+          { label: "Stage All Changes", icon: ICON.plus, disabled: !hasUnstaged, onClick: () => bulkAction("stage", "unstaged") },
+          { label: "Unstage All Changes", icon: ICON.x, disabled: !hasStaged, onClick: () => bulkAction("unstage", "staged") },
+          { label: "Discard All Changes", icon: ACT_DISCARD, danger: true, disabled: !hasUnstaged, onClick: () => bulkAction("discard", "unstaged") },
+        ],
+      },
+      {
+        label: "Pull, Push",
+        icon: ICON.swap,
+        submenu: [
+          { label: "Sync", icon: ICON.swap, onClick: () => doSync("sync") },
+          { separator: true },
+          { label: "Pull", icon: ICON.down, onClick: () => doSync("pull") },
+          { label: "Pull (Rebase)", icon: ICON.down, onClick: pullRebaseFlow },
+          { label: "Pull from…", icon: ICON.down, onClick: pullFromFlow },
+          { separator: true },
+          { label: pushLabel, icon: ICON.up, onClick: () => doSync("push") },
+          { label: "Push to…", icon: ICON.up, onClick: pushToFlow },
+          { separator: true },
+          { label: "Fetch", icon: ICON.sync, onClick: () => doSync("fetch") },
+          { label: "Fetch (Prune)", icon: ICON.sync, onClick: () => runGitAction("Fetch (prune)", () => DC.gitFetchPrune(repoId)) },
+          { label: "Fetch From All Remotes", icon: ICON.sync, onClick: () => runGitAction("Fetch (all remotes)", () => DC.gitFetchAll(repoId)) },
+        ],
+      },
+      {
+        label: "Branch",
+        icon: ICON.branch,
+        submenu: [
+          { label: "Merge…", icon: ICON.mergeGit, onClick: openMergeDialog },
+          { label: "Rebase Branch…", icon: ICON.swap, onClick: rebaseBranchFlow },
+          { separator: true },
+          { label: "Create Branch…", icon: ICON.plus, onClick: newBranchFlow },
+          { label: "Create Branch From…", icon: ICON.plus, onClick: newBranchFlow },
+          { separator: true },
+          { label: "Rename Branch…", icon: ICON.pencil, onClick: renameCurrentBranchFlow },
+          { label: "Delete Branch…", icon: ICON.trash, danger: true, onClick: deleteBranchPickerFlow },
+          { label: "Delete Remote Branch…", icon: ICON.trash, danger: true, onClick: deleteRemoteBranchFlow },
+          { separator: true },
+          { label: "Publish Branch…", icon: ICON.up, disabled: syncHasUpstream, onClick: () => doSync("push") },
+        ],
+      },
+      {
+        label: "Remote",
+        icon: ICON.external,
+        submenu: [
+          { label: "Add Remote…", icon: ICON.plus, onClick: addRemoteFlow },
+          { label: "Remove Remote", icon: ICON.trash, danger: true, onClick: removeRemoteFlow },
+        ],
+      },
+      {
+        label: "Stash",
+        icon: ICON.archive,
+        submenu: [
+          { label: "Stash", icon: ICON.archive, disabled: !hasChanges, onClick: () => runStaging(() => DC.gitStashPush(repoId, "", false)) },
+          { label: "Stash (Include Untracked)", icon: ICON.archive, disabled: !hasChanges, onClick: () => runStaging(() => DC.gitStashPush(repoId, "", true)) },
+          { label: "Stash Staged", icon: ICON.archive, disabled: !hasStaged, onClick: () => runStaging(() => DC.gitStashPushStaged(repoId, "")) },
+          { separator: true },
+          { label: "Apply Latest Stash", icon: ICON.copy, disabled: !hasStashes, onClick: () => stashApply(stashes[0]) },
+          { label: "Apply Stash…", icon: ICON.copy, disabled: !hasStashes, onClick: applyStashPickerFlow },
+          { separator: true },
+          { label: "Pop Latest Stash", icon: ACT_RESTORE, disabled: !hasStashes, onClick: () => stashRestore(stashes[0]) },
+          { label: "Pop Stash…", icon: ACT_RESTORE, disabled: !hasStashes, onClick: popStashPickerFlow },
+          { separator: true },
+          { label: "Drop Stash…", icon: ICON.trash, danger: true, disabled: !hasStashes, onClick: dropStashPickerFlow },
+          { label: "Drop All Stashes…", icon: ICON.trash, danger: true, disabled: !hasStashes, onClick: dropAllStashesFlow },
+          { separator: true },
+          { label: "View Stash…", icon: ICON.eye, disabled: !hasStashes, onClick: viewStashPickerFlow },
+        ],
+      },
+      {
+        label: "Tags",
+        icon: ICON.tag,
+        submenu: [
+          { label: "Create Tag…", icon: ICON.tag, onClick: createTagFlow },
+          { label: "Delete Tag…", icon: ICON.trash, danger: true, onClick: deleteTagFlow },
+          { label: "Delete Remote Tag…", icon: ICON.trash, danger: true, onClick: deleteRemoteTagFlow },
+          { separator: true },
+          { label: "Push Tags", icon: ICON.up, onClick: pushTagsFlow },
+        ],
+      },
+      {
+        label: "Worktrees",
+        icon: ICON.folder,
+        submenu: [
+          { label: "Add Worktree…", icon: ICON.plus, onClick: addWorktreeFlow },
+          { label: "Remove Worktree…", icon: ICON.trash, danger: true, onClick: removeWorktreeFlow },
+        ],
+      },
+      { separator: true },
+      { label: "Show Git Output", icon: ICON.terminal, onClick: showGitOutputFlow },
+    ];
+  }
+
+  async function openGitMenu(anchor) {
+    if (!repoId || !DC || !DC.hasBackend) return;
+    let conflictKind = "none";
+    try {
+      const info = await DC.gitConflicts(repoId);
+      conflictKind = (info && info.kind) || "none";
+    } catch (e) { /* treat as none */ }
+    Dropdown.flyout(anchor, gitMenuItems(conflictKind));
   }
 
   function updateCommitBtn() {
@@ -3519,40 +4398,6 @@ const ChangesPage = (() => {
     if (!busy) $("commitBtn").textContent = staged.length > 0 ? "Commit" : "Commit all";
     const stashBtn = $("changeStashBtn");
     if (stashBtn) stashBtn.disabled = busy || !has;
-  }
-
-  async function doCommit() {
-    if (busy) return;
-    const summary = ($("commitSummary").value || "").trim();
-    const desc = $("commitDesc").value || "";
-    if (!summary || (staged.length === 0 && unstaged.length === 0)) return;
-    // Commit the staged index; if nothing is staged, commit everything.
-    const all = staged.length === 0;
-    busy = true; updateCommitBtn();
-    const btn = $("commitBtn");
-    const prev = btn.innerHTML;
-    btn.innerHTML = `<span class="spin">${ICON.sync}</span>Committing…`;
-    try {
-      const cs = await DC.gitCommit(repoId, summary, desc, all);
-      $("commitSummary").value = ""; $("commitDesc").value = "";
-      branch = cs.branch || branch;
-      $("chgBranchLabel").textContent = branch;
-      activeFile = null; activeGroup = null;
-      showDiffEmpty("Commit created. Select a file to view its diff.");
-      staged = cs.staged || [];
-      unstaged = cs.unstaged || [];
-      renderSync(cs);
-      renderChanges();
-    } catch (e) {
-      console.error("gitCommit failed", e);
-      await Modal.alert({ title: "Commit failed", message: String(e) });
-    } finally {
-      // Restore the original commit button content after the spinner state.
-      busy = false; btn.innerHTML = prev;
-      const branchLbl = $("chgBranchLabel");
-      if (branchLbl) branchLbl.textContent = branch;
-      updateCommitBtn();
-    }
   }
 
   // ---- history tab ----
@@ -3597,8 +4442,52 @@ const ChangesPage = (() => {
       </div>`;
       })
       .join("");
-    $("historyList").querySelectorAll(".history-row").forEach((row) =>
-      row.addEventListener("click", () => selectCommit(row.dataset.sha)));
+    $("historyList").querySelectorAll(".history-row").forEach((row) => {
+      row.addEventListener("click", () => selectCommit(row.dataset.sha));
+      row.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        const c = history.find((x) => x.hash === row.dataset.sha);
+        if (c) openCommitContextMenu(e, c);
+      });
+    });
+  }
+
+  function openCommitContextMenu(e, c) {
+    if (!DC || !DC.hasBackend) return;
+    const isLatest = history.length > 0 && history[0].hash === c.hash;
+    Dropdown.context(e.clientX, e.clientY, [
+      {
+        label: "Undo commit",
+        icon: ACT_DISCARD,
+        disabled: !isLatest,
+        onClick: () => undoCommit(c),
+      },
+    ]);
+  }
+
+  // Undo the most recent commit: soft-resets HEAD to its parent so the
+  // commit's changes move back into Staged Changes instead of being lost.
+  async function undoCommit(c) {
+    if (busy || !repoId) return;
+    const ok = await Modal.confirm({
+      title: "Undo commit",
+      message: `Undo “${c.summary}”? Its changes will move back to Staged Changes so you can edit or re-commit them.`,
+      confirmText: "Undo commit",
+    });
+    if (!ok) return;
+    busy = true;
+    try {
+      const cs = await DC.undoCommit(repoId, c.hash);
+      history = history.filter((h) => h.hash !== c.hash);
+      activeSha = null;
+      setChangeSet(cs);
+      switchTab("changes");
+    } catch (e) {
+      console.error("undoCommit failed", e);
+      await Modal.alert({ title: "Undo commit failed", message: String(e) });
+    } finally {
+      busy = false;
+    }
   }
 
   async function selectCommit(sha) {
@@ -3990,9 +4879,7 @@ const ChangesPage = (() => {
     $("commitSummary").addEventListener("input", updateCommitBtn);
     $("commitBtn").addEventListener("click", doCommit);
     $("chgBranchBtn").addEventListener("click", openBranchPicker);
-    $("pushBtn").addEventListener("click", () => doSync("push"));
-    $("pullBtn").addEventListener("click", () => doSync("pull"));
-    $("fetchSyncBtn").addEventListener("click", () => doSync("fetch"));
+    $("gitMenuBtn").addEventListener("click", () => openGitMenu($("gitMenuBtn")));
     $("conflictBanner").addEventListener("click", () => {
       if (window.ConflictResolver && repoId) window.ConflictResolver.open(repoId);
     });

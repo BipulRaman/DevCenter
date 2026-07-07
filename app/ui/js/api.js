@@ -55,10 +55,21 @@
     gitStashApply: (id, index) => invoke("git_stash_apply", { id, index }),
     gitStashPop: (id, index) => invoke("git_stash_pop", { id, index }),
     gitStashDrop: (id, index) => invoke("git_stash_drop", { id, index }),
-    gitCommit: (id, summary, description, all) =>
-      invoke("git_commit", { id, summary, description, all: !!all }),
+    gitStashPushStaged: (id, message) => invoke("git_stash_push_staged", { id, message: message || "" }),
+    gitStashClear: (id) => invoke("git_stash_clear", { id }),
+    gitStashShow: (id, index) => invoke("git_stash_show", { id, index }),
+    gitCommit: (id, summary, description, all, amend, signoff) =>
+      invoke("git_commit", { id, summary, description, all: !!all, amend: !!amend, signoff: !!signoff }),
+    undoCommit: (id, sha) => invoke("git_undo_commit", { id, sha }),
     gitPush: (id) => invoke("git_push", { id }),
-    gitPull: (id) => invoke("git_pull", { id }),
+    gitPushTo: (id, remote, branch) => invoke("git_push_to", { id, remote, branch }),
+    gitPull: (id, rebase) => invoke("git_pull", { id, rebase: !!rebase }),
+    gitPullFrom: (id, remote, branch) => invoke("git_pull_from", { id, remote, branch }),
+    gitFetchPrune: (id) => invoke("git_fetch_prune", { id }),
+    gitFetchAll: (id) => invoke("git_fetch_all", { id }),
+    mergeBranch: (id, branch) => invoke("git_merge_branch", { id, branch }),
+    rebaseBranch: (id, onto) => invoke("git_rebase_branch", { id, onto }),
+    deleteRemoteBranch: (id, branch) => invoke("git_delete_remote_branch", { id, branch }),
     // --- Merge-conflict resolution ---
     gitConflicts: (id) => invoke("git_conflicts", { id }),
     gitConflictFile: (id, path) => invoke("git_conflict_file", { id, path }),
@@ -67,6 +78,32 @@
     conflictAbort: (id) => invoke("git_conflict_abort", { id }),
     conflictContinue: (id) => invoke("git_conflict_continue", { id }),
     gitLog: (id, limit) => invoke("git_log", { id, limit: limit ?? null }),
+
+    // --- Remotes ---
+    gitRemoteUrl: (id) => invoke("git_remote_url", { id }),
+    gitSetRemoteUrl: (id, url) => invoke("git_set_remote_url", { id, url }),
+    gitListRemotes: (id) => invoke("git_list_remotes", { id }),
+    gitAddRemote: (id, name, url) => invoke("git_add_remote", { id, name, url }),
+    gitRemoveRemote: (id, name) => invoke("git_remove_remote", { id, name }),
+
+    // --- Tags ---
+    gitListGitTags: (id) => invoke("git_list_tags", { id }),
+    gitCreateTag: (id, name, target, message) =>
+      invoke("git_create_tag", { id, name, target: target || "", message: message || "" }),
+    gitDeleteTag: (id, name) => invoke("git_delete_tag", { id, name }),
+    gitCheckoutTag: (id, name) => invoke("git_checkout_tag", { id, name }),
+    gitDeleteRemoteTag: (id, name) => invoke("git_delete_remote_tag", { id, name }),
+    gitPushTags: (id) => invoke("git_push_tags", { id }),
+
+    // --- Worktrees ---
+    gitListWorktrees: (id) => invoke("git_list_worktrees", { id }),
+    gitAddWorktree: (id, targetPath, branch, createBranch) =>
+      invoke("git_add_worktree", { id, targetPath, branch, createBranch: !!createBranch }),
+    gitRemoveWorktree: (id, targetPath, force) =>
+      invoke("git_remove_worktree", { id, targetPath, force: !!force }),
+
+    // --- Show Git Output ---
+    gitActionLog: () => (hasBackend ? invoke("git_action_log") : Promise.resolve([])),
 
     // --- Pull Requests (Phase 3) ---
     listPullRequests: (repoIds) =>

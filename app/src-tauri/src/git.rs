@@ -1,6 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use git2::{Delta, DiffOptions, Oid, Patch, Repository, Sort, StatusEntry, StatusOptions};
@@ -10,7 +11,7 @@ use base64::Engine;
 use crate::error::{AppError, AppResult};
 use crate::models::{
     ChangeSet, CommitInfo, ConflictFile, ConflictInfo, DiffHunk, DiffLine, FileChange, FileDiff,
-    Repo, StashEntry,
+    GitLogEntry, GitTagInfo, RemoteInfo, Repo, StashEntry, WorktreeInfo,
 };
 
 #[cfg(windows)]
@@ -277,19 +278,19 @@ pub fn default_scan_roots() -> Vec<PathBuf> {
 
 // ---------- Network operations (system git) ----------
 
-/// Fetch all remotes for the repository at `path`.
+/// Fetch the current branch's remote (plain `git fetch`, no pruning).
 pub fn fetch(path: &Path) -> AppResult<()> {
-    let output = git_cmd()
-        .arg("-C")
-        .arg(path)
-        .args(["fetch", "--all", "--prune"])
-        .output()?;
-    if !output.status.success() {
-        return Err(AppError::msg(
-            String::from_utf8_lossy(&output.stderr).trim().to_string(),
-        ));
-    }
-    Ok(())
+    run_git(path, &["fetch"])
+}
+
+/// Fetch the current branch's remote, pruning stale remote-tracking branches.
+pub fn fetch_prune(path: &Path) -> AppResult<()> {
+    run_git(path, &["fetch", "--prune"])
+}
+
+/// Fetch every configured remote.
+pub fn fetch_all(path: &Path) -> AppResult<()> {
+    run_git(path, &["fetch", "--all"])
 }
 
 /// Push the current branch to its upstream. When the branch has no upstream
@@ -320,16 +321,27 @@ pub fn push(path: &Path) -> AppResult<()> {
     Ok(())
 }
 
-/// Pull (fetch + merge with `--ff-only` to avoid surprise merge commits) the
-/// current branch from its upstream.
-pub fn pull(path: &Path) -> AppResult<()> {
-    let output = git_cmd()
-        .arg("-C")
-        .arg(path)
-        .args(["pull", "--ff-only"])
-        .output()?;
+/// Pull the current branch from its upstream. `rebase` false uses `--ff-only`
+/// (avoids surprise merge commits, matching the default Pull button); `rebase`
+/// true replays local commits on top instead (`git pull --rebase`), which can
+/// leave a rebase in progress on conflicts (handled by the conflict resolver).
+pub fn pull(path: &Path, rebase: bool) -> AppResult<()> {
+    let mut cmd = git_cmd();
+    cmd.arg("-C").arg(path).arg("pull");
+    if rebase {
+        cmd.arg("--rebase");
+    } else {
+        cmd.arg("--ff-only");
+    }
+    let output = cmd.output()?;
     if !output.status.success() {
-        let err = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        let out = String::from_utf8_lossy(&output.stdout);
+        let err = String::from_utf8_lossy(&output.stderr);
+        if rebase && (out.contains("CONFLICT") || err.contains("CONFLICT") || out.contains("could not apply")) {
+            // Left in-progress on purpose — the caller refreshes ConflictInfo.
+            return Ok(());
+        }
+        let err = err.trim().to_string();
         let msg = if err.contains("not possible to fast-forward") || err.contains("diverging") {
             "Local and remote have diverged. Pull is fast-forward only — commit or stash, then merge/rebase manually.".to_string()
         } else if err.is_empty() {
@@ -340,6 +352,99 @@ pub fn pull(path: &Path) -> AppResult<()> {
         return Err(AppError::msg(msg));
     }
     Ok(())
+}
+
+/// Pull from an explicit `remote`/`branch` instead of the tracked upstream
+/// (`git pull <remote> <branch>`).
+pub fn pull_from(path: &Path, remote: &str, branch: &str) -> AppResult<()> {
+    let remote = remote.trim();
+    let branch = branch.trim();
+    if remote.is_empty() || branch.is_empty() {
+        return Err(AppError::msg("Enter a remote and a branch."));
+    }
+    run_git(path, &["pull", remote, branch])
+}
+
+/// Push the current branch to an explicit `remote`/`branch` (`git push <remote>
+/// HEAD:<branch>`), setting it as the upstream.
+pub fn push_to(path: &Path, remote: &str, branch: &str) -> AppResult<()> {
+    let remote = remote.trim();
+    let branch = branch.trim();
+    if remote.is_empty() || branch.is_empty() {
+        return Err(AppError::msg("Enter a remote and a branch."));
+    }
+    run_git(path, &["push", "-u", remote, &format!("HEAD:{branch}")])
+}
+
+/// Merge `branch` into the current branch (`git merge --no-edit <branch>`).
+/// When the merge results in conflicts, this is NOT treated as a hard error —
+/// the merge is left in-progress (MERGE_HEAD + conflict markers written to the
+/// working tree) for the conflict resolver to handle, matching how `pull`
+/// leaves a diverged branch for the user rather than failing silently.
+pub fn merge_branch(path: &Path, branch: &str) -> AppResult<()> {
+    let branch = branch.trim();
+    if branch.is_empty() {
+        return Err(AppError::msg("Choose a branch to merge."));
+    }
+    let output = git_cmd()
+        .arg("-C")
+        .arg(path)
+        .args(["merge", "--no-edit", branch])
+        .output()?;
+    if !output.status.success() {
+        let out = String::from_utf8_lossy(&output.stdout);
+        let err = String::from_utf8_lossy(&output.stderr);
+        if out.contains("CONFLICT") || out.contains("Automatic merge failed") {
+            // Left in-progress on purpose — the caller refreshes ConflictInfo.
+            return Ok(());
+        }
+        let msg = if !err.trim().is_empty() {
+            err.trim().to_string()
+        } else if !out.trim().is_empty() {
+            out.trim().to_string()
+        } else {
+            format!("Merge of \"{branch}\" failed.")
+        };
+        return Err(AppError::msg(msg));
+    }
+    Ok(())
+}
+
+/// Rebase the current branch onto `onto` (`git rebase <onto>`). Like
+/// `merge_branch`, a conflicting rebase is left in-progress rather than
+/// treated as an error — the conflict resolver handles it (`kind` reports
+/// "rebase").
+pub fn rebase_branch(path: &Path, onto: &str) -> AppResult<()> {
+    let onto = onto.trim();
+    if onto.is_empty() {
+        return Err(AppError::msg("Choose a branch to rebase onto."));
+    }
+    let output = git_cmd().arg("-C").arg(path).args(["rebase", onto]).output()?;
+    if !output.status.success() {
+        let out = String::from_utf8_lossy(&output.stdout);
+        let err = String::from_utf8_lossy(&output.stderr);
+        if out.contains("CONFLICT") || err.contains("CONFLICT") || out.contains("could not apply") {
+            return Ok(());
+        }
+        let msg = if !err.trim().is_empty() {
+            err.trim().to_string()
+        } else if !out.trim().is_empty() {
+            out.trim().to_string()
+        } else {
+            format!("Rebase onto \"{onto}\" failed.")
+        };
+        return Err(AppError::msg(msg));
+    }
+    Ok(())
+}
+
+/// Delete a branch on the `origin` remote (`git push origin --delete <branch>`).
+pub fn delete_remote_branch(path: &Path, branch: &str) -> AppResult<()> {
+    let branch = branch.trim();
+    if branch.is_empty() {
+        return Err(AppError::msg("Choose a branch to delete."));
+    }
+    run_git(path, &["push", "origin", "--delete", branch])
 }
 
 // ===================== Merge-conflict resolution =====================
@@ -1217,6 +1322,47 @@ pub fn stash_drop(path: &Path, index: usize) -> AppResult<()> {
     stash_op(path, "drop", index)
 }
 
+/// Stash only the staged changes (`git stash push --staged`), leaving unstaged
+/// changes in the working tree.
+pub fn stash_push_staged(path: &Path, message: &str) -> AppResult<()> {
+    let mut cmd = git_cmd();
+    cmd.arg("-C").arg(path).args(["stash", "push", "--staged"]);
+    let message = message.trim();
+    if !message.is_empty() {
+        cmd.arg("-m").arg(message);
+    }
+    let output = cmd.output()?;
+    if !output.status.success() {
+        return Err(AppError::msg(
+            String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        ));
+    }
+    Ok(())
+}
+
+/// Raw unified diff for a stash (`git stash show -p`), for the "View Stash…"
+/// action. Returned as-is (not parsed into a ChangeSet) since it's shown as
+/// plain text.
+pub fn stash_show(path: &Path, index: usize) -> AppResult<String> {
+    let stash_ref = format!("stash@{{{index}}}");
+    let output = git_cmd()
+        .arg("-C")
+        .arg(path)
+        .args(["stash", "show", "-p", &stash_ref])
+        .output()?;
+    if !output.status.success() {
+        return Err(AppError::msg(
+            String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        ));
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+/// Delete every stash (`git stash clear`) — destructive, confirm in the UI first.
+pub fn stash_clear(path: &Path) -> AppResult<()> {
+    run_git(path, &["stash", "clear"])
+}
+
 /// Stage files into the index (`git add -A`). An empty `files` list stages
 /// everything (the working tree). Handles new, modified, deleted and renamed
 /// paths.
@@ -1445,7 +1591,17 @@ pub fn file_diff(path: &Path, file: &str, staged: bool) -> AppResult<FileDiff> {
 /// system `git` (so the user's configured identity and hooks apply). When `all`
 /// is true, everything is staged first (`git add -A`) — used when the user
 /// commits without having staged anything. Returns the new short hash.
-pub fn commit(path: &Path, summary: &str, description: &str, all: bool) -> AppResult<String> {
+/// Commit the index. `all` stages everything first (`git add -A`). `amend`
+/// rewrites the current HEAD commit instead of creating a new one. `signoff`
+/// appends a `Signed-off-by` trailer (`git commit -s`).
+pub fn commit(
+    path: &Path,
+    summary: &str,
+    description: &str,
+    all: bool,
+    amend: bool,
+    signoff: bool,
+) -> AppResult<String> {
     let summary = summary.trim();
     if summary.is_empty() {
         return Err(AppError::msg("Enter a commit summary."));
@@ -1463,7 +1619,14 @@ pub fn commit(path: &Path, summary: &str, description: &str, all: bool) -> AppRe
 
     // Commit whatever is staged (the index).
     let mut c = git_cmd();
-    c.arg("-C").arg(path).arg("commit").arg("-m").arg(summary);
+    c.arg("-C").arg(path).arg("commit");
+    if amend {
+        c.arg("--amend");
+    }
+    if signoff {
+        c.arg("--signoff");
+    }
+    c.arg("-m").arg(summary);
     if !description.trim().is_empty() {
         c.arg("-m").arg(description.trim());
     }
@@ -1480,6 +1643,32 @@ pub fn commit(path: &Path, summary: &str, description: &str, all: bool) -> AppRe
     }
 
     Ok(repo.head().ok().and_then(|h| h.target()).map(short_oid).unwrap_or_default())
+}
+
+/// Undo the current HEAD commit (soft reset to its parent) so its changes
+/// move back into the index (Staged Changes) instead of being lost. Only the
+/// most recent commit can be undone this way — undoing an older commit would
+/// require rewriting everything after it.
+pub fn undo_commit(path: &Path, sha: &str) -> AppResult<()> {
+    let repo = Repository::open(path)?;
+    let head_oid = repo
+        .head()
+        .ok()
+        .and_then(|h| h.target())
+        .ok_or_else(|| AppError::msg("No commits to undo."))?;
+    let target_oid =
+        Oid::from_str(sha).map_err(|_| AppError::msg("Invalid commit reference."))?;
+    if head_oid != target_oid {
+        return Err(AppError::msg(
+            "Only the most recent commit can be undone.",
+        ));
+    }
+    let commit = repo.find_commit(head_oid)?;
+    let parent = commit
+        .parent(0)
+        .map_err(|_| AppError::msg("Can't undo the first commit in the repository."))?;
+    repo.reset(parent.as_object(), git2::ResetType::Soft, None)?;
+    Ok(())
 }
 
 /// Recent commit history (newest first), up to `limit` entries.
@@ -1705,3 +1894,282 @@ pub fn pr_file_diff(path: &Path, base: &str, head: &str, file: &str) -> AppResul
     let diff = repo.diff_tree_to_tree(Some(&before), Some(&after), Some(&mut opts))?;
     build_file_diff(&repo, &diff, file)
 }
+
+// ===================== Remote =====================
+
+/// The raw URL of the `origin` remote (unlike `Repo.remote`, this is NOT
+/// stripped of scheme/credentials — it's meant for copying/re-pasting as-is).
+pub fn remote_url(path: &Path) -> AppResult<String> {
+    let repo = Repository::open(path)?;
+    let remote = repo
+        .find_remote("origin")
+        .map_err(|_| AppError::msg("This repository has no \"origin\" remote."))?;
+    Ok(remote.url().unwrap_or_default().to_string())
+}
+
+/// Point `origin` at a new URL, creating the remote if it doesn't exist yet.
+pub fn set_remote_url(path: &Path, url: &str) -> AppResult<()> {
+    let url = url.trim();
+    if url.is_empty() {
+        return Err(AppError::msg("Enter a remote URL."));
+    }
+    let repo = Repository::open(path)?;
+    if repo.find_remote("origin").is_ok() {
+        repo.remote_set_url("origin", url)?;
+    } else {
+        repo.remote("origin", url)?;
+    }
+    Ok(())
+}
+
+/// All configured remotes.
+pub fn list_remotes(path: &Path) -> AppResult<Vec<RemoteInfo>> {
+    let repo = Repository::open(path)?;
+    let mut out = Vec::new();
+    for name in repo.remotes()?.iter().flatten() {
+        if let Ok(remote) = repo.find_remote(name) {
+            out.push(RemoteInfo {
+                name: name.to_string(),
+                url: remote.url().unwrap_or_default().to_string(),
+            });
+        }
+    }
+    Ok(out)
+}
+
+/// Add a new remote.
+pub fn add_remote(path: &Path, name: &str, url: &str) -> AppResult<()> {
+    let name = name.trim();
+    let url = url.trim();
+    if name.is_empty() || url.is_empty() {
+        return Err(AppError::msg("Enter a remote name and URL."));
+    }
+    let repo = Repository::open(path)?;
+    repo.remote(name, url)?;
+    Ok(())
+}
+
+/// Remove a remote.
+pub fn remove_remote(path: &Path, name: &str) -> AppResult<()> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err(AppError::msg("Choose a remote to remove."));
+    }
+    let repo = Repository::open(path)?;
+    repo.remote_delete(name)?;
+    Ok(())
+}
+
+// ===================== Tags =====================
+
+/// All tags in the repository (lightweight and annotated), newest name first.
+pub fn list_git_tags(path: &Path) -> AppResult<Vec<GitTagInfo>> {
+    let repo = Repository::open(path)?;
+    let mut out = Vec::new();
+    if let Ok(names) = repo.tag_names(None) {
+        for name in names.iter().flatten() {
+            let Ok(obj) = repo.revparse_single(name) else { continue };
+            let (target, message) = match obj.as_tag() {
+                Some(tag) => (
+                    short_oid(tag.target_id()),
+                    tag.message().map(|s| s.trim().to_string()).filter(|s| !s.is_empty()),
+                ),
+                None => (short_oid(obj.id()), None),
+            };
+            out.push(GitTagInfo { name: name.to_string(), target, message });
+        }
+    }
+    out.sort_by(|a, b| b.name.cmp(&a.name));
+    Ok(out)
+}
+
+/// Create a tag at `target` (a branch/commit ref, or empty for HEAD). Annotated
+/// when `message` is non-empty, lightweight otherwise.
+pub fn create_tag(path: &Path, name: &str, target: &str, message: &str) -> AppResult<()> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err(AppError::msg("Enter a tag name."));
+    }
+    let repo = Repository::open(path)?;
+    let obj = if target.trim().is_empty() {
+        repo.head()?.peel(git2::ObjectType::Commit)?
+    } else {
+        repo.revparse_single(target.trim())?.peel(git2::ObjectType::Commit)?
+    };
+    let message = message.trim();
+    if message.is_empty() {
+        repo.tag_lightweight(name, &obj, false)?;
+    } else {
+        let sig = repo
+            .signature()
+            .or_else(|_| git2::Signature::now("DevCenter", "devcenter@local"))?;
+        repo.tag(name, &obj, &sig, message, false)?;
+    }
+    Ok(())
+}
+
+/// Delete a tag.
+pub fn delete_tag(path: &Path, name: &str) -> AppResult<()> {
+    let repo = Repository::open(path)?;
+    repo.tag_delete(name)?;
+    Ok(())
+}
+
+/// Check out a tag (detached HEAD, like any other non-branch ref).
+pub fn checkout_tag(path: &Path, name: &str) -> AppResult<()> {
+    run_git(path, &["checkout", &format!("tags/{name}")])
+}
+
+/// Delete a tag on the `origin` remote (`git push origin --delete tag <name>`).
+pub fn delete_remote_tag(path: &Path, name: &str) -> AppResult<()> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err(AppError::msg("Enter a tag name."));
+    }
+    run_git(path, &["push", "origin", "--delete", "tag", name])
+}
+
+/// Push all local tags to `origin` (`git push origin --tags`).
+pub fn push_tags(path: &Path) -> AppResult<()> {
+    run_git(path, &["push", "origin", "--tags"])
+}
+
+// ===================== Worktrees =====================
+
+/// All linked worktrees for this repository (the main working directory first).
+pub fn list_worktrees(path: &Path) -> AppResult<Vec<WorktreeInfo>> {
+    let output = git_cmd()
+        .arg("-C")
+        .arg(path)
+        .args(["worktree", "list", "--porcelain"])
+        .output()?;
+    if !output.status.success() {
+        return Err(AppError::msg(
+            String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        ));
+    }
+    let text = String::from_utf8_lossy(&output.stdout);
+    let mut result = Vec::new();
+    let mut cur_path: Option<String> = None;
+    let mut cur_branch: Option<String> = None;
+    let mut cur_locked = false;
+    let mut first = true;
+    let flush = |path: &mut Option<String>, branch: &mut Option<String>, locked: &mut bool, first: &mut bool, out: &mut Vec<WorktreeInfo>| {
+        if let Some(p) = path.take() {
+            let name = Path::new(&p)
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| p.clone());
+            out.push(WorktreeInfo {
+                name,
+                path: p.replace('\\', "/"),
+                branch: branch.take(),
+                is_main: *first,
+                locked: *locked,
+            });
+            *first = false;
+        }
+        *locked = false;
+    };
+    for line in text.lines() {
+        if line.is_empty() {
+            flush(&mut cur_path, &mut cur_branch, &mut cur_locked, &mut first, &mut result);
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix("worktree ") {
+            cur_path = Some(rest.to_string());
+        } else if let Some(rest) = line.strip_prefix("branch ") {
+            cur_branch = Some(rest.trim_start_matches("refs/heads/").to_string());
+        } else if line == "locked" || line.starts_with("locked ") {
+            cur_locked = true;
+        }
+    }
+    flush(&mut cur_path, &mut cur_branch, &mut cur_locked, &mut first, &mut result);
+    Ok(result)
+}
+
+/// Add a new linked worktree at `target_path` checked out to `branch`.
+/// `create_branch` creates `branch` (from HEAD) instead of checking out an
+/// existing one.
+pub fn add_worktree(path: &Path, target_path: &str, branch: &str, create_branch: bool) -> AppResult<()> {
+    let target_path = target_path.trim();
+    let branch = branch.trim();
+    if target_path.is_empty() {
+        return Err(AppError::msg("Choose a folder for the new worktree."));
+    }
+    if branch.is_empty() {
+        return Err(AppError::msg("Enter a branch name."));
+    }
+    let mut args: Vec<&str> = vec!["worktree", "add"];
+    if create_branch {
+        args.push("-b");
+        args.push(branch);
+        args.push(target_path);
+    } else {
+        args.push(target_path);
+        args.push(branch);
+    }
+    run_git(path, &args)
+}
+
+/// Remove a linked worktree. `force` discards uncommitted changes in it.
+pub fn remove_worktree(path: &Path, target_path: &str, force: bool) -> AppResult<()> {
+    let mut args = vec!["worktree", "remove"];
+    if force {
+        args.push("--force");
+    }
+    args.push(target_path);
+    run_git(path, &args)
+}
+
+// ===================== "Show Git Output" activity log =====================
+// A lightweight, best-effort, in-memory record of the git actions DevCenter has
+// run (newest first, capped) — purely for the "Show Git Output" panel. Not
+// persisted; cleared on restart.
+
+const GIT_LOG_CAP: usize = 300;
+static GIT_LOG: OnceLock<Mutex<VecDeque<GitLogEntry>>> = OnceLock::new();
+
+fn git_log_store() -> &'static Mutex<VecDeque<GitLogEntry>> {
+    GIT_LOG.get_or_init(|| Mutex::new(VecDeque::new()))
+}
+
+fn now_clock() -> String {
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let t = secs % 86_400;
+    format!("{:02}:{:02}:{:02}", t / 3600, (t % 3600) / 60, t % 60)
+}
+
+/// Record one action in the activity log. Never fails the caller — logging is
+/// best-effort.
+pub fn record_action(path: &Path, action: &str, result: &Result<(), String>) {
+    let repo = path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| norm(path));
+    let entry = GitLogEntry {
+        time: now_clock(),
+        repo,
+        action: action.to_string(),
+        ok: result.is_ok(),
+        detail: result.as_ref().err().cloned(),
+    };
+    if let Ok(mut log) = git_log_store().lock() {
+        log.push_front(entry);
+        while log.len() > GIT_LOG_CAP {
+            log.pop_back();
+        }
+    }
+}
+
+/// A snapshot of the activity log, newest first.
+pub fn action_log() -> Vec<GitLogEntry> {
+    git_log_store()
+        .lock()
+        .map(|l| l.iter().cloned().collect())
+        .unwrap_or_default()
+}
+

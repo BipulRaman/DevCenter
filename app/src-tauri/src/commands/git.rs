@@ -359,7 +359,7 @@ pub async fn git_stage(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> AppResult<ChangeSet> {
-    staging_op(id, state, app, move |p| git::stage(p, &files)).await
+    staging_op(id, "Stage files", state, app, move |p| git::stage(p, &files)).await
 }
 
 /// Unstage files (empty list = unstage everything) and return the refreshed
@@ -371,7 +371,7 @@ pub async fn git_unstage(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> AppResult<ChangeSet> {
-    staging_op(id, state, app, move |p| git::unstage(p, &files)).await
+    staging_op(id, "Unstage files", state, app, move |p| git::unstage(p, &files)).await
 }
 
 /// Discard unstaged changes (empty list = discard everything) and return the
@@ -384,7 +384,7 @@ pub async fn git_discard(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> AppResult<ChangeSet> {
-    staging_op(id, state, app, move |p| git::discard(p, &files)).await
+    staging_op(id, "Discard changes", state, app, move |p| git::discard(p, &files)).await
 }
 
 /// Save the current changes to a new stash and return the refreshed working
@@ -397,7 +397,7 @@ pub async fn git_stash_push(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> AppResult<ChangeSet> {
-    staging_op(id, state, app, move |p| {
+    staging_op(id, "Stash changes", state, app, move |p| {
         git::stash_push(p, &message, include_untracked)
     })
     .await
@@ -411,7 +411,7 @@ pub async fn git_stash_apply(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> AppResult<ChangeSet> {
-    staging_op(id, state, app, move |p| git::stash_apply(p, index)).await
+    staging_op(id, "Apply stash", state, app, move |p| git::stash_apply(p, index)).await
 }
 
 /// Apply a stash and remove it from the list, returning the refreshed changes.
@@ -422,7 +422,7 @@ pub async fn git_stash_pop(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> AppResult<ChangeSet> {
-    staging_op(id, state, app, move |p| git::stash_pop(p, index)).await
+    staging_op(id, "Restore stash", state, app, move |p| git::stash_pop(p, index)).await
 }
 
 /// Delete a stash without applying it, returning the refreshed changes.
@@ -433,13 +433,46 @@ pub async fn git_stash_drop(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> AppResult<ChangeSet> {
-    staging_op(id, state, app, move |p| git::stash_drop(p, index)).await
+    staging_op(id, "Delete stash", state, app, move |p| git::stash_drop(p, index)).await
+}
+
+/// Stash only the staged changes, returning the refreshed working changes.
+/// Emits `repos_updated`.
+#[tauri::command]
+pub async fn git_stash_push_staged(
+    id: String,
+    message: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> AppResult<ChangeSet> {
+    staging_op(id, "Stash staged", state, app, move |p| git::stash_push_staged(p, &message)).await
+}
+
+/// Delete every stash, returning the refreshed working changes. Destructive —
+/// confirm in the UI first. Emits `repos_updated`.
+#[tauri::command]
+pub async fn git_stash_clear(
+    id: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> AppResult<ChangeSet> {
+    staging_op(id, "Drop all stashes", state, app, |p| git::stash_clear(p)).await
+}
+
+/// Raw unified diff for a stash ("View Stash…"), shown as plain text.
+#[tauri::command]
+pub async fn git_stash_show(id: String, index: usize) -> AppResult<String> {
+    tauri::async_runtime::spawn_blocking(move || git::stash_show(Path::new(&id), index))
+        .await
+        .map_err(|e| AppError::msg(e.to_string()))?
 }
 
 /// Shared plumbing for stage/unstage/discard: run `op`, return the refreshed
 /// working changes, and emit `repos_updated` so the Git Board stays in sync.
+/// Also records the action (success/failure) in the "Show Git Output" log.
 async fn staging_op<F>(
     id: String,
+    label: &'static str,
     state: State<'_, AppState>,
     app: AppHandle,
     op: F,
@@ -448,7 +481,8 @@ where
     F: FnOnce(&Path) -> AppResult<()> + Send + 'static,
 {
     let st = state.inner().clone();
-    let (changes, repos) = tauri::async_runtime::spawn_blocking(
+    let log_id = id.clone();
+    let result = tauri::async_runtime::spawn_blocking(
         move || -> AppResult<(ChangeSet, Vec<Repo>)> {
             let p = Path::new(&id);
             op(p)?;
@@ -458,8 +492,15 @@ where
         },
     )
     .await
-    .map_err(|e| AppError::msg(e.to_string()))??;
+    .map_err(|e| AppError::msg(e.to_string()))?;
 
+    git::record_action(
+        Path::new(&log_id),
+        label,
+        &result.as_ref().map(|_| ()).map_err(|e| e.to_string()),
+    );
+
+    let (changes, repos) = result?;
     let _ = app.emit("repos_updated", &repos);
     Ok(changes)
 }
@@ -473,24 +514,28 @@ pub async fn git_commit(
     summary: String,
     description: String,
     all: bool,
+    amend: bool,
+    signoff: bool,
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> AppResult<ChangeSet> {
-    let st = state.inner().clone();
-    let (changes, repos) = tauri::async_runtime::spawn_blocking(
-        move || -> AppResult<(ChangeSet, Vec<Repo>)> {
-            let p = Path::new(&id);
-            git::commit(p, &summary, &description, all)?;
-            let changes = git::working_changes(p)?;
-            let repos = collect_repos(&st)?;
-            Ok((changes, repos))
-        },
-    )
+    staging_op(id, "Commit", state, app, move |p| {
+        git::commit(p, &summary, &description, all, amend, signoff).map(|_| ())
+    })
     .await
-    .map_err(|e| AppError::msg(e.to_string()))??;
+}
 
-    let _ = app.emit("repos_updated", &repos);
-    Ok(changes)
+/// Undo the current HEAD commit (soft reset to its parent), returning the
+/// refreshed working changes — the undone commit's files reappear as staged.
+/// Only allowed when `sha` is the current HEAD commit. Emits `repos_updated`.
+#[tauri::command]
+pub async fn git_undo_commit(
+    id: String,
+    sha: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> AppResult<ChangeSet> {
+    staging_op(id, "Undo commit", state, app, move |p| git::undo_commit(p, &sha)).await
 }
 
 /// Push the current branch to its upstream, then return refreshed working
@@ -501,46 +546,105 @@ pub async fn git_push(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> AppResult<ChangeSet> {
-    let st = state.inner().clone();
-    let (changes, repos) = tauri::async_runtime::spawn_blocking(
-        move || -> AppResult<(ChangeSet, Vec<Repo>)> {
-            let p = Path::new(&id);
-            git::push(p)?;
-            let changes = git::working_changes(p)?;
-            let repos = collect_repos(&st)?;
-            Ok((changes, repos))
-        },
-    )
-    .await
-    .map_err(|e| AppError::msg(e.to_string()))??;
-
-    let _ = app.emit("repos_updated", &repos);
-    Ok(changes)
+    staging_op(id, "Push", state, app, |p| git::push(p)).await
 }
 
-/// Pull (fast-forward) the current branch from its upstream, then return
-/// refreshed working changes. Emits `repos_updated`.
+/// Pull the current branch from its upstream (`rebase` false = fast-forward
+/// only, true = `git pull --rebase`), then return refreshed working changes.
+/// Emits `repos_updated`.
 #[tauri::command]
 pub async fn git_pull(
+    id: String,
+    rebase: bool,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> AppResult<ChangeSet> {
+    staging_op(id, if rebase { "Pull (rebase)" } else { "Pull" }, state, app, move |p| git::pull(p, rebase)).await
+}
+
+/// Pull from an explicit remote/branch, then return refreshed working changes.
+/// Emits `repos_updated`.
+#[tauri::command]
+pub async fn git_pull_from(
+    id: String,
+    remote: String,
+    branch: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> AppResult<ChangeSet> {
+    staging_op(id, "Pull from", state, app, move |p| git::pull_from(p, &remote, &branch)).await
+}
+
+/// Push the current branch to an explicit remote/branch, then return refreshed
+/// working changes. Emits `repos_updated`.
+#[tauri::command]
+pub async fn git_push_to(
+    id: String,
+    remote: String,
+    branch: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> AppResult<ChangeSet> {
+    staging_op(id, "Push to", state, app, move |p| git::push_to(p, &remote, &branch)).await
+}
+
+/// Fetch the current branch's remote, pruning stale remote-tracking branches.
+/// Emits `repos_updated`.
+#[tauri::command]
+pub async fn git_fetch_prune(
     id: String,
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> AppResult<ChangeSet> {
-    let st = state.inner().clone();
-    let (changes, repos) = tauri::async_runtime::spawn_blocking(
-        move || -> AppResult<(ChangeSet, Vec<Repo>)> {
-            let p = Path::new(&id);
-            git::pull(p)?;
-            let changes = git::working_changes(p)?;
-            let repos = collect_repos(&st)?;
-            Ok((changes, repos))
-        },
-    )
-    .await
-    .map_err(|e| AppError::msg(e.to_string()))??;
+    staging_op(id, "Fetch (prune)", state, app, |p| git::fetch_prune(p)).await
+}
 
-    let _ = app.emit("repos_updated", &repos);
-    Ok(changes)
+/// Fetch every configured remote. Emits `repos_updated`.
+#[tauri::command]
+pub async fn git_fetch_all(
+    id: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> AppResult<ChangeSet> {
+    staging_op(id, "Fetch (all remotes)", state, app, |p| git::fetch_all(p)).await
+}
+
+/// Merge `branch` into the current branch, then return refreshed working
+/// changes. A conflicted merge is left in-progress (not an error) — the
+/// caller should check `git_conflicts` afterwards. Emits `repos_updated`.
+#[tauri::command]
+pub async fn git_merge_branch(
+    id: String,
+    branch: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> AppResult<ChangeSet> {
+    staging_op(id, "Merge branch", state, app, move |p| git::merge_branch(p, &branch)).await
+}
+
+/// Rebase the current branch onto `onto`, then return refreshed working
+/// changes. A conflicted rebase is left in-progress (not an error) — the
+/// caller should check `git_conflicts` afterwards. Emits `repos_updated`.
+#[tauri::command]
+pub async fn git_rebase_branch(
+    id: String,
+    onto: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> AppResult<ChangeSet> {
+    staging_op(id, "Rebase branch", state, app, move |p| git::rebase_branch(p, &onto)).await
+}
+
+/// Delete a branch on the `origin` remote, then return refreshed working
+/// changes. Emits `repos_updated`.
+#[tauri::command]
+pub async fn git_delete_remote_branch(
+    id: String,
+    branch: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> AppResult<ChangeSet> {
+    staging_op(id, "Delete remote branch", state, app, move |p| git::delete_remote_branch(p, &branch)).await
 }
 
 /// Current merge-conflict state for a repo (kind, side labels, conflicted files).
@@ -649,4 +753,203 @@ pub async fn git_log(id: String, limit: Option<u32>) -> AppResult<Vec<CommitInfo
     })
     .await
     .map_err(|e| AppError::msg(e.to_string()))?
+}
+
+// ===================== Remote =====================
+
+/// The raw `origin` remote URL (unlike `Repo.remote`, not stripped of scheme).
+#[tauri::command]
+pub async fn git_remote_url(id: String) -> AppResult<String> {
+    tauri::async_runtime::spawn_blocking(move || git::remote_url(Path::new(&id)))
+        .await
+        .map_err(|e| AppError::msg(e.to_string()))?
+}
+
+/// Point `origin` at a new URL, returning the repository's refreshed state.
+/// Emits `repos_updated`.
+#[tauri::command]
+pub async fn git_set_remote_url(
+    id: String,
+    url: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> AppResult<Repo> {
+    let st = state.inner().clone();
+    let log_id = id.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || -> AppResult<(Repo, Vec<Repo>)> {
+        let path = PathBuf::from(&id);
+        git::set_remote_url(&path, &url)?;
+        let (watched, tags) = meta_for(&st, &id);
+        let repo = git::repo_info(&path, watched, tags)?;
+        let repos = collect_repos(&st)?;
+        Ok((repo, repos))
+    })
+    .await
+    .map_err(|e| AppError::msg(e.to_string()))?;
+
+    git::record_action(
+        Path::new(&log_id),
+        "Change remote URL",
+        &result.as_ref().map(|_| ()).map_err(|e| e.to_string()),
+    );
+    let (repo, repos) = result?;
+    let _ = app.emit("repos_updated", &repos);
+    Ok(repo)
+}
+
+/// All configured remotes.
+#[tauri::command]
+pub async fn git_list_remotes(id: String) -> AppResult<Vec<crate::models::RemoteInfo>> {
+    tauri::async_runtime::spawn_blocking(move || git::list_remotes(Path::new(&id)))
+        .await
+        .map_err(|e| AppError::msg(e.to_string()))?
+}
+
+/// Add a new remote, returning the refreshed working changes. Emits `repos_updated`.
+#[tauri::command]
+pub async fn git_add_remote(
+    id: String,
+    name: String,
+    url: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> AppResult<ChangeSet> {
+    staging_op(id, "Add remote", state, app, move |p| git::add_remote(p, &name, &url)).await
+}
+
+/// Remove a remote, returning the refreshed working changes. Emits `repos_updated`.
+#[tauri::command]
+pub async fn git_remove_remote(
+    id: String,
+    name: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> AppResult<ChangeSet> {
+    staging_op(id, "Remove remote", state, app, move |p| git::remove_remote(p, &name)).await
+}
+
+// ===================== Tags =====================
+
+/// All tags in the repository.
+#[tauri::command]
+pub async fn git_list_tags(id: String) -> AppResult<Vec<crate::models::GitTagInfo>> {
+    tauri::async_runtime::spawn_blocking(move || git::list_git_tags(Path::new(&id)))
+        .await
+        .map_err(|e| AppError::msg(e.to_string()))?
+}
+
+/// Create a tag (annotated when `message` is non-empty). `target` may be empty
+/// for HEAD. Returns the refreshed working changes. Emits `repos_updated`.
+#[tauri::command]
+pub async fn git_create_tag(
+    id: String,
+    name: String,
+    target: String,
+    message: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> AppResult<ChangeSet> {
+    staging_op(id, "Create tag", state, app, move |p| {
+        git::create_tag(p, &name, &target, &message)
+    })
+    .await
+}
+
+/// Delete a tag, returning the refreshed working changes. Emits `repos_updated`.
+#[tauri::command]
+pub async fn git_delete_tag(
+    id: String,
+    name: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> AppResult<ChangeSet> {
+    staging_op(id, "Delete tag", state, app, move |p| git::delete_tag(p, &name)).await
+}
+
+/// Check out a tag (detached HEAD), returning the refreshed working changes.
+/// Emits `repos_updated`.
+#[tauri::command]
+pub async fn git_checkout_tag(
+    id: String,
+    name: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> AppResult<ChangeSet> {
+    staging_op(id, "Checkout tag", state, app, move |p| git::checkout_tag(p, &name)).await
+}
+
+/// Delete a tag on the `origin` remote, returning the refreshed working
+/// changes. Emits `repos_updated`.
+#[tauri::command]
+pub async fn git_delete_remote_tag(
+    id: String,
+    name: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> AppResult<ChangeSet> {
+    staging_op(id, "Delete remote tag", state, app, move |p| git::delete_remote_tag(p, &name)).await
+}
+
+/// Push all local tags to `origin`, returning the refreshed working changes.
+/// Emits `repos_updated`.
+#[tauri::command]
+pub async fn git_push_tags(
+    id: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> AppResult<ChangeSet> {
+    staging_op(id, "Push tags", state, app, |p| git::push_tags(p)).await
+}
+
+// ===================== Worktrees =====================
+
+/// All linked worktrees for a repository.
+#[tauri::command]
+pub async fn git_list_worktrees(id: String) -> AppResult<Vec<crate::models::WorktreeInfo>> {
+    tauri::async_runtime::spawn_blocking(move || git::list_worktrees(Path::new(&id)))
+        .await
+        .map_err(|e| AppError::msg(e.to_string()))?
+}
+
+/// Add a new linked worktree, returning the refreshed working changes. Emits
+/// `repos_updated`.
+#[tauri::command]
+pub async fn git_add_worktree(
+    id: String,
+    target_path: String,
+    branch: String,
+    create_branch: bool,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> AppResult<ChangeSet> {
+    staging_op(id, "Add worktree", state, app, move |p| {
+        git::add_worktree(p, &target_path, &branch, create_branch)
+    })
+    .await
+}
+
+/// Remove a linked worktree, returning the refreshed working changes. Emits
+/// `repos_updated`.
+#[tauri::command]
+pub async fn git_remove_worktree(
+    id: String,
+    target_path: String,
+    force: bool,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> AppResult<ChangeSet> {
+    staging_op(id, "Remove worktree", state, app, move |p| {
+        git::remove_worktree(p, &target_path, force)
+    })
+    .await
+}
+
+// ===================== Show Git Output =====================
+
+/// Snapshot of the "Show Git Output" activity log (newest first).
+#[tauri::command]
+pub async fn git_action_log() -> AppResult<Vec<crate::models::GitLogEntry>> {
+    tauri::async_runtime::spawn_blocking(git::action_log)
+        .await
+        .map_err(|e| AppError::msg(e.to_string()))
 }
