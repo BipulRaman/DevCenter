@@ -2492,6 +2492,109 @@ const Dropdown = (() => {
   return { open, close, isOpenFor, menu, context, closeContext, flyout, closeFlyout };
 })();
 
+// ---------- Enhanced tooltips ----------
+// Replaces the plain native browser tooltip (from `title="…"`) with a small
+// styled floating card, app-wide, via event delegation — no need to touch any
+// of the many existing `title` attributes. The native `title` is temporarily
+// removed while hovering (restored on mouseout) so the OS tooltip never shows
+// alongside the custom one.
+const Tooltip = (() => {
+  let el = null;
+  let showTimer = null;
+  let hideTimer = null;
+  let current = null;
+
+  function ensureEl() {
+    if (!el) {
+      el = document.createElement("div");
+      el.className = "app-tooltip";
+      el.setAttribute("role", "tooltip");
+      document.body.appendChild(el);
+    }
+    return el;
+  }
+
+  function position(target) {
+    const tip = ensureEl();
+    const r = target.getBoundingClientRect();
+    const tw = tip.offsetWidth;
+    const th = tip.offsetHeight;
+    let left = r.left + r.width / 2 - tw / 2;
+    let top = r.top - th - 9;
+    let placement = "top";
+    if (top < 8) {
+      top = r.bottom + 9;
+      placement = "bottom";
+    }
+    if (left < 8) left = 8;
+    if (left + tw > window.innerWidth - 8) left = window.innerWidth - 8 - tw;
+    tip.style.left = Math.round(left) + "px";
+    tip.style.top = Math.round(top) + "px";
+    tip.dataset.placement = placement;
+    const arrowX = Math.max(10, Math.min(tw - 10, r.left + r.width / 2 - left));
+    tip.style.setProperty("--tip-arrow-x", `${arrowX}px`);
+  }
+
+  function show(target, text) {
+    clearTimeout(hideTimer);
+    const tip = ensureEl();
+    tip.textContent = text;
+    current = target;
+    position(target);
+    // Force layout before adding the visible class so the transition runs.
+    void tip.offsetWidth;
+    tip.classList.add("visible");
+  }
+
+  function hide() {
+    clearTimeout(showTimer);
+    current = null;
+    if (el) el.classList.remove("visible");
+  }
+
+  function restore(t) {
+    if (t.dataset.tip !== undefined) {
+      t.setAttribute("title", t.dataset.tip);
+      delete t.dataset.tip;
+    }
+  }
+
+  document.addEventListener(
+    "mouseover",
+    (e) => {
+      const t = e.target.closest("[title]");
+      if (!t || t === current) return;
+      const text = t.getAttribute("title");
+      if (!text) return;
+      t.dataset.tip = text;
+      t.removeAttribute("title");
+      clearTimeout(showTimer);
+      showTimer = setTimeout(() => show(t, text), 350);
+    },
+    true
+  );
+
+  document.addEventListener(
+    "mouseout",
+    (e) => {
+      const t = e.target.closest("[data-tip]");
+      if (!t) return;
+      const to = e.relatedTarget;
+      if (to && t.contains(to)) return;
+      restore(t);
+      hide();
+    },
+    true
+  );
+
+  // Any of these should dismiss an open tooltip immediately (stale position/text).
+  window.addEventListener("scroll", hide, true);
+  window.addEventListener("resize", hide, true);
+  document.addEventListener("mousedown", hide, true);
+
+  return { hide };
+})();
+
 // Replace the WebView's default right-click menu (Save as, Print, Inspect…) with
 // a single useful action: Reload. App-specific context menus (branch, stash, …)
 // call preventDefault first, so they're left untouched here. Text fields keep
