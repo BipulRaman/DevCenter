@@ -1948,6 +1948,7 @@ const Modal = (() => {
     titleEl.textContent = title;
     bodyEl.innerHTML = "";
     footEl.innerHTML = "";
+    footEl.hidden = false; // reset — a previous modal (e.g. Git Output) may have hidden it
     modalEl.classList.toggle("modal-wide", !!opts.wide);
     settle = resolve;
     render(bodyEl, footEl, close);
@@ -3152,6 +3153,16 @@ const ChangesPage = (() => {
   let navOrder = [];        // visible {path, group} in render order (prev/next + keys)
   let busy = false;
 
+  // Bumped on every navigation away from the current context (repo switch,
+  // tab switch). Async loads (loadChanges/loadHistory/loadRepoPulls/
+  // selectCommit/selectFile/selectPull/…) capture this value before their
+  // first await and re-check it after — if it changed, a newer navigation
+  // has already superseded them, so their (now-stale) result is discarded
+  // instead of overwriting whatever the user has since navigated to. This is
+  // what prevents an old file/commit/PR/repo load from "winning" the race and
+  // flashing stale data into the detail/diff panes.
+  let loadGen = 0;
+
   const $ = (id) => document.getElementById(id);
   const esc = escapeHtml;
 
@@ -3352,6 +3363,7 @@ const ChangesPage = (() => {
   }
 
   function selectRepo(r) {
+    loadGen++; // cancel any in-flight load for the previously selected repo
     repoId = r.id;
     branch = r.branch || "main";
     try { localStorage.setItem("dc.changes.repoId", r.id); } catch (e) {}
@@ -3476,9 +3488,13 @@ const ChangesPage = (() => {
   // ---- changes tab ----
   async function loadChanges() {
     if (!repoId) return;
+    loadGen++;
+    const gen = loadGen;
+    const forRepo = repoId;
     $("changesList").innerHTML = `<div class="changes-empty">Loading…</div>`;
     try {
-      const cs = await DC.gitChanges(repoId, null);
+      const cs = await DC.gitChanges(forRepo, null);
+      if (gen !== loadGen || repoId !== forRepo) return; // superseded by a newer navigation
       branch = cs.branch || branch;
       $("chgBranchLabel").textContent = branch;
       collapsedChanges = new Set();
@@ -3486,6 +3502,7 @@ const ChangesPage = (() => {
       activeFile = null; activeGroup = null;
       setChangeSet(cs);
     } catch (e) {
+      if (gen !== loadGen || repoId !== forRepo) return;
       console.error("gitChanges failed", e);
       $("changesList").innerHTML = `<div class="changes-empty">${esc(String(e))}</div>`;
     }
@@ -3496,8 +3513,11 @@ const ChangesPage = (() => {
   // from VS Code) update the Push/Pull counts and file list in place.
   async function refreshChangesSilently() {
     if (!repoId) return;
+    const gen = loadGen;
+    const forRepo = repoId;
     try {
-      const cs = await DC.gitChanges(repoId, null);
+      const cs = await DC.gitChanges(forRepo, null);
+      if (gen !== loadGen || repoId !== forRepo) return; // a real navigation/load has since taken over
       branch = cs.branch || branch;
       $("chgBranchLabel").textContent = branch;
       setChangeSet(cs);
@@ -4506,14 +4526,20 @@ const ChangesPage = (() => {
   // ---- history tab ----
   async function loadHistory() {
     if (!repoId) return;
+    loadGen++;
+    const gen = loadGen;
+    const forRepo = repoId;
     $("historyList").innerHTML = `<div class="changes-empty">Loading…</div>`;
     try {
-      history = await DC.gitLog(repoId, 200);
+      const log = await DC.gitLog(forRepo, 200);
+      if (gen !== loadGen || repoId !== forRepo) return; // superseded by a newer navigation
+      history = log;
       renderHistory();
       // Auto-select the newest commit so the detail + diff panes aren't left
       // empty (fills the space and matches GitHub Desktop behaviour).
       if (history.length && !activeSha) selectCommit(history[0].hash);
     } catch (e) {
+      if (gen !== loadGen || repoId !== forRepo) return;
       console.error("gitLog failed", e);
       $("historyList").innerHTML = `<div class="changes-empty">${esc(String(e))}</div>`;
     }
@@ -4594,6 +4620,9 @@ const ChangesPage = (() => {
   }
 
   async function selectCommit(sha) {
+    loadGen++;
+    const gen = loadGen;
+    const forRepo = repoId;
     activeSha = sha; activeFile = null; navOrder = [];
     $("historyList").querySelectorAll(".history-row").forEach((r) =>
       r.classList.toggle("selected", r.dataset.sha === sha));
@@ -4601,15 +4630,22 @@ const ChangesPage = (() => {
     $("detailHead").innerHTML = `<div class="detail-msg">${esc(c ? c.summary : "")}</div>
       <div class="detail-meta"><span class="avatar">${esc((c && c.author ? c.author : "?").slice(0, 2).toUpperCase())}</span><span class="detail-author" title="${esc(c ? c.author : "")}">${esc(c ? c.author : "")}</span><span class="hm-dot">·</span><span class="history-when">${esc(c ? c.when : "")}</span><span class="history-hash">${esc(c ? c.id : sha.slice(0, 7))}</span></div>`;
     $("detailFiles").innerHTML = `<div class="changes-empty">Loading…</div>`;
+    $("detailCollapseBtn").hidden = true;
     showDiffEmpty("Loading commit…");
     collapsedDetail = new Set();
     try {
-      const cs = await DC.gitChanges(repoId, sha);
+      const cs = await DC.gitChanges(forRepo, sha);
+      // Bail if a newer navigation (another commit, repo, or tab) has since
+      // taken over — otherwise this stale response can hijack whatever the
+      // user is looking at now (it shares activeFile/diffBody with the
+      // Changes tab and the Pull Requests tab).
+      if (gen !== loadGen || repoId !== forRepo || activeSha !== sha) return;
       commitFiles = cs.files || [];
       renderDetail();
       if (commitFiles.length) selectFile(commitFiles[0].path, null);
       else showDiffEmpty("This commit has no file changes.");
     } catch (e) {
+      if (gen !== loadGen || repoId !== forRepo || activeSha !== sha) return;
       console.error("commit changes failed", e);
       $("detailFiles").innerHTML = `<div class="changes-empty">${esc(String(e))}</div>`;
       showDiffEmpty(String(e));
@@ -4664,6 +4700,9 @@ const ChangesPage = (() => {
 
   async function selectFile(path, group) {
     group = group || null;
+    loadGen++;
+    const gen = loadGen;
+    const forRepo = repoId;
     activeFile = path; activeGroup = group;
     // Highlight the row + scroll into view in whichever list is active.
     const listId = (tab === "history" || tab === "pulls") ? "detailFiles" : "changesList";
@@ -4680,11 +4719,14 @@ const ChangesPage = (() => {
     $("diffBody").innerHTML = `<div class="diff-binary">Loading diff…</div>`;
     try {
       const d = (tab === "pulls" && activePull)
-        ? await DC.prFileDiff(repoId, activePull.base, activePull.branch, path)
-        : await DC.gitDiff(repoId, path, activeSha, group === "staged");
-      if (activeFile !== path || activeGroup !== group) return; // a newer selection won
+        ? await DC.prFileDiff(forRepo, activePull.base, activePull.branch, path)
+        : await DC.gitDiff(forRepo, path, activeSha, group === "staged");
+      // Bail if a newer navigation (another file, repo, or tab) has since taken
+      // over — the diff pane is shared by all three tabs.
+      if (gen !== loadGen || repoId !== forRepo || activeFile !== path || activeGroup !== group) return;
       renderDiff(d);
     } catch (e) {
+      if (gen !== loadGen || repoId !== forRepo || activeFile !== path || activeGroup !== group) return;
       console.error("gitDiff failed", e);
       $("diffBody").innerHTML = `<div class="diff-binary">${esc(String(e))}</div>`;
     }
@@ -4733,6 +4775,7 @@ const ChangesPage = (() => {
 
   // ---- tabs / view mode ----
   function switchTab(next) {
+    loadGen++; // cancel any in-flight load for the tab being left
     tab = next;
     $("cpane-changes").hidden = next !== "changes";
     $("cpane-history").hidden = next !== "history";
@@ -4741,7 +4784,13 @@ const ChangesPage = (() => {
     $("commitLayout").classList.toggle("mode-history", next === "history");
     $("commitLayout").classList.toggle("mode-pulls", next === "pulls");
     document.querySelectorAll(".commit-tab").forEach((t) => t.classList.toggle("active", t.dataset.ctab === next));
-    activeFile = null; navOrder = [];
+    activeFile = null; activeGroup = null; navOrder = [];
+    // Drop the previous tab's detail-panel files immediately so "Collapse all"
+    // (or anything else touching `commitFiles`) can't act on stale data from
+    // the tab just left (e.g. History's last-selected commit) while the new
+    // tab's own commit/PR is still loading.
+    commitFiles = [];
+    $("detailCollapseBtn").hidden = true;
     if (next === "history") {
       activeSha = null; activePull = null;
       $("detailHead").innerHTML = "";
@@ -4755,18 +4804,24 @@ const ChangesPage = (() => {
       $("detailFiles").innerHTML = `<div class="detail-empty">Select a pull request to see its files.</div>`;
       $("detailFileCount").textContent = "Files";
       showDiffEmpty("Select a pull request, then a file to view its diff.");
-      if (pullsLoaded) renderRepoPulls($("pullFilter").value || "");
-      else loadRepoPulls();
+      // Always refresh from the backend on switch-in (matches History) so PRs
+      // opened/closed/updated elsewhere are never shown stale.
+      loadRepoPulls();
     } else {
       activeSha = null; activePull = null;
       showDiffEmpty("Select a file to view its diff.");
-      if (repoId && !staged.length && !unstaged.length) loadChanges(); else renderChanges();
+      // Always refresh from the backend on switch-in — the working tree can
+      // change externally (terminal, VS Code) while another tab was active.
+      if (repoId) loadChanges(); else renderChanges();
     }
   }
 
   // ---- pull requests tab ----
   async function loadRepoPulls() {
     if (!repoId) return;
+    loadGen++;
+    const gen = loadGen;
+    const forRepo = repoId;
     pullsLoaded = false; activePull = null;
     $("repoPrList").innerHTML = `<div class="changes-empty">Loading pull requests…</div>`;
     // Fetch in the background so the PR's head/base branches are present locally
@@ -4774,16 +4829,18 @@ const ChangesPage = (() => {
     // diff). Runs in parallel with the PR list load; non-fatal on failure
     // (offline, no remote, auth, …).
     prFetch = DC.hasBackend
-      ? DC.fetchRepo(repoId).catch((e) => console.warn("PR branch fetch failed", e))
+      ? DC.fetchRepo(forRepo).catch((e) => console.warn("PR branch fetch failed", e))
       : null;
     try {
-      const data = await DC.listRepoPullRequests(repoId);
+      const data = await DC.listRepoPullRequests(forRepo);
+      if (gen !== loadGen || repoId !== forRepo) return; // superseded by a newer navigation
       repoPulls = Array.isArray(data) ? data : [];
       pullsLoaded = true;
       renderRepoPulls($("pullFilter").value || "");
       // Auto-open the newest PR so the detail + diff panes aren't left empty.
       if (repoPulls.length && !activePull) selectPull(repoPulls[0].id);
     } catch (e) {
+      if (gen !== loadGen || repoId !== forRepo) return;
       console.error("listRepoPullRequests failed", e);
       repoPulls = []; pullsLoaded = true;
       $("repoPrList").innerHTML = `<div class="changes-empty">${esc(String(e))}</div>`;
@@ -4828,6 +4885,9 @@ const ChangesPage = (() => {
   async function selectPull(id) {
     const pr = repoPulls.find((p) => String(p.id) === String(id));
     if (!pr) return;
+    loadGen++;
+    const gen = loadGen;
+    const forRepo = repoId;
     activePull = pr; activeSha = null; activeFile = null; navOrder = [];
     $("repoPrList").querySelectorAll(".history-row").forEach((r) =>
       r.classList.toggle("selected", r.dataset.prId === String(id)));
@@ -4840,31 +4900,32 @@ const ChangesPage = (() => {
     const vb = $("prViewBtn");
     if (vb) vb.addEventListener("click", () => openPrUrl(pr.url));
     $("detailFiles").innerHTML = `<div class="changes-empty">Loading…</div>`;
+    $("detailCollapseBtn").hidden = true;
     showDiffEmpty("Loading pull request…");
     collapsedDetail = new Set();
     try {
       let cs;
       try {
         // Fast path: diff against the PR branches already present locally.
-        cs = await DC.prChanges(repoId, pr.base, pr.branch);
+        cs = await DC.prChanges(forRepo, pr.base, pr.branch);
       } catch (err) {
         // Branches probably aren't fetched yet — wait for the in-flight background
         // fetch (kicked off in loadRepoPulls) and retry once.
         if (!prFetch) throw err;
-        if (activePull !== pr) return;
+        if (gen !== loadGen || repoId !== forRepo || activePull !== pr) return;
         showDiffEmpty("Fetching pull request branches…");
         await prFetch;
-        if (activePull !== pr) return;
-        cs = await DC.prChanges(repoId, pr.base, pr.branch);
+        if (gen !== loadGen || repoId !== forRepo || activePull !== pr) return;
+        cs = await DC.prChanges(forRepo, pr.base, pr.branch);
       }
-      if (activePull !== pr) return; // a newer selection won
+      if (gen !== loadGen || repoId !== forRepo || activePull !== pr) return; // a newer selection won
       commitFiles = cs.files || [];
       renderDetail();
       if (commitFiles.length) selectFile(commitFiles[0].path, null);
       else showDiffEmpty("This pull request has no file changes.");
     } catch (e) {
+      if (gen !== loadGen || repoId !== forRepo || activePull !== pr) return;
       console.error("prChanges failed", e);
-      if (activePull !== pr) return;
       commitFiles = []; navOrder = [];
       $("detailFileCount").textContent = "Files";
       $("detailFiles").innerHTML = `<div class="changes-empty">${esc(String(e))}</div>`;
