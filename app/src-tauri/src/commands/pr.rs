@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::path::Path;
 
 use tauri::State;
@@ -48,13 +47,12 @@ pub async fn list_pull_requests(
             .cloned()
             .collect();
 
-        let mut token_cache: HashMap<String, Option<String>> = HashMap::new();
         let mut out: Vec<PullRequest> = Vec::new();
         let mut errors: Vec<String> = Vec::new();
 
         for repo in &repos {
             let (mut prs, err) =
-                fetch_repo_prs(repo, &github_accounts, &all_accounts, &mut token_cache);
+                fetch_repo_prs(repo, &github_accounts, &all_accounts, &st);
             out.append(&mut prs);
             if let Some(e) = err {
                 errors.push(e);
@@ -91,8 +89,7 @@ pub async fn list_repo_pull_requests(
             .filter(|a| a.provider == "github")
             .cloned()
             .collect();
-        let mut token_cache: HashMap<String, Option<String>> = HashMap::new();
-        let (prs, err) = fetch_repo_prs(&repo, &github_accounts, &all_accounts, &mut token_cache);
+        let (prs, err) = fetch_repo_prs(&repo, &github_accounts, &all_accounts, &st);
         if prs.is_empty() {
             if let Some(e) = err {
                 return Err(AppError::msg(e));
@@ -112,7 +109,7 @@ fn fetch_repo_prs(
     repo: &Repo,
     github_accounts: &[Account],
     all_accounts: &[Account],
-    token_cache: &mut HashMap<String, Option<String>>,
+    st: &AppState,
 ) -> (Vec<PullRequest>, Option<String>) {
     let rref = match pr::RepoRef::parse(&repo.remote, &repo.provider) {
         Some(x) => x,
@@ -134,19 +131,30 @@ fn fetch_repo_prs(
     if candidates.is_empty() {
         return (Vec::new(), None); // no account configured for this provider/org
     }
-    // Try each candidate; the first that succeeds wins.
+    // Try each candidate; the first that succeeds wins. Tokens are resolved
+    // through the shared state cache so repeated refreshes reuse a `git`-auth
+    // credential instead of re-triggering a sign-in popup.
     let mut last_err: Option<String> = None;
     for account in &candidates {
-        if !token_cache.contains_key(&account.id) {
-            token_cache.insert(account.id.clone(), pr::resolve_token(account).ok());
-        }
-        let token = match token_cache.get(&account.id).and_then(|t| t.clone()) {
-            Some(t) => t,
-            None => continue,
+        let token = match st.resolve_token(account) {
+            Ok(t) => t,
+            Err(_) => continue,
         };
         match pr::fetch_for_repo(&rref, &token, &repo.name, &repo.id) {
             Ok(prs) => return (prs, None),
-            Err(e) => last_err = Some(format!("{}: {}", repo.name, e)),
+            Err(e) => {
+                // A cached `git`-auth token may have expired — drop it and try
+                // once more with a freshly resolved credential.
+                if account.auth_kind == "git" {
+                    st.invalidate_token(&account.id);
+                    if let Ok(token) = st.resolve_token(account) {
+                        if let Ok(prs) = pr::fetch_for_repo(&rref, &token, &repo.name, &repo.id) {
+                            return (prs, None);
+                        }
+                    }
+                }
+                last_err = Some(format!("{}: {}", repo.name, e));
+            }
         }
     }
     (Vec::new(), last_err)
@@ -155,11 +163,13 @@ fn fetch_repo_prs(
 // ===================== PR review: comments + threads =====================
 
 /// Resolve a repo (by path id) to its provider ref + a working account/token,
-/// trying every candidate account until one succeeds.
+/// trying every candidate account until one succeeds. Returns the winning
+/// account so the caller can invalidate its cached token on a later auth error.
 fn resolve_repo_account(
     repo_id: &str,
     all_accounts: &[Account],
-) -> AppResult<(pr::RepoRef, String)> {
+    st: &AppState,
+) -> AppResult<(pr::RepoRef, Account, String)> {
     let repo = git::repo_info(Path::new(repo_id), false, Vec::new())?;
     let rref = pr::RepoRef::parse(&repo.remote, &repo.provider)
         .ok_or_else(|| AppError::msg("Couldn't determine the provider repository from its remote."))?;
@@ -177,13 +187,34 @@ fn resolve_repo_account(
         ));
     }
     let mut last_err: Option<String> = None;
-    for account in &candidates {
-        match pr::resolve_token(account) {
-            Ok(token) => return Ok((rref, token)),
+    for account in candidates {
+        match st.resolve_token(&account) {
+            Ok(token) => return Ok((rref, account, token)),
             Err(e) => last_err = Some(e.to_string()),
         }
     }
     Err(AppError::msg(last_err.unwrap_or_else(|| "Couldn't resolve a token for this account.".to_string())))
+}
+
+/// Run a PR operation against a repo's resolved account/token, retrying once
+/// with a freshly resolved credential if the first attempt fails on a
+/// `git`-auth account (its cached token may have expired).
+fn with_repo_token<T>(
+    st: &AppState,
+    repo_id: &str,
+    op: impl Fn(&pr::RepoRef, &str) -> AppResult<T>,
+) -> AppResult<T> {
+    let all_accounts = accounts(st)?;
+    let (rref, account, token) = resolve_repo_account(repo_id, &all_accounts, st)?;
+    match op(&rref, &token) {
+        Ok(v) => Ok(v),
+        Err(e) if account.auth_kind == "git" => {
+            st.invalidate_token(&account.id);
+            let token = st.resolve_token(&account)?;
+            op(&rref, &token).map_err(|_| e)
+        }
+        Err(e) => Err(e),
+    }
 }
 
 fn accounts(state: &AppState) -> AppResult<Vec<Account>> {
@@ -200,9 +231,7 @@ pub async fn fetch_pr_threads(
 ) -> AppResult<Vec<PrThread>> {
     let st = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || -> AppResult<Vec<PrThread>> {
-        let all_accounts = accounts(&st)?;
-        let (rref, token) = resolve_repo_account(&repo_id, &all_accounts)?;
-        pr::fetch_threads(&rref, pr_id, &token)
+        with_repo_token(&st, &repo_id, |rref, token| pr::fetch_threads(rref, pr_id, token))
     })
     .await
     .map_err(|e| AppError::msg(e.to_string()))?
@@ -223,10 +252,10 @@ pub async fn post_pr_comment(
 ) -> AppResult<Vec<PrThread>> {
     let st = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || -> AppResult<Vec<PrThread>> {
-        let all_accounts = accounts(&st)?;
-        let (rref, token) = resolve_repo_account(&repo_id, &all_accounts)?;
-        pr::post_comment(&rref, pr_id, thread_id.as_deref(), path.as_deref(), line, &body, &token)?;
-        pr::fetch_threads(&rref, pr_id, &token)
+        with_repo_token(&st, &repo_id, |rref, token| {
+            pr::post_comment(rref, pr_id, thread_id.as_deref(), path.as_deref(), line, &body, token)?;
+            pr::fetch_threads(rref, pr_id, token)
+        })
     })
     .await
     .map_err(|e| AppError::msg(e.to_string()))?
@@ -243,10 +272,10 @@ pub async fn resolve_pr_thread(
 ) -> AppResult<Vec<PrThread>> {
     let st = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || -> AppResult<Vec<PrThread>> {
-        let all_accounts = accounts(&st)?;
-        let (rref, token) = resolve_repo_account(&repo_id, &all_accounts)?;
-        pr::resolve_thread(&rref, pr_id, &thread_id, resolved, &token)?;
-        pr::fetch_threads(&rref, pr_id, &token)
+        with_repo_token(&st, &repo_id, |rref, token| {
+            pr::resolve_thread(rref, pr_id, &thread_id, resolved, token)?;
+            pr::fetch_threads(rref, pr_id, token)
+        })
     })
     .await
     .map_err(|e| AppError::msg(e.to_string()))?
@@ -264,10 +293,10 @@ pub async fn submit_pr_review(
 ) -> AppResult<Vec<PrThread>> {
     let st = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || -> AppResult<Vec<PrThread>> {
-        let all_accounts = accounts(&st)?;
-        let (rref, token) = resolve_repo_account(&repo_id, &all_accounts)?;
-        pr::submit_review(&rref, pr_id, &review_type, &body, &token)?;
-        pr::fetch_threads(&rref, pr_id, &token)
+        with_repo_token(&st, &repo_id, |rref, token| {
+            pr::submit_review(rref, pr_id, &review_type, &body, token)?;
+            pr::fetch_threads(rref, pr_id, token)
+        })
     })
     .await
     .map_err(|e| AppError::msg(e.to_string()))?

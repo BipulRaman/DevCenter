@@ -160,6 +160,10 @@ pub async fn add_account(
 
         let conn = st.db.lock().unwrap();
         store::upsert_account(&conn, &account)?;
+        drop(conn);
+        // Drop any previously cached token for this id so the fresh credential
+        // is used from now on.
+        st.invalidate_token(&account.id);
         Ok(account)
     })
     .await
@@ -175,8 +179,10 @@ pub async fn test_account(id: String, state: State<'_, AppState>) -> AppResult<A
             let conn = st.db.lock().unwrap();
             store::get_account(&conn, &id)?
         }
-        .ok_or_else(|| AppError::msg("Account not found."))?;
+                .ok_or_else(|| AppError::msg("Account not found."))?;
 
+        // Re-testing should hit the provider with a freshly resolved credential.
+        st.invalidate_token(&id);
         let tok = pr::resolve_token(&account)?;
         match pr::verify(&account, &tok) {
             Ok(username) => {
@@ -207,6 +213,7 @@ pub async fn remove_account(id: String, state: State<'_, AppState>) -> AppResult
             store::delete_account(&conn, &id)?;
         }
         let _ = secrets::delete_token(&id);
+        st.invalidate_token(&id);
         Ok(())
     })
     .await
