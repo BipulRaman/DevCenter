@@ -1,0 +1,154 @@
+// ---------- Pull Requests render ----------
+let prCurrentFilter = "all";
+let prRepoSelected = new Set(); // empty = all watched repos
+
+function watchedRepoNames() {
+  return repos.filter((r) => r.watched).map((r) => r.name);
+}
+
+function watchedPulls() {
+  const names = watchedRepoNames();
+  return pulls.filter((p) => names.includes(p.repo));
+}
+
+// PR summary panels were removed; kept as a no-op so callers stay harmless.
+function renderPrStats() {}
+
+function refreshPrRepoFilter() {
+  const menu = document.getElementById("prRepoMenu");
+  const label = document.getElementById("prRepoLabel");
+  if (!menu) return;
+  const names = watchedRepoNames();
+  // drop any selected repos that are no longer watched
+  prRepoSelected = new Set([...prRepoSelected].filter((n) => names.includes(n)));
+
+  // Map each watched repo name to its provider for icons.
+  const providerOf = (name) => {
+    const r = repos.find((x) => x.name === name);
+    return r ? r.provider : "other";
+  };
+  const icon = (p) => (p === "github" ? ICON.github : p === "azure" ? ICON.azure : ICON.repo);
+
+  if (!names.length) {
+    menu.innerHTML = `<div class="multiselect-empty">No watched repos</div>`;
+  } else {
+    menu.innerHTML =
+      `<label class="multiselect-opt all">
+         <input type="checkbox" id="prRepoAll" ${prRepoSelected.size === 0 ? "checked" : ""} />
+         <span>All watched repos</span>
+       </label>
+       <div class="multiselect-sep"></div>` +
+      names
+        .map(
+          (n) => `<label class="multiselect-opt">
+            <input type="checkbox" value="${escapeHtml(n)}" ${prRepoSelected.has(n) ? "checked" : ""} />
+            <span class="multiselect-ico">${icon(providerOf(n))}</span>
+            <span>${escapeHtml(n)}</span>
+          </label>`
+        )
+        .join("");
+  }
+
+  // label text
+  if (prRepoSelected.size === 0) label.textContent = "All watched repos";
+  else if (prRepoSelected.size === 1) label.textContent = [...prRepoSelected][0];
+  else label.textContent = `${prRepoSelected.size} repos`;
+
+  // button icon: provider glyph when exactly one repo is selected
+  const iconHost = document.getElementById("prRepoIcon");
+  if (iconHost) {
+    const DEFAULT_REPO_ICON =
+      '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6a2 2 0 0 1 2-2h14v16H5a2 2 0 0 1-2-2Z"/><path d="M19 16H5a2 2 0 0 0-2 2"/></svg>';
+    iconHost.innerHTML = prRepoSelected.size === 1 ? icon(providerOf([...prRepoSelected][0])) : DEFAULT_REPO_ICON;
+  }
+
+  // wire option checkboxes
+  const allBox = document.getElementById("prRepoAll");
+  if (allBox) {
+    allBox.addEventListener("change", () => {
+      prRepoSelected.clear();
+      refreshPrRepoFilter();
+      renderPulls(document.getElementById("prSearch").value);
+    });
+  }
+  on(menu, 'input[type="checkbox"][value]', "change", (box) => {
+    if (box.checked) prRepoSelected.add(box.value);
+    else prRepoSelected.delete(box.value);
+    refreshPrRepoFilter();
+    renderPulls(document.getElementById("prSearch").value);
+  });
+}
+
+function renderPulls(filter = "") {
+  const f = filter.toLowerCase();
+  const watchedNames = watchedRepoNames();
+  if (!watchedNames.length) {
+    document.getElementById("prList").innerHTML = empty(
+      "No repositories are being watched. Enable \u201cWatch PRs\u201d on a repo in Git Board to see its pull requests here."
+    );
+    return;
+  }
+  const list = pulls.filter((p) => {
+    const isWatched = watchedNames.includes(p.repo);
+    const matchRepo = prRepoSelected.size === 0 || prRepoSelected.has(p.repo);
+    const matchText = p.title.toLowerCase().includes(f) || p.repo.toLowerCase().includes(f) || p.author.toLowerCase().includes(f);
+    const matchStatus = prCurrentFilter === "all" || p.status === prCurrentFilter;
+    return isWatched && matchRepo && matchText && matchStatus;
+  });
+  const reviewMap = {
+    approved: { cls: "ok", icon: ICON.check, label: "Approved" },
+    changes: { cls: "danger", icon: ICON.changes, label: "Changes requested" },
+    pending: { cls: "muted", icon: ICON.clock, label: "Review pending" },
+  };
+  document.getElementById("prList").innerHTML = list
+    .map((p) => {
+      const rev = reviewMap[p.reviews];
+      const statusTag =
+        p.status === "merged"
+          ? `<span class="pr-state merged">${ICON.merge}Merged</span>`
+          : p.status === "draft"
+          ? `<span class="pr-state draft">${ICON.pr}Draft</span>`
+          : `<span class="pr-state open">${ICON.pr}Open</span>`;
+      return `
+      <div class="pr-row ${p.status}">
+        <div class="pr-icon ${p.status}">${p.status === "merged" ? ICON.merge : ICON.pr}</div>
+        <div class="pr-main">
+          <div class="pr-title-row">
+            <span class="pr-name">${p.title}</span>
+            ${statusTag}
+          </div>
+          <div class="pr-sub">
+            <span>${p.repo} #${p.id}</span>
+            <span class="repo-dot">·</span>
+            <span><code>${p.branch}</code> → <code>${p.base}</code></span>
+            <span class="repo-dot">·</span>
+            <span>by ${p.author}</span>
+            <span class="repo-dot">·</span>
+            <span>${p.updated}</span>
+          </div>
+        </div>
+        <div class="pr-meta">
+          <span class="chip review ${rev.cls}">${rev.icon}${rev.label}</span>
+          <span class="chip">${ICON.comment}${p.comments}</span>
+          <span class="pr-diff"><span class="add">+${p.additions}</span> <span class="del">−${p.deletions}</span></span>
+        </div>
+        <div class="pr-actions">
+          ${p.repoId ? `<button class="btn btn-primary btn-sm" data-pr-review="${p.id}" data-pr-repo="${p.repoId}">Review</button>` : ""}
+          <button class="btn btn-ghost btn-sm" data-pr-url="${p.url}">${ICON.external}View</button>
+        </div>
+      </div>`;
+    })
+    .join("");
+  if (!list.length) document.getElementById("prList").innerHTML = empty("No pull requests match your filters.");
+
+  on(document, "#prList [data-pr-url]", "click", (btn) => {
+    const url = btn.dataset.prUrl;
+    if (!url) return;
+    if (DC && DC.hasBackend) DC.openUrl(url).catch((e) => console.error("openUrl failed", e));
+    else window.open(url, "_blank");
+  });
+  on(document, "#prList [data-pr-review]", "click", (btn) => {
+    const pr = pulls.find((p) => String(p.id) === btn.dataset.prReview && p.repoId === btn.dataset.prRepo);
+    if (pr && window.PrReviewer) window.PrReviewer.open(pr.repoId, pr, { returnTo: "pull-requests" });
+  });
+}
