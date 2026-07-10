@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>DevCenter</title>
+  <script src="js/theme.js"></script>
   <link rel="stylesheet" href="css/fonts.css" />
   <link rel="stylesheet" href="css/styles.css" />
 </head>
@@ -92,20 +93,20 @@
               <input type="text" placeholder="Search repositories…" id="repoSearch" />
             </div>
             <div class="multiselect" id="repoAccountSelect" hidden>
-              <button class="multiselect-btn" id="repoAccountBtn" type="button" aria-haspopup="true" aria-expanded="false">
+              <button class="multiselect-btn" id="repoAccountBtn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="repoAccountMenu">
                 <span class="ms-ico" id="repoAccountIcon"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M3 10h18"/></svg></span>
                 <span id="repoAccountLabel">All accounts</span>
                 <svg class="caret" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
               </button>
-              <div class="multiselect-menu" id="repoAccountMenu" role="menu"></div>
+              <div class="multiselect-menu" id="repoAccountMenu" role="group" aria-label="Repository accounts"></div>
             </div>
             <div class="multiselect" id="repoTagSelect" hidden>
-              <button class="multiselect-btn" id="repoTagBtn" type="button" aria-haspopup="true" aria-expanded="false">
+              <button class="multiselect-btn" id="repoTagBtn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="repoTagMenu">
                 <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4l8.2 8.2a2 2 0 0 0 2.8 0l6.8-6.8a2 2 0 0 0 0-2.8Z"/><circle cx="7" cy="7" r="1.2" fill="currentColor"/></svg>
                 <span id="repoTagLabel">All tags</span>
                 <svg class="caret" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
               </button>
-              <div class="multiselect-menu" id="repoTagMenu" role="menu"></div>
+              <div class="multiselect-menu" id="repoTagMenu" role="group" aria-label="Repository tags"></div>
             </div>
             <button class="btn btn-ghost" id="addRepoBtn">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/><line x1="12" y1="10" x2="12" y2="16"/><line x1="9" y1="13" x2="15" y2="13"/></svg>
@@ -129,14 +130,18 @@
             <p class="page-desc">Review changes, write a message and commit — like GitHub Desktop.</p>
           </div>
           <div class="page-actions">
+            <div class="multiselect" id="chgAccountSelect" hidden>
+              <button class="multiselect-btn" id="chgAccountBtn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="chgAccountMenu">
+                <span class="ms-ico" id="chgAccountIcon"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M3 10h18"/></svg></span>
+                <span id="chgAccountLabel">All accounts</span>
+                <svg class="caret" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+              <div class="multiselect-menu" id="chgAccountMenu" role="group" aria-label="Repository accounts"></div>
+            </div>
             <button class="chg-repo-btn" id="chgRepoBtn" type="button" aria-haspopup="true" aria-expanded="false">
               <span id="chgRepoIcon" class="chg-repo-ico"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6a2 2 0 0 1 2-2h14v16H5a2 2 0 0 1-2-2Z"/><path d="M19 16H5a2 2 0 0 0-2 2"/></svg></span>
               <span id="chgRepoLabel">Select repository</span>
               <svg class="caret" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-            </button>
-            <button class="btn btn-ghost" id="chgRefreshBtn" title="Refresh">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
-              Refresh
             </button>
           </div>
         </header>
@@ -144,14 +149,14 @@
         <div class="commit-layout" id="commitLayout">
           <!-- COLUMN 1: tabs + file list (Changes) / commit list (History) + commit box -->
           <aside class="commit-side">
-            <div class="commit-tabs">
-              <button class="commit-tab active" data-ctab="changes" type="button"><span class="ct-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span><span>Changes</span></button>
-              <button class="commit-tab" data-ctab="history" type="button"><span class="ct-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg></span><span>Commits</span></button>
-              <button class="commit-tab" data-ctab="pulls" type="button"><span class="ct-ico"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M13 10.05V5.5C13 4.12 11.88 3 10.5 3H8.71L9.85 1.85C10.05 1.66 10.05 1.34 9.85 1.15C9.66 0.95 9.34 0.95 9.15 1.15L7.15 3.15C6.95 3.34 6.95 3.66 7.15 3.85L9.15 5.85C9.34 6.05 9.66 6.05 9.85 5.85C10.05 5.66 10.05 5.34 9.85 5.15L8.71 4H10.5C11.33 4 12 4.67 12 5.5V10.05C10.86 10.28 10 11.29 10 12.5C10 13.88 11.12 15 12.5 15C13.88 15 15 13.88 15 12.5C15 11.29 14.14 10.28 13 10.05ZM12.5 14C11.67 14 11 13.33 11 12.5C11 11.67 11.67 11 12.5 11C13.33 11 14 11.67 14 12.5C14 13.33 13.33 14 12.5 14ZM6 3.5C6 2.12 4.88 1 3.5 1C2.12 1 1 2.12 1 3.5C1 4.71 1.86 5.72 3 5.95V10.051C1.86 10.283 1 11.293 1 12.5C1 13.879 2.122 15 3.5 15C4.878 15 6 13.879 6 12.5C6 11.292 5.14 10.283 4 10.051V5.95C5.14 5.72 6 4.71 6 3.5ZM2 3.5C2 2.67 2.67 2 3.5 2C4.33 2 5 2.67 5 3.5C5 4.33 4.33 5 3.5 5C2.67 5 2 4.33 2 3.5ZM5 12.5C5 13.327 4.327 14 3.5 14C2.673 14 2 13.327 2 12.5C2 11.673 2.673 11 3.5 11C4.327 11 5 11.673 5 12.5Z"/></svg></span><span class="ct-full">Pull Requests</span><span class="ct-short">PRs</span></button>
+            <div class="commit-tabs" role="tablist" aria-label="Repository views">
+              <button class="commit-tab active" id="ctab-changes" data-ctab="changes" type="button" role="tab" aria-selected="true" aria-controls="cpane-changes"><span class="ct-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span><span>Changes</span></button>
+              <button class="commit-tab" id="ctab-history" data-ctab="history" type="button" role="tab" aria-selected="false" aria-controls="cpane-history" tabindex="-1"><span class="ct-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg></span><span>Commits</span></button>
+              <button class="commit-tab" id="ctab-pulls" data-ctab="pulls" type="button" role="tab" aria-selected="false" aria-controls="cpane-pulls" tabindex="-1"><span class="ct-ico"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M13 10.05V5.5C13 4.12 11.88 3 10.5 3H8.71L9.85 1.85C10.05 1.66 10.05 1.34 9.85 1.15C9.66 0.95 9.34 0.95 9.15 1.15L7.15 3.15C6.95 3.34 6.95 3.66 7.15 3.85L9.15 5.85C9.34 6.05 9.66 6.05 9.85 5.85C10.05 5.66 10.05 5.34 9.85 5.15L8.71 4H10.5C11.33 4 12 4.67 12 5.5V10.05C10.86 10.28 10 11.29 10 12.5C10 13.88 11.12 15 12.5 15C13.88 15 15 13.88 15 12.5C15 11.29 14.14 10.28 13 10.05ZM12.5 14C11.67 14 11 13.33 11 12.5C11 11.67 11.67 11 12.5 11C13.33 11 14 11.67 14 12.5C14 13.33 13.33 14 12.5 14ZM6 3.5C6 2.12 4.88 1 3.5 1C2.12 1 1 2.12 1 3.5C1 4.71 1.86 5.72 3 5.95V10.051C1.86 10.283 1 11.293 1 12.5C1 13.879 2.122 15 3.5 15C4.878 15 6 13.879 6 12.5C6 11.292 5.14 10.283 4 10.051V5.95C5.14 5.72 6 4.71 6 3.5ZM2 3.5C2 2.67 2.67 2 3.5 2C4.33 2 5 2.67 5 3.5C5 4.33 4.33 5 3.5 5C2.67 5 2 4.33 2 3.5ZM5 12.5C5 13.327 4.327 14 3.5 14C2.673 14 2 13.327 2 12.5C2 11.673 2.673 11 3.5 11C4.327 11 5 11.673 5 12.5Z"/></svg></span><span class="ct-full">Pull Requests</span><span class="ct-short">PRs</span></button>
             </div>
 
             <!-- Changes tab -->
-            <div class="commit-pane" id="cpane-changes">
+            <div class="commit-pane" id="cpane-changes" role="tabpanel" aria-labelledby="ctab-changes">
               <button class="conflict-banner" id="conflictBanner" type="button" hidden>
                 <svg class="conflict-banner-ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
                 <span class="conflict-banner-text" id="conflictBannerText">Merge conflicts</span>
@@ -167,11 +172,11 @@
               <div class="changes-head">
                 <span class="changes-head-title" id="changeCount">No changes</span>
                 <div class="changes-head-actions">
-                  <div class="seg view-toggle" id="chgViewToggle" title="Toggle file tree / flat list">
-                    <button class="seg-btn" data-view="tree" type="button" title="Tree view">
+                  <div class="seg view-toggle" id="chgViewToggle" role="group" aria-label="File display" title="Toggle file tree / flat list">
+                    <button class="seg-btn" data-view="tree" type="button" title="Tree view" aria-pressed="false">
                       <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h8"/><path d="M3 12h6"/><path d="M3 19h10"/><path d="M15 5h6"/><path d="M18 5v14"/><path d="M15 19h6"/></svg>
                     </button>
-                    <button class="seg-btn active" data-view="list" type="button" title="Flat list">
+                    <button class="seg-btn active" data-view="list" type="button" title="Flat list" aria-pressed="true">
                       <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
                     </button>
                   </div>
@@ -202,7 +207,7 @@
             </div>
 
             <!-- History tab -->
-            <div class="commit-pane" id="cpane-history" hidden>
+            <div class="commit-pane" id="cpane-history" role="tabpanel" aria-labelledby="ctab-history" hidden>
               <div class="commit-filter">
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                 <input type="text" id="historyFilter" placeholder="Filter commits…" spellcheck="false" />
@@ -210,11 +215,11 @@
                   <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
                 </button>
               </div>
-              <div class="history-list" id="historyList"></div>
+              <div class="history-list" id="historyList" role="listbox" aria-label="Commits"></div>
             </div>
 
             <!-- Pull Requests tab -->
-            <div class="commit-pane" id="cpane-pulls" hidden>
+            <div class="commit-pane" id="cpane-pulls" role="tabpanel" aria-labelledby="ctab-pulls" hidden>
               <div class="commit-filter">
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                 <input type="text" id="pullFilter" placeholder="Filter pull requests…" spellcheck="false" />
@@ -222,12 +227,12 @@
                   <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
                 </button>
               </div>
-              <div class="history-list" id="repoPrList"></div>
+              <div class="history-list" id="repoPrList" role="listbox" aria-label="Pull requests"></div>
             </div>
           </aside>
 
           <!-- resizer: side ↔ next pane -->
-          <div class="pane-resizer" data-resize="side" title="Drag to resize · double-click to reset"></div>
+          <div class="pane-resizer" data-resize="side" role="separator" aria-label="Resize repository panel" aria-orientation="vertical" tabindex="0" title="Drag to resize · double-click to reset"></div>
 
           <!-- COLUMN 2 (History only): selected commit's metadata + file list -->
           <section class="commit-detail" id="commitDetail" hidden>
@@ -242,7 +247,7 @@
           </section>
 
           <!-- resizer: detail ↔ diff (History only) -->
-          <div class="pane-resizer rz-detail" data-resize="detail" title="Drag to resize · double-click to reset"></div>
+          <div class="pane-resizer rz-detail" data-resize="detail" role="separator" aria-label="Resize detail panel" aria-orientation="vertical" tabindex="0" title="Drag to resize · double-click to reset"></div>
 
           <!-- COLUMN 3: diff viewer -->
           <section class="diff-view">
@@ -304,14 +309,14 @@
         </header>
         <div class="prr-layout" id="prrLayout">
           <aside class="prr-side">
-            <div class="prr-tabs">
-              <button class="prr-tab active" data-prrtab="files" type="button">Files</button>
-              <button class="prr-tab" data-prrtab="conversation" type="button">Conversation</button>
+            <div class="prr-tabs" role="tablist" aria-label="Pull request review views">
+              <button class="prr-tab active" id="prrtab-files" data-prrtab="files" type="button" role="tab" aria-selected="true" aria-controls="prrFilesView">Files</button>
+              <button class="prr-tab" id="prrtab-conversation" data-prrtab="conversation" type="button" role="tab" aria-selected="false" aria-controls="prrConversationView" tabindex="-1">Conversation</button>
             </div>
             <div class="conflict-files" id="prrFiles"></div>
           </aside>
           <section class="prr-main" id="prrMain">
-            <div id="prrFilesView">
+            <div id="prrFilesView" role="tabpanel" aria-labelledby="prrtab-files">
               <div class="diff-view">
                 <div class="diff-empty" id="prrDiffEmpty">Select a file to view its diff.</div>
                 <div class="diff-content" id="prrDiffContent" hidden>
@@ -320,7 +325,7 @@
                 </div>
               </div>
             </div>
-            <div id="prrConversationView" hidden></div>
+            <div id="prrConversationView" role="tabpanel" aria-labelledby="prrtab-conversation" hidden></div>
           </section>
         </div>
       </section>
@@ -338,17 +343,17 @@
               <input type="text" placeholder="Search pull requests…" id="prSearch" />
             </div>
             <div class="multiselect" id="prRepoSelect">
-              <button class="multiselect-btn" id="prRepoBtn" type="button" aria-haspopup="true" aria-expanded="false">
+              <button class="multiselect-btn" id="prRepoBtn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="prRepoMenu">
                 <span class="ms-ico" id="prRepoIcon"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6a2 2 0 0 1 2-2h14v16H5a2 2 0 0 1-2-2Z"/><path d="M19 16H5a2 2 0 0 0-2 2"/></svg></span>
                 <span id="prRepoLabel">All watched repos</span>
                 <svg class="caret" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
               </button>
-              <div class="multiselect-menu" id="prRepoMenu" role="menu"></div>
+              <div class="multiselect-menu" id="prRepoMenu" role="group" aria-label="Watched repositories"></div>
             </div>
-            <div class="seg" id="prFilter">
-              <button class="seg-btn active" data-filter="all">All</button>
-              <button class="seg-btn" data-filter="open">Open</button>
-              <button class="seg-btn" data-filter="draft">Draft</button>
+            <div class="seg" id="prFilter" role="group" aria-label="Pull request status">
+              <button class="seg-btn active" data-filter="all" aria-pressed="true">All</button>
+              <button class="seg-btn" data-filter="open" aria-pressed="false">Open</button>
+              <button class="seg-btn" data-filter="draft" aria-pressed="false">Draft</button>
             </div>
           </div>
         </header>
@@ -368,10 +373,10 @@
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
               <input type="text" placeholder="Search applications…" id="appSearch" />
             </div>
-            <div class="seg" id="appFilter">
-              <button class="seg-btn active" data-appfilter="all">All</button>
-              <button class="seg-btn" data-appfilter="running">Running</button>
-              <button class="seg-btn" data-appfilter="stopped">Stopped</button>
+            <div class="seg" id="appFilter" role="group" aria-label="Application status">
+              <button class="seg-btn active" data-appfilter="all" aria-pressed="true">All</button>
+              <button class="seg-btn" data-appfilter="running" aria-pressed="false">Running</button>
+              <button class="seg-btn" data-appfilter="stopped" aria-pressed="false">Stopped</button>
             </div>
             <button class="btn btn-ghost" id="newAppBtn">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
@@ -405,7 +410,7 @@
 
   <!-- ============ MODAL ============ -->
   <div class="modal-overlay" id="modalOverlay" aria-hidden="true">
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle" tabindex="-1">
       <div class="modal-head">
         <h2 class="modal-title" id="modalTitle"></h2>
         <button class="btn btn-icon modal-close" id="modalClose" type="button" title="Close" aria-label="Close">

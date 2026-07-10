@@ -28,7 +28,7 @@ function stat(label, value, color) {
   </div>`;
 }
 function empty(msg, icon) {
-  return `<div class="empty-state"><div class="empty-ico">${icon || ICON.folder}</div><p>${msg}</p></div>`;
+  return `<div class="empty-state"><div class="empty-ico">${icon || ICON.folder}</div><p>${escapeHtml(msg)}</p></div>`;
 }
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -47,10 +47,77 @@ function mdInline(s) {
     .replace(/\*\*([^*]+)\*\*|__([^_]+)__/g, (_, a, b) => `<strong>${a || b}</strong>`)
     .replace(/\*([^*]+)\*|_([^_]+)_/g, (_, a, b) => `<em>${a || b}</em>`);
 }
+
+function normalizeCommentMarkup(raw) {
+  const htmlPattern = /<!--[\s\S]*?-->|<\/?(?:a|blockquote|br|code|details|div|em|h[1-6]|hr|i|img|li|ol|p|pre|span|strong|summary|table|tbody|td|th|thead|tr|ul)\b[^>]*>/i;
+  if (!htmlPattern.test(raw) || typeof DOMParser === "undefined") return raw;
+
+  const doc = new DOMParser().parseFromString(raw, "text/html");
+  const discarded = new Set(["SCRIPT", "STYLE", "IFRAME", "OBJECT", "EMBED", "SVG", "MATH", "FORM", "INPUT", "BUTTON", "TEXTAREA", "SELECT"]);
+  const block = (value) => value.trim() ? `\n${value.trim()}\n` : "";
+  const children = (node) => [...node.childNodes].map(render).join("");
+
+  function render(node) {
+    if (node.nodeType === Node.TEXT_NODE) return node.nodeValue || "";
+    if (node.nodeType !== Node.ELEMENT_NODE || discarded.has(node.tagName)) return "";
+
+    const content = children(node);
+    switch (node.tagName) {
+      case "A": {
+        const href = node.getAttribute("href") || "";
+        const label = content.trim() || href;
+        return /^https?:\/\//i.test(href) ? `[${label}](${href})` : label;
+      }
+      case "IMG": {
+        const src = node.getAttribute("src") || "";
+        const alt = node.getAttribute("alt") || "";
+        return /^https?:\/\//i.test(src) ? `![${alt}](${src})` : alt;
+      }
+      case "BR": return "\n";
+      case "HR": return "\n---\n";
+      case "STRONG":
+      case "B": return `**${content}**`;
+      case "EM":
+      case "I": return `*${content}*`;
+      case "CODE": return node.parentElement?.tagName === "PRE" ? content : `\`${content}\``;
+      case "PRE": return `\n\`\`\`\n${node.textContent || ""}\n\`\`\`\n`;
+      case "BLOCKQUOTE": return block(content.split("\n").map((line) => `> ${line}`).join("\n"));
+      case "UL":
+      case "OL": {
+        const ordered = node.tagName === "OL";
+        const items = [...node.children]
+          .filter((item) => item.tagName === "LI")
+          .map((item, index) => `${ordered ? `${index + 1}.` : "-"} ${children(item).trim()}`);
+        return block(items.join("\n"));
+      }
+      case "LI": return content;
+      case "H1":
+      case "H2":
+      case "H3":
+      case "H4":
+      case "H5":
+      case "H6": return block(`#### ${content.trim()}`);
+      case "P":
+      case "DIV":
+      case "DETAILS":
+      case "SUMMARY":
+      case "TABLE":
+      case "THEAD":
+      case "TBODY":
+      case "TR": return block(content);
+      case "TD":
+      case "TH": return `${content.trim()} `;
+      default: return content;
+    }
+  }
+
+  return [...doc.body.childNodes].map(render).join("").replace(/\n{3,}/g, "\n\n").trim();
+}
+
 function mdLite(raw) {
   if (!raw) return "";
   const blocks = [];
-  let s = escapeHtml(raw)
+  let s = escapeHtml(normalizeCommentMarkup(String(raw)))
     .replace(/\r\n/g, "\n")
     .replace(/```[a-zA-Z0-9]*\n([\s\S]*?)```/g, (_, code) => {
       blocks.push(`<pre class="prr-md-pre"><code>${code.replace(/\n$/, "")}</code></pre>`);

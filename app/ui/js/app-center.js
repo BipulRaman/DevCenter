@@ -33,7 +33,8 @@ function renderApps(filter = "") {
   });
   document.getElementById("appList").innerHTML = list
     .map((a) => {
-      const status = a.status || "stopped";
+      const status = ["running", "building", "error", "stopped"].includes(a.status) ? a.status : "stopped";
+      const id = Number(a.id);
       const running = status === "running";
       const building = status === "building";
       const statusLabel = { running: "Running", building: "Building", error: "Error" }[status] || "Stopped";
@@ -51,8 +52,8 @@ function renderApps(filter = "") {
            <button class="btn btn-icon btn-sm" data-restart="${a.id}" title="Restart">${ICON.sync}</button>`
         : `<button class="btn btn-start btn-sm" data-start="${a.id}">${ICON.play}Start</button>`;
       return `
-      <div class="app-row ${status}" data-row="${a.id}">
-        <span class="app-drag" title="Drag to reorder">${ICON.grip}</span>
+      <div class="app-row ${status}" data-row="${id}">
+        <button class="app-drag" type="button" title="Reorder application" aria-label="Reorder ${escapeHtml(a.name)}. Use Up and Down arrow keys.">${ICON.grip}</button>
         <span class="app-status-dot ${status}"></span>
         <div class="app-main">
           <div class="app-title-row">
@@ -97,6 +98,17 @@ function appById(id) {
 function setupAppListEvents() {
   const listEl = document.getElementById("appList");
   if (!listEl) return;
+
+  const persistVisibleOrder = async () => {
+    const visibleIds = [...listEl.querySelectorAll(".app-row")].map((row) => String(row.dataset.row));
+    const visibleSet = new Set(visibleIds);
+    let index = 0;
+    apps = apps.map((app) => visibleSet.has(String(app.id)) ? appById(visibleIds[index++]) : app);
+    if (DC && DC.hasBackend) {
+      try { await DC.reorderApps(apps.map((app) => Number(app.id))); }
+      catch (err) { console.error("reorderApps failed", err); }
+    }
+  };
 
   on(listEl, "[data-start]", "click", (btn) => appAction("start", btn.dataset.start, btn));
   on(listEl, "[data-stop]", "click", (btn) => appAction("stop", btn.dataset.stop, btn));
@@ -169,16 +181,27 @@ function setupAppListEvents() {
         window.removeEventListener("pointercancel", onUp, true);
         row.classList.remove("dragging");
         if (moved) {
-          const ids = [...listEl.querySelectorAll(".app-row")].map((r) => Number(r.dataset.row));
-          apps.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
-          if (DC && DC.hasBackend) {
-            try { await DC.reorderApps(ids); } catch (err) { console.error("reorderApps failed", err); }
-          }
+          await persistVisibleOrder();
+          handle.focus();
         }
       };
       window.addEventListener("pointermove", onMove, true);
       window.addEventListener("pointerup", onUp, true);
       window.addEventListener("pointercancel", onUp, true);
+    }));
+
+  listEl.querySelectorAll(".app-drag").forEach((handle) =>
+    handle.addEventListener("keydown", async (e) => {
+      if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+      const row = handle.closest(".app-row");
+      if (!row) return;
+      const sibling = e.key === "ArrowUp" ? row.previousElementSibling : row.nextElementSibling;
+      if (!sibling || !sibling.classList.contains("app-row")) return;
+      e.preventDefault();
+      if (e.key === "ArrowUp") listEl.insertBefore(row, sibling);
+      else listEl.insertBefore(sibling, row);
+      await persistVisibleOrder();
+      handle.focus();
     }));
 }
 

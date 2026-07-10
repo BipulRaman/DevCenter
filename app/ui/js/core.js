@@ -137,7 +137,9 @@ if (mainScroll) {
   if (themeBtn) {
     themeBtn.addEventListener("click", () => {
       const root = document.documentElement;
-      root.setAttribute("data-theme", root.getAttribute("data-theme") === "light" ? "dark" : "light");
+      const theme = root.getAttribute("data-theme") === "light" ? "dark" : "light";
+      root.setAttribute("data-theme", theme);
+      try { localStorage.setItem("dc.theme", theme); } catch (e) {}
       syncThemeUI();
     });
   }

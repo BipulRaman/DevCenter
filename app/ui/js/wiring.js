@@ -5,7 +5,11 @@ document.getElementById("appSearch").addEventListener("input", debounce((e) => r
 // App Center status filter (All / Running / Stopped)
 on(document, "#appFilter .seg-btn", "click", (btn) => {
   appStatusFilter = btn.dataset.appfilter;
-  document.querySelectorAll("#appFilter .seg-btn").forEach((b) => b.classList.toggle("active", b === btn));
+  document.querySelectorAll("#appFilter .seg-btn").forEach((b) => {
+    const active = b === btn;
+    b.classList.toggle("active", active);
+    b.setAttribute("aria-pressed", String(active));
+  });
   renderApps(document.getElementById("appSearch").value || "");
 });
 
@@ -13,55 +17,65 @@ const prSearch = document.getElementById("prSearch");
 prSearch.addEventListener("input", debounce((e) => renderPulls(e.target.value)));
 on(document, "#prFilter .seg-btn", "click", (btn) => {
   prCurrentFilter = btn.dataset.filter;
-  document.querySelectorAll("#prFilter .seg-btn").forEach((b) => b.classList.toggle("active", b === btn));
+  document.querySelectorAll("#prFilter .seg-btn").forEach((b) => {
+    const active = b === btn;
+    b.classList.toggle("active", active);
+    b.setAttribute("aria-pressed", String(active));
+  });
   renderPulls(prSearch.value);
 });
 
-// repo multiselect dropdown open/close
-const prRepoSelect = document.getElementById("prRepoSelect");
-const prRepoBtn = document.getElementById("prRepoBtn");
-prRepoBtn.addEventListener("click", (e) => {
-  e.stopPropagation();
-  const open = prRepoSelect.classList.toggle("open");
-  prRepoBtn.setAttribute("aria-expanded", open ? "true" : "false");
-});
-document.addEventListener("click", (e) => {
-  if (!prRepoSelect.contains(e.target)) {
-    prRepoSelect.classList.remove("open");
-    prRepoBtn.setAttribute("aria-expanded", "false");
-  }
-});
+function wireMultiselect(selectId, buttonId) {
+  const select = document.getElementById(selectId);
+  const button = document.getElementById(buttonId);
+  if (!select || !button) return;
 
-// Git Board tag multiselect dropdown open/close
-const repoTagSelect = document.getElementById("repoTagSelect");
-const repoTagBtn = document.getElementById("repoTagBtn");
-if (repoTagBtn) {
-  repoTagBtn.addEventListener("click", (e) => {
+  const setOpen = (open, moveFocus = false) => {
+    select.classList.toggle("open", open);
+    button.setAttribute("aria-expanded", String(open));
+    if (moveFocus) {
+      const target = open ? select.querySelector('input[type="checkbox"]') : button;
+      if (target) target.focus();
+    }
+  };
+  button.addEventListener("click", (e) => {
     e.stopPropagation();
-    const open = repoTagSelect.classList.toggle("open");
-    repoTagBtn.setAttribute("aria-expanded", open ? "true" : "false");
+    setOpen(!select.classList.contains("open"));
+  });
+  button.addEventListener("keydown", (e) => {
+    if (e.key !== "ArrowDown") return;
+    e.preventDefault();
+    setOpen(true, true);
+  });
+  select.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      setOpen(false, true);
+    }
   });
   document.addEventListener("click", (e) => {
-    if (!repoTagSelect.contains(e.target)) {
-      repoTagSelect.classList.remove("open");
-      repoTagBtn.setAttribute("aria-expanded", "false");
-    }
+    if (!select.contains(e.target)) setOpen(false);
   });
 }
 
-// Git Board account multiselect dropdown open/close
-const repoAccountSelect = document.getElementById("repoAccountSelect");
-const repoAccountBtn = document.getElementById("repoAccountBtn");
-if (repoAccountBtn) {
-  repoAccountBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    const open = repoAccountSelect.classList.toggle("open");
-    repoAccountBtn.setAttribute("aria-expanded", open ? "true" : "false");
+wireMultiselect("prRepoSelect", "prRepoBtn");
+wireMultiselect("repoTagSelect", "repoTagBtn");
+wireMultiselect("repoAccountSelect", "repoAccountBtn");
+wireMultiselect("chgAccountSelect", "chgAccountBtn");
+
+document.querySelectorAll(".seg").forEach((group) => {
+  group.addEventListener("keydown", (e) => {
+    const buttons = [...group.querySelectorAll(".seg-btn:not(:disabled)")];
+    const index = buttons.indexOf(document.activeElement);
+    if (index < 0 || buttons.length < 2) return;
+    let next = index;
+    if (e.key === "ArrowLeft" || e.key === "ArrowUp") next = (index - 1 + buttons.length) % buttons.length;
+    else if (e.key === "ArrowRight" || e.key === "ArrowDown") next = (index + 1) % buttons.length;
+    else if (e.key === "Home") next = 0;
+    else if (e.key === "End") next = buttons.length - 1;
+    else return;
+    e.preventDefault();
+    buttons[next].focus();
+    buttons[next].click();
   });
-  document.addEventListener("click", (e) => {
-    if (!repoAccountSelect.contains(e.target)) {
-      repoAccountSelect.classList.remove("open");
-      repoAccountBtn.setAttribute("aria-expanded", "false");
-    }
-  });
-}
+});

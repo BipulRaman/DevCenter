@@ -102,39 +102,42 @@ function renderPulls(filter = "") {
   };
   document.getElementById("prList").innerHTML = list
     .map((p) => {
-      const rev = reviewMap[p.reviews];
+      const status = ["open", "draft", "merged"].includes(p.status) ? p.status : "open";
+      const rev = reviewMap[p.reviews] || reviewMap.pending;
+      const id = escapeHtml(p.id);
+      const repoId = escapeHtml(p.repoId || "");
       const statusTag =
-        p.status === "merged"
+        status === "merged"
           ? `<span class="pr-state merged">${ICON.merge}Merged</span>`
-          : p.status === "draft"
+          : status === "draft"
           ? `<span class="pr-state draft">${ICON.pr}Draft</span>`
           : `<span class="pr-state open">${ICON.pr}Open</span>`;
       return `
-      <div class="pr-row ${p.status}">
-        <div class="pr-icon ${p.status}">${p.status === "merged" ? ICON.merge : ICON.pr}</div>
+      <div class="pr-row ${status}">
+        <div class="pr-icon ${status}">${status === "merged" ? ICON.merge : ICON.pr}</div>
         <div class="pr-main">
           <div class="pr-title-row">
-            <span class="pr-name">${p.title}</span>
+            <span class="pr-name">${escapeHtml(p.title || "")}</span>
             ${statusTag}
           </div>
           <div class="pr-sub">
-            <span>${p.repo} #${p.id}</span>
+            <span>${escapeHtml(p.repo || "")} #${id}</span>
             <span class="repo-dot">·</span>
-            <span><code>${p.branch}</code> → <code>${p.base}</code></span>
+            <span><code>${escapeHtml(p.branch || "")}</code> → <code>${escapeHtml(p.base || "")}</code></span>
             <span class="repo-dot">·</span>
-            <span>by ${p.author}</span>
+            <span>by ${escapeHtml(p.author || "")}</span>
             <span class="repo-dot">·</span>
-            <span>${p.updated}</span>
+            <span>${escapeHtml(p.updated || "")}</span>
           </div>
         </div>
         <div class="pr-meta">
           <span class="chip review ${rev.cls}">${rev.icon}${rev.label}</span>
-          <span class="chip">${ICON.comment}${p.comments}</span>
-          <span class="pr-diff"><span class="add">+${p.additions}</span> <span class="del">−${p.deletions}</span></span>
+          <span class="chip">${ICON.comment}${escapeHtml(p.comments ?? 0)}</span>
+          <span class="pr-diff"><span class="add">+${escapeHtml(p.additions ?? 0)}</span> <span class="del">−${escapeHtml(p.deletions ?? 0)}</span></span>
         </div>
         <div class="pr-actions">
-          ${p.repoId ? `<button class="btn btn-primary btn-sm" data-pr-review="${p.id}" data-pr-repo="${p.repoId}">Review</button>` : ""}
-          <button class="btn btn-ghost btn-sm" data-pr-url="${p.url}">${ICON.external}View</button>
+          ${p.repoId ? `<button class="btn btn-primary btn-sm" data-pr-review="${id}" data-pr-repo="${repoId}">Review</button>` : ""}
+          <button class="btn btn-ghost btn-sm" data-pr-url="${escapeHtml(p.url || "")}">${ICON.external}View</button>
         </div>
       </div>`;
     })

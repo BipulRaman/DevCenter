@@ -6,25 +6,64 @@ const Modal = (() => {
   const bodyEl = document.getElementById("modalBody");
   const footEl = document.getElementById("modalFoot");
   const closeBtn = document.getElementById("modalClose");
+  const appEl = document.querySelector(".app");
+  const queue = [];
   let settle = null;
+  let restoreFocus = null;
+
+  function focusableElements() {
+    return [...modalEl.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [href], [tabindex]:not([tabindex="-1"])')]
+      .filter((el) => !el.hidden && el.getClientRects().length > 0);
+  }
+
+  function drainQueue() {
+    if (!settle && queue.length) show(queue.shift());
+  }
 
   function close(result) {
+    if (!settle) return;
     overlay.classList.remove("open");
     overlay.setAttribute("aria-hidden", "true");
     document.removeEventListener("keydown", onKey);
+    if (appEl) appEl.inert = false;
     const cb = settle;
     settle = null;
-    if (cb) cb(result);
+    const target = restoreFocus;
+    restoreFocus = null;
+    cb(result);
+    if (target && target.isConnected) target.focus();
+    if (queue.length) queueMicrotask(drainQueue);
   }
   function onKey(e) {
-    if (e.key === "Escape") close(null);
+    if (e.key === "Escape") {
+      e.preventDefault();
+      close(null);
+      return;
+    }
+    if (e.key !== "Tab") return;
+    const focusable = focusableElements();
+    if (!focusable.length) {
+      e.preventDefault();
+      modalEl.focus();
+      return;
+    }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey && (document.activeElement === first || !modalEl.contains(document.activeElement))) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && (document.activeElement === last || !modalEl.contains(document.activeElement))) {
+      e.preventDefault();
+      first.focus();
+    }
   }
   closeBtn.addEventListener("click", () => close(null));
   overlay.addEventListener("mousedown", (e) => {
     if (e.target === overlay) close(null);
   });
 
-  function open(title, resolve, render, opts = {}) {
+  function show({ title, resolve, render, opts }) {
+    restoreFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     titleEl.textContent = title;
     bodyEl.innerHTML = "";
     footEl.innerHTML = "";
@@ -32,9 +71,21 @@ const Modal = (() => {
     modalEl.classList.toggle("modal-wide", !!opts.wide);
     settle = resolve;
     render(bodyEl, footEl, close);
+    if (appEl) appEl.inert = true;
     overlay.classList.add("open");
     overlay.setAttribute("aria-hidden", "false");
     document.addEventListener("keydown", onKey);
+    requestAnimationFrame(() => {
+      if (!settle || modalEl.contains(document.activeElement)) return;
+      const preferred = bodyEl.querySelector('input:not(:disabled), select:not(:disabled), textarea:not(:disabled), button:not(:disabled)');
+      (preferred || footEl.querySelector("button:not(:disabled)") || closeBtn).focus();
+    });
+  }
+
+  function open(title, resolve, render, opts = {}) {
+    const request = { title, resolve, render, opts };
+    if (settle) queue.push(request);
+    else show(request);
   }
 
   function mkBtn(cls, text) {
@@ -146,7 +197,9 @@ const Dropdown = (() => {
     window.removeEventListener("resize", onMove, true);
     window.removeEventListener("scroll", onMove, true);
     anchor.classList.remove("dropdown-open");
+    anchor.setAttribute("aria-expanded", "false");
     active = null;
+    if (anchor.isConnected) anchor.focus();
   }
 
   function isOpenFor(anchor) {
@@ -200,6 +253,8 @@ const Dropdown = (() => {
 
     const list = document.createElement("div");
     list.className = "dropdown-list";
+    list.setAttribute("role", "listbox");
+    list.setAttribute("aria-label", header || anchor.textContent.trim() || "Options");
     menu.appendChild(list);
     document.body.appendChild(menu);
 
@@ -247,6 +302,8 @@ const Dropdown = (() => {
         row.type = "button";
         row.className = "dropdown-opt" + (isCur ? " current" : "");
         row.title = opt;
+        row.setAttribute("role", "option");
+        row.setAttribute("aria-selected", String(isCur));
         const check = document.createElement("span");
         check.className = "opt-check";
         check.innerHTML = ICON.check;
@@ -300,7 +357,7 @@ const Dropdown = (() => {
     };
 
     // Keyboard navigation over the currently-visible, selectable rows.
-    const moveActive = (dir) => {
+    const moveActive = (dir, focusRow = false) => {
       const rows = [...list.querySelectorAll('.dropdown-opt:not(:disabled):not([aria-disabled="true"])')];
       if (!rows.length) return;
       let idx = rows.findIndex((r) => r.classList.contains("active"));
@@ -308,6 +365,17 @@ const Dropdown = (() => {
       rows.forEach((r) => r.classList.remove("active"));
       rows[idx].classList.add("active");
       rows[idx].scrollIntoView({ block: "nearest" });
+      if (focusRow) rows[idx].focus();
+    };
+
+    const focusBoundary = (last) => {
+      const rows = [...list.querySelectorAll('.dropdown-opt:not(:disabled):not([aria-disabled="true"])')];
+      if (!rows.length) return;
+      rows.forEach((r) => r.classList.remove("active"));
+      const row = rows[last ? rows.length - 1 : 0];
+      row.classList.add("active");
+      row.scrollIntoView({ block: "nearest" });
+      row.focus();
     };
 
     renderList("");
@@ -332,7 +400,16 @@ const Dropdown = (() => {
       if (menu.contains(e.target) || anchor.contains(e.target) || e.target === anchor) return;
       close();
     };
-    const onKey = (e) => { if (e.key === "Escape") close(); };
+    const onKey = (e) => {
+      if (e.key === "Escape") close();
+      else if (!input && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+        e.preventDefault();
+        moveActive(e.key === "ArrowDown" ? 1 : -1, true);
+      } else if (!input && (e.key === "Home" || e.key === "End")) {
+        e.preventDefault();
+        focusBoundary(e.key === "End");
+      }
+    };
     const onMove = () => position();
 
     document.addEventListener("mousedown", onDoc, true);
@@ -340,8 +417,11 @@ const Dropdown = (() => {
     window.addEventListener("resize", onMove, true);
     window.addEventListener("scroll", onMove, true);
     anchor.classList.add("dropdown-open");
+    anchor.setAttribute("aria-haspopup", "listbox");
+    anchor.setAttribute("aria-expanded", "true");
     active = { menu, anchor, onDoc, onKey, onMove };
     if (input) setTimeout(() => input.focus(), 30);
+    else setTimeout(() => focusBoundary(false), 30);
   }
 
   // Action menu (icon + label rows that run a callback). `items` is an array of
@@ -397,6 +477,7 @@ const Dropdown = (() => {
     window.addEventListener("resize", onMove, true);
     window.addEventListener("scroll", onMove, true);
     anchor.classList.add("dropdown-open");
+    anchor.setAttribute("aria-expanded", "true");
     active = { menu: el, anchor, onDoc, onKey, onMove };
   }
 
@@ -478,6 +559,7 @@ const Dropdown = (() => {
     window.removeEventListener("scroll", flyoutOnScroll, true);
     window.removeEventListener("resize", flyoutOnScroll, true);
     if (flyoutAnchor) flyoutAnchor.classList.remove("dropdown-open");
+    if (flyoutAnchor) flyoutAnchor.setAttribute("aria-expanded", "false");
     flyoutAnchor = null;
   }
 
@@ -556,6 +638,7 @@ const Dropdown = (() => {
     el.style.top = Math.round(top) + "px";
     flyoutLevels = [{ el }];
     anchor.classList.add("dropdown-open");
+    anchor.setAttribute("aria-expanded", "true");
 
     flyoutOnDoc = (e) => {
       if (flyoutLevels.some((l) => l.el.contains(e.target))) return;

@@ -43,8 +43,11 @@ async function hydrateFromBackend() {
 }
 
 // ---------- Pull Requests (backend) ----------
+let pullsLoadGen = 0;
+
 async function hydratePulls() {
   if (!DC || !DC.hasBackend) return;
+  const gen = ++pullsLoadGen;
   if (!watchedRepoNames().length) {
     renderPrStats();
     renderPulls(document.getElementById("prSearch").value || "");
@@ -54,12 +57,14 @@ async function hydratePulls() {
   if (prList) prList.innerHTML = empty("Loading pull requests…");
   try {
     const data = await DC.listPullRequests(null);
+    if (gen !== pullsLoadGen) return;
     if (Array.isArray(data)) {
       pulls = data;
       renderPrStats();
       renderPulls(document.getElementById("prSearch").value || "");
     }
   } catch (e) {
+    if (gen !== pullsLoadGen) return;
     console.error("listPullRequests failed", e);
     if (prList) prList.innerHTML = empty(String(e));
   }
@@ -90,14 +95,14 @@ function renderAccounts() {
       const m = providerMeta(a.provider);
       const stateCls = a.status === "connected" ? "connected" : a.status === "error" ? "error" : "unverified";
       const stateLabel = a.status === "connected" ? "Connected" : a.status === "error" ? "Error" : "Unverified";
-      const who = a.username ? `<code>${a.username}</code>` : "Token";
-      const org = a.organization ? ` · ${a.organization}` : "";
+      const who = a.username ? `<code>${escapeHtml(a.username)}</code>` : "Token";
+      const org = a.organization ? ` · ${escapeHtml(a.organization)}` : "";
       return `
       <div class="account-row">
         <div class="account-icon ${m.cls}">${m.icon}</div>
         <div class="account-main">
           <div class="account-title-row">
-            <span class="account-name">${a.label}</span>
+            <span class="account-name">${escapeHtml(a.label || "")}</span>
             <span class="account-state ${stateCls}">${stateLabel}</span>
           </div>
           <div class="account-sub">${m.name}${org} · ${who}</div>

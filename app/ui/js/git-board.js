@@ -124,6 +124,7 @@ function renderRepos(filter = "") {
   document.getElementById("repoGrid").innerHTML = list
     .map((r) => {
       const i = repos.indexOf(r);
+      const provider = r.provider === "github" || r.provider === "azure" ? r.provider : "other";
       const dirtyChip =
         r.status === "dirty"
           ? `<span class="chip dirty-chip" title="Uncommitted changes">${ICON.dot}Uncommitted</span>`
@@ -145,21 +146,22 @@ function renderRepos(filter = "") {
         : `<button class="btn btn-ghost btn-sm" data-watch="${i}" title="Watch this repo's PRs">${ICON.eyeOff}Watch PRs</button>`;
       const branchChip =
         DC && DC.hasBackend
-          ? `<button class="chip branch switchable" data-branch="${i}" title="Switch branch">${ICON.branch}${r.branch}${ICON.caret}</button>`
-          : `<span class="chip branch">${ICON.branch}${r.branch}</span>`;
+          ? `<button class="chip branch switchable" data-branch="${i}" title="Switch branch">${ICON.branch}${escapeHtml(r.branch || "")}${ICON.caret}</button>`
+          : `<span class="chip branch">${ICON.branch}${escapeHtml(r.branch || "")}</span>`;
+      const fetchLabel = r.lastFetch ? `Fetched ${escapeHtml(r.lastFetch)}` : "Never fetched";
       return `
       <div class="repo-row ${dotClass}">
-        <div class="repo-icon ${r.provider}">${providerIcon(r.provider)}</div>
+        <div class="repo-icon ${provider}">${providerIcon(provider)}</div>
         <div class="repo-main">
           <div class="repo-title-row">
-            <span class="repo-name repo-open-link" data-open-changes="${i}" title="Open in Changes">${r.name}</span>
+            <span class="repo-name repo-open-link" data-open-changes="${i}" title="Open in Changes">${escapeHtml(r.name || "")}</span>
             ${branchChip}
             ${syncChip}${dirtyChip}${tagChips}
           </div>
           <div class="repo-sub">
-            <span class="repo-path">${r.path}</span>
+            <span class="repo-path">${escapeHtml(r.path || "")}</span>
             <span class="repo-dot">·</span>
-            <span>${ICON.sync}Fetched ${r.lastFetch}</span>
+            <span>${ICON.sync}${fetchLabel}</span>
           </div>
         </div>
         <div class="repo-actions">

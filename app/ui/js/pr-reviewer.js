@@ -17,6 +17,7 @@ const PrReviewer = (() => {
   let collapsed = new Set(); // collapsed folders in the file tree
   let busy = false;
   let returnPage = "changes"; // page to go back to — wherever "Review" was clicked from
+  let loadGen = 0;
 
   function threadsFor(path) {
     return threads.filter((t) => t.path === path);
@@ -25,20 +26,32 @@ const PrReviewer = (() => {
     return threads.filter((t) => t.path == null);
   }
 
+  function syncTabState(tab) {
+    document.querySelectorAll(".prr-tab").forEach((t) => {
+      const active = t.dataset.prrtab === tab;
+      t.classList.toggle("active", active);
+      t.setAttribute("aria-selected", String(active));
+      t.tabIndex = active ? 0 : -1;
+    });
+    $("prrLayout").dataset.tab = tab;
+    $("prrFilesView").hidden = tab !== "files";
+    $("prrConversationView").hidden = tab !== "conversation";
+  }
+
   async function open(id, pullRequest, opts) {
+    const gen = ++loadGen;
     repoId = id;
     pr = pullRequest;
+    busy = false;
     returnPage = (opts && opts.returnTo) || "changes";
     files = []; threads = []; activeFile = null; activeTab = "files"; collapsed = new Set();
     document.querySelectorAll(".page").forEach((p) => p.classList.toggle("active", p.id === "page-pr-review"));
-    document.querySelectorAll(".prr-tab").forEach((t) => t.classList.toggle("active", t.dataset.prrtab === "files"));
-    $("prrLayout").dataset.tab = "files";
-    $("prrFilesView").hidden = false;
-    $("prrConversationView").hidden = true;
+    syncTabState("files");
     renderHeader();
     $("prrFiles").innerHTML = `<div class="changes-empty">Loading…</div>`;
     showDiffEmpty("Loading…");
-    await Promise.all([loadFiles(), loadThreads()]);
+    await Promise.all([loadFiles(gen, id, pullRequest), loadThreads(gen, id, pullRequest)]);
+    if (gen !== loadGen || repoId !== id || pr !== pullRequest) return;
     if (files.length) selectFile(files[0].path);
     else showDiffEmpty("This pull request has no file changes.");
   }
@@ -48,21 +61,26 @@ const PrReviewer = (() => {
     $("prrMeta").innerHTML = `${esc(pr.repo || "")} #${esc(String(pr.id))} · by ${esc(pr.author || "")} · <code>${esc(pr.branch)}</code> → <code>${esc(pr.base)}</code>`;
   }
 
-  async function loadFiles() {
+  async function loadFiles(gen = loadGen, forRepo = repoId, forPr = pr) {
     try {
-      const cs = await DC.prChanges(repoId, pr.base, pr.branch);
+      const cs = await DC.prChanges(forRepo, forPr.base, forPr.branch);
+      if (gen !== loadGen || repoId !== forRepo || pr !== forPr) return;
       files = cs.files || [];
     } catch (e) {
+      if (gen !== loadGen || repoId !== forRepo || pr !== forPr) return;
       console.error("prChanges failed", e);
       files = [];
     }
     renderFileList();
   }
 
-  async function loadThreads() {
+  async function loadThreads(gen = loadGen, forRepo = repoId, forPr = pr) {
     try {
-      threads = await DC.fetchPrThreads(repoId, pr.id);
+      const data = await DC.fetchPrThreads(forRepo, forPr.id);
+      if (gen !== loadGen || repoId !== forRepo || pr !== forPr) return;
+      threads = data;
     } catch (e) {
+      if (gen !== loadGen || repoId !== forRepo || pr !== forPr) return;
       console.error("fetchPrThreads failed", e);
       threads = [];
     }
@@ -101,24 +119,24 @@ const PrReviewer = (() => {
   }
 
   async function selectFile(path) {
+    const gen = loadGen;
+    const forRepo = repoId;
+    const forPr = pr;
     activeFile = path;
     // Switch to the Files view directly (without going through switchTab,
     // which would call back into selectFile via renderCurrentDiff).
     if (activeTab !== "files") {
       activeTab = "files";
-      document.querySelectorAll(".prr-tab").forEach((t) => t.classList.toggle("active", t.dataset.prrtab === "files"));
-      $("prrLayout").dataset.tab = "files";
-      $("prrFilesView").hidden = false;
-      $("prrConversationView").hidden = true;
+      syncTabState("files");
     }
     renderFileList();
     showDiffEmpty("Loading diff…");
     try {
-      const d = await DC.prFileDiff(repoId, pr.base, pr.branch, path);
-      if (activeFile !== path) return; // a newer selection won
+      const d = await DC.prFileDiff(forRepo, forPr.base, forPr.branch, path);
+      if (gen !== loadGen || repoId !== forRepo || pr !== forPr || activeFile !== path) return;
       renderDiff(d);
     } catch (e) {
-      if (activeFile !== path) return;
+      if (gen !== loadGen || repoId !== forRepo || pr !== forPr || activeFile !== path) return;
       showDiffEmpty(String(e));
     }
   }
@@ -253,33 +271,45 @@ const PrReviewer = (() => {
   // set), or new general comment (neither set, used by the Conversation tab).
   async function postComment({ body, threadId, path, line }) {
     if (busy) return;
+    const gen = loadGen;
+    const forRepo = repoId;
+    const forPr = pr;
     busy = true;
     try {
-      threads = await DC.postPrComment(repoId, pr.id, body, threadId || null, path || null, line ?? null);
+      const data = await DC.postPrComment(forRepo, forPr.id, body, threadId || null, path || null, line ?? null);
+      if (gen !== loadGen || repoId !== forRepo || pr !== forPr) return;
+      threads = data;
       renderFileList();
       if (activeTab === "conversation") renderConversation();
       else if (activeFile) renderCurrentDiff();
     } catch (e) {
+      if (gen !== loadGen || repoId !== forRepo || pr !== forPr) return;
       console.error("postPrComment failed", e);
       await Modal.alert({ title: "Couldn't post comment", message: String(e) });
     } finally {
-      busy = false;
+      if (gen === loadGen && repoId === forRepo && pr === forPr) busy = false;
     }
   }
 
   async function resolveThread(threadId, resolved) {
     if (busy) return;
+    const gen = loadGen;
+    const forRepo = repoId;
+    const forPr = pr;
     busy = true;
     try {
-      threads = await DC.resolvePrThread(repoId, pr.id, threadId, resolved);
+      const data = await DC.resolvePrThread(forRepo, forPr.id, threadId, resolved);
+      if (gen !== loadGen || repoId !== forRepo || pr !== forPr) return;
+      threads = data;
       renderFileList();
       if (activeTab === "conversation") renderConversation();
       else if (activeFile) renderCurrentDiff();
     } catch (e) {
+      if (gen !== loadGen || repoId !== forRepo || pr !== forPr) return;
       console.error("resolvePrThread failed", e);
       await Modal.alert({ title: "Couldn't update thread", message: String(e) });
     } finally {
-      busy = false;
+      if (gen === loadGen && repoId === forRepo && pr === forPr) busy = false;
     }
   }
 
@@ -305,10 +335,7 @@ const PrReviewer = (() => {
 
   function switchTab(tab) {
     activeTab = tab;
-    document.querySelectorAll(".prr-tab").forEach((t) => t.classList.toggle("active", t.dataset.prrtab === tab));
-    $("prrLayout").dataset.tab = tab;
-    $("prrFilesView").hidden = tab !== "files";
-    $("prrConversationView").hidden = tab !== "conversation";
+    syncTabState(tab);
     if (tab === "conversation") renderConversation();
     else if (activeFile) renderCurrentDiff();
     else showDiffEmpty("This pull request has no file changes.");
@@ -327,17 +354,23 @@ const PrReviewer = (() => {
       required: requireBody,
     });
     if (res === null) return;
+    const gen = loadGen;
+    const forRepo = repoId;
+    const forPr = pr;
     busy = true;
     try {
-      threads = await DC.submitPrReview(repoId, pr.id, type, res);
+      const data = await DC.submitPrReview(forRepo, forPr.id, type, res);
+      if (gen !== loadGen || repoId !== forRepo || pr !== forPr) return;
+      threads = data;
       renderFileList();
       if (activeTab === "conversation") renderConversation();
       await Modal.alert({ title: "Review submitted", message: titles[type] + " — done." });
     } catch (e) {
+      if (gen !== loadGen || repoId !== forRepo || pr !== forPr) return;
       console.error("submitPrReview failed", e);
       await Modal.alert({ title: "Couldn't submit review", message: String(e) });
     } finally {
-      busy = false;
+      if (gen === loadGen && repoId === forRepo && pr === forPr) busy = false;
     }
   }
 
@@ -370,6 +403,19 @@ const PrReviewer = (() => {
   }
 
   on(document, ".prr-tab", "click", (t) => switchTab(t.dataset.prrtab));
+  on(document, ".prr-tab", "keydown", (t, e) => {
+    const tabs = [...document.querySelectorAll(".prr-tab")];
+    const index = tabs.indexOf(t);
+    let next = index;
+    if (e.key === "ArrowLeft") next = (index - 1 + tabs.length) % tabs.length;
+    else if (e.key === "ArrowRight") next = (index + 1) % tabs.length;
+    else if (e.key === "Home") next = 0;
+    else if (e.key === "End") next = tabs.length - 1;
+    else return;
+    e.preventDefault();
+    tabs[next].click();
+    tabs[next].focus();
+  });
   $("prrBackBtn") && $("prrBackBtn").addEventListener("click", () => showPage(returnPage));
   $("prrOpenBtn") && $("prrOpenBtn").addEventListener("click", () => { if (pr && pr.url) DC.openUrl(pr.url); });
   $("prrApproveBtn") && $("prrApproveBtn").addEventListener("click", () => openReviewDialog("approve"));

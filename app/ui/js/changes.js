@@ -193,6 +193,8 @@ const ChangesPage = (() => {
   let activeGroup = null;   // "staged" | "unstaged" | null (history/commit)
   let navOrder = [];        // visible {path, group} in render order (prev/next + keys)
   let busy = false;
+  let accountFilter = new Set(); // selected remote accounts; empty = all
+  let accountFilterSig = "";
 
   // Bumped on every navigation away from the current context (repo switch,
   // tab switch). Async loads (loadChanges/loadHistory/loadRepoPulls/
@@ -225,14 +227,142 @@ const ChangesPage = (() => {
   }
 
   // ---- repo picker ----
+  function matchesAccountFilter(r) {
+    if (accountFilter.size === 0) return true;
+    const account = r && repoAccount(r);
+    return !!account && accountFilter.has(account.key);
+  }
+
+  function clearSelectedRepo() {
+    if (!repoId) return;
+    loadGen++;
+    repoId = null;
+    branch = "";
+    try { localStorage.removeItem("dc.changes.repoId"); } catch (e) {}
+
+    $("chgRepoLabel").textContent = "Select repository";
+    $("chgRepoLabel").removeAttribute("title");
+    $("chgRepoIcon").innerHTML = providerIcon(null);
+    $("chgBranchLabel").textContent = "—";
+
+    activeSha = null; activeFile = null; activeGroup = null; activePull = null; navOrder = [];
+    staged = []; unstaged = []; stashes = []; history = []; commitFiles = [];
+    collapsedChanges = new Set(); collapsedStaged = new Set(); collapsedGroups = new Set(); collapsedDetail = new Set();
+    repoPulls = []; pullsLoaded = false; prFetch = null;
+    syncAhead = 0; syncBehind = 0; syncHasUpstream = false;
+    renderSync({ ahead: 0, behind: 0, hasUpstream: false });
+
+    $("changeCount").textContent = "No changes";
+    $("changesList").innerHTML = `<div class="changes-empty">Select a repository to view changes.</div>`;
+    $("historyList").innerHTML = `<div class="changes-empty">Select a repository to view commits.</div>`;
+    $("repoPrList").innerHTML = `<div class="changes-empty">Select a repository to view pull requests.</div>`;
+    $("detailHead").innerHTML = "";
+    $("detailFileCount").textContent = "Files";
+    $("detailFiles").innerHTML = `<div class="detail-empty">Select a repository to continue.</div>`;
+    $("detailCollapseBtn").hidden = true;
+    $("commitSummary").value = "";
+    $("commitDesc").value = "";
+    $("conflictBanner").hidden = true;
+    showDiffEmpty("Select a repository to continue.");
+
+    ["chgBranchBtn", "gitMenuBtn", "changeRefreshBtn", "historyRefreshBtn", "pullRefreshBtn"].forEach((id) => {
+      const control = $(id);
+      if (control) control.disabled = true;
+    });
+    updateCommitBtn();
+  }
+
+  function reconcileSelectedRepo() {
+    if (!repoId || accountFilter.size === 0) return;
+    const selected = repos.find((r) => r.id === repoId);
+    if (!matchesAccountFilter(selected)) clearSelectedRepo();
+  }
+
+  function renderAccountFilter() {
+    const select = $("chgAccountSelect");
+    const menu = $("chgAccountMenu");
+    const label = $("chgAccountLabel");
+    if (!select || !menu || !label) return;
+
+    const map = new Map();
+    repos.forEach((r) => {
+      const account = repoAccount(r);
+      if (!account) return;
+      const entry = map.get(account.key) || { label: account.label, provider: account.provider, count: 0 };
+      entry.count++;
+      map.set(account.key, entry);
+    });
+    if (!map.size) {
+      select.hidden = true;
+      accountFilter.clear();
+      accountFilterSig = "";
+      return;
+    }
+
+    select.hidden = false;
+    accountFilter = new Set([...accountFilter].filter((key) => map.has(key)));
+    const keys = [...map.keys()].sort((a, b) => map.get(a).label.localeCompare(map.get(b).label));
+    const signature = keys.map((key) => {
+      const entry = map.get(key);
+      return `${key}:${entry.label}:${entry.provider}:${entry.count}`;
+    }).join("|") + "#" + [...accountFilter].sort().join(",");
+    if (signature === accountFilterSig) return;
+    accountFilterSig = signature;
+
+    const providerIco = (provider) => provider === "github" ? ICON.github : provider === "azure" ? ICON.azure : ICON.repo;
+    menu.innerHTML = `
+      <label class="multiselect-opt all">
+        <input type="checkbox" id="chgAccountAll" ${accountFilter.size === 0 ? "checked" : ""} />
+        <span>All accounts</span>
+      </label>
+      <div class="multiselect-sep"></div>` + keys.map((key) => {
+        const entry = map.get(key);
+        return `<label class="multiselect-opt">
+          <input type="checkbox" value="${esc(key)}" ${accountFilter.has(key) ? "checked" : ""} />
+          <span class="multiselect-ico">${providerIco(entry.provider)}</span>
+          <span>${esc(entry.label)}</span>
+          <span class="multiselect-count">${entry.count}</span>
+        </label>`;
+      }).join("");
+
+    if (accountFilter.size === 0) label.textContent = "All accounts";
+    else if (accountFilter.size === 1) label.textContent = map.get([...accountFilter][0])?.label || "1 account";
+    else label.textContent = `${accountFilter.size} accounts`;
+
+    const iconHost = $("chgAccountIcon");
+    if (iconHost) {
+      const defaultIcon = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M3 10h18"/></svg>';
+      iconHost.innerHTML = accountFilter.size === 1
+        ? providerIco(map.get([...accountFilter][0])?.provider)
+        : defaultIcon;
+    }
+
+    $("chgAccountAll").addEventListener("change", () => {
+      accountFilter.clear();
+      reconcileSelectedRepo();
+      renderAccountFilter();
+      $("chgAccountAll")?.focus();
+    });
+    on(menu, 'input[type="checkbox"][value]', "change", (box) => {
+      const value = box.value;
+      if (box.checked) accountFilter.add(box.value);
+      else accountFilter.delete(box.value);
+      reconcileSelectedRepo();
+      renderAccountFilter();
+      menu.querySelector(`input[value="${CSS.escape(value)}"]`)?.focus();
+    });
+  }
+
   function openRepoPicker() {
     if (!repos.length) {
       Modal.alert({ title: "No repositories", message: "Add or clone a repository on the Git Board first." });
       return;
     }
+    renderAccountFilter();
+    const pickerRepos = repos.filter(matchesAccountFilter);
     const labels = [];
     const map = new Map();
-    repos.forEach((r) => {
+    pickerRepos.forEach((r) => {
       let label = r.name, n = 2;
       while (map.has(label)) label = `${r.name} (${n++})`;
       map.set(label, r); labels.push(label);
@@ -264,6 +394,10 @@ const ChangesPage = (() => {
     const repoIco = $("chgRepoIcon");
     if (repoIco) repoIco.innerHTML = providerIcon(r.provider);
     $("chgBranchLabel").textContent = branch;
+    ["chgBranchBtn", "gitMenuBtn", "changeRefreshBtn", "historyRefreshBtn", "pullRefreshBtn"].forEach((id) => {
+      const control = $(id);
+      if (control) control.disabled = false;
+    });
     // Fully reset every piece of state carried over from the previous repo —
     // otherwise a leftover value (stashes, sync counts, collapse state, …)
     // can flash/act stale until the new repo's data finishes loading.
@@ -1287,9 +1421,10 @@ const ChangesPage = (() => {
     const isRebasing = conflictKind === "rebase";
 
     return [
-      { label: "Pull", icon: ICON.down, onClick: () => doSync("pull") },
-      { label: pushLabel, icon: ICON.up, onClick: () => doSync("push") },
       { label: "Fetch", icon: ICON.sync, onClick: () => doSync("fetch") },
+      { label: "Sync", icon: ICON.swap, onClick: () => doSync("sync") },
+      { label: pushLabel, icon: ICON.up, onClick: () => doSync("push") },
+      { label: "Pull", icon: ICON.down, onClick: () => doSync("pull") },
       { label: "Checkout to…", icon: ICON.branch, onClick: openBranchPicker },
       { label: "Clone", icon: ICON.copy, onClick: cloneRepoFlow },
       { separator: true },
@@ -1405,7 +1540,7 @@ const ChangesPage = (() => {
       },
       { separator: true },
       { label: "Show Git Output", icon: ICON.terminal, onClick: showGitOutputFlow },
-    ];
+    ].reverse();
   }
 
   async function openGitMenu(anchor) {
@@ -1467,7 +1602,8 @@ const ChangesPage = (() => {
           ? `<span class="history-unpushed" title="This commit hasn't been pushed yet">${ICON.up}</span>`
           : "";
         const badges = tags || unpushed ? `<div class="history-badges">${tags}${unpushed}</div>` : "";
-        return `<div class="history-row${c.hash === activeSha ? " selected" : ""}" data-sha="${c.hash}">
+        const selected = c.hash === activeSha;
+        return `<div class="history-row${selected ? " selected" : ""}" data-sha="${c.hash}" role="option" aria-selected="${selected}" tabindex="0">
         <div class="history-main">
           <div class="history-summary" title="${esc(c.summary)}">${esc(c.summary)}</div>
           <div class="history-meta"><span class="history-hash">${c.id}</span><span class="history-author" title="${esc(c.author)}">${esc(c.author)}</span><span class="hm-dot">·</span><span class="history-when">${esc(c.when)}</span></div>
@@ -1476,6 +1612,19 @@ const ChangesPage = (() => {
       })
       .join("");
     on($("historyList"), ".history-row", "click", (row) => selectCommit(row.dataset.sha));
+    on($("historyList"), ".history-row", "keydown", (row, e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        selectCommit(row.dataset.sha);
+        return;
+      }
+      const rows = [...$("historyList").querySelectorAll(".history-row")];
+      const index = rows.indexOf(row);
+      const next = e.key === "ArrowUp" ? index - 1 : e.key === "ArrowDown" ? index + 1 : index;
+      if (next === index || !rows[next]) return;
+      e.preventDefault();
+      rows[next].focus();
+    });
     on($("historyList"), ".history-row", "contextmenu", (row, e) => {
       e.preventDefault();
       const c = history.find((x) => x.hash === row.dataset.sha);
@@ -1526,8 +1675,11 @@ const ChangesPage = (() => {
     const gen = loadGen;
     const forRepo = repoId;
     activeSha = sha; activeFile = null; navOrder = [];
-    $("historyList").querySelectorAll(".history-row").forEach((r) =>
-      r.classList.toggle("selected", r.dataset.sha === sha));
+    $("historyList").querySelectorAll(".history-row").forEach((r) => {
+      const selected = r.dataset.sha === sha;
+      r.classList.toggle("selected", selected);
+      r.setAttribute("aria-selected", String(selected));
+    });
     const c = history.find((x) => x.hash === sha);
     $("detailHead").innerHTML = `<div class="detail-msg">${esc(c ? c.summary : "")}</div>
       <div class="detail-meta"><span class="avatar">${esc((c && c.author ? c.author : "?").slice(0, 2).toUpperCase())}</span><span class="detail-author" title="${esc(c ? c.author : "")}">${esc(c ? c.author : "")}</span><span class="hm-dot">·</span><span class="history-when">${esc(c ? c.when : "")}</span><span class="history-hash">${esc(c ? c.id : sha.slice(0, 7))}</span></div>`;
@@ -1686,7 +1838,12 @@ const ChangesPage = (() => {
     $("commitDetail").hidden = next !== "history" && next !== "pulls";
     $("commitLayout").classList.toggle("mode-history", next === "history");
     $("commitLayout").classList.toggle("mode-pulls", next === "pulls");
-    document.querySelectorAll(".commit-tab").forEach((t) => t.classList.toggle("active", t.dataset.ctab === next));
+    document.querySelectorAll(".commit-tab").forEach((t) => {
+      const active = t.dataset.ctab === next;
+      t.classList.toggle("active", active);
+      t.setAttribute("aria-selected", String(active));
+      t.tabIndex = active ? 0 : -1;
+    });
     activeFile = null; activeGroup = null; navOrder = [];
     // Drop the previous tab's detail-panel files immediately so "Collapse all"
     // (or anything else touching `commitFiles`) can't act on stale data from
@@ -1772,7 +1929,7 @@ const ChangesPage = (() => {
     host.innerHTML = list
       .map((p) => {
         const sel = activePull && String(activePull.id) === String(p.id) ? " selected" : "";
-        return `<div class="history-row${sel}" data-pr-id="${esc(String(p.id))}">
+        return `<div class="history-row${sel}" data-pr-id="${esc(String(p.id))}" role="option" aria-selected="${!!sel}" tabindex="0">
         <div class="history-main">
           <div class="history-summary" title="${esc(p.title)}">${esc(p.title)}</div>
           <div class="history-meta"><span class="history-hash">#${esc(String(p.id))}</span><span class="history-author" title="${esc(p.author)}">${esc(p.author)}</span><span class="hm-dot">·</span><span class="history-when">${esc(p.updated)}</span></div>
@@ -1782,6 +1939,19 @@ const ChangesPage = (() => {
       })
       .join("");
     on(host, ".history-row", "click", (row) => selectPull(row.dataset.prId));
+    on(host, ".history-row", "keydown", (row, e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        selectPull(row.dataset.prId);
+        return;
+      }
+      const rows = [...host.querySelectorAll(".history-row")];
+      const index = rows.indexOf(row);
+      const next = e.key === "ArrowUp" ? index - 1 : e.key === "ArrowDown" ? index + 1 : index;
+      if (next === index || !rows[next]) return;
+      e.preventDefault();
+      rows[next].focus();
+    });
   }
 
   async function selectPull(id) {
@@ -1791,8 +1961,11 @@ const ChangesPage = (() => {
     const gen = loadGen;
     const forRepo = repoId;
     activePull = pr; activeSha = null; activeFile = null; navOrder = [];
-    $("repoPrList").querySelectorAll(".history-row").forEach((r) =>
-      r.classList.toggle("selected", r.dataset.prId === String(id)));
+    $("repoPrList").querySelectorAll(".history-row").forEach((r) => {
+      const selected = r.dataset.prId === String(id);
+      r.classList.toggle("selected", selected);
+      r.setAttribute("aria-selected", String(selected));
+    });
     const initials = (pr.author || "?").slice(0, 2).toUpperCase();
     const rev = REVIEW_MAP[pr.reviews] || REVIEW_MAP.pending;
     $("detailHead").innerHTML = `<div class="detail-msg">${esc(pr.title)}</div>
@@ -1842,7 +2015,11 @@ const ChangesPage = (() => {
   function setView(mode) {
     if (changesView === mode) return;
     changesView = mode;
-    document.querySelectorAll("#chgViewToggle .seg-btn").forEach((b) => b.classList.toggle("active", b.dataset.view === mode));
+    document.querySelectorAll("#chgViewToggle .seg-btn").forEach((b) => {
+      const active = b.dataset.view === mode;
+      b.classList.toggle("active", active);
+      b.setAttribute("aria-pressed", String(active));
+    });
     renderChanges();
   }
 
@@ -1863,14 +2040,16 @@ const ChangesPage = (() => {
   }
 
   function onShow() {
+    renderAccountFilter();
     if (!DC || !DC.hasBackend) return;
+    const availableRepos = repos.filter(matchesAccountFilter);
     const branchBtn = $("chgBranchBtn");
-    if (branchBtn) branchBtn.disabled = !repos.length;
+    if (branchBtn) branchBtn.disabled = !availableRepos.length;
     if (!repoId) {
       // Restore the last-used repo across app restarts; fall back to the first.
       let saved = null;
       try { saved = localStorage.getItem("dc.changes.repoId"); } catch (e) {}
-      const target = (saved && repos.find((r) => r.id === saved)) || repos[0];
+      const target = (saved && availableRepos.find((r) => r.id === saved)) || availableRepos[0];
       if (target) selectRepo(target);
       return;
     }
@@ -1893,31 +2072,55 @@ const ChangesPage = (() => {
     layout.querySelectorAll(".pane-resizer").forEach((rz) => {
       const which = rz.dataset.resize;
       const varName = which === "side" ? "--w-side" : "--w-detail";
+      const [min, max] = LIMITS[which];
+      const defaultWidth = which === "side" ? 300 : 240;
+      const currentWidth = () => parseFloat(getComputedStyle(layout).getPropertyValue(varName)) || defaultWidth;
+      const setWidth = (width, persist = true) => {
+        const value = Math.max(min, Math.min(Math.round(width), max));
+        layout.style.setProperty(varName, value + "px");
+        rz.setAttribute("aria-valuenow", String(value));
+        if (persist) {
+          try { localStorage.setItem("dc.commit" + varName, value + "px"); } catch (e) {}
+        }
+      };
+      rz.setAttribute("aria-valuemin", String(min));
+      rz.setAttribute("aria-valuemax", String(max));
+      rz.setAttribute("aria-valuenow", String(Math.round(currentWidth())));
       rz.addEventListener("pointerdown", (e) => {
         e.preventDefault();
-        const [min, max] = LIMITS[which];
         const startX = e.clientX;
-        const startW = parseFloat(getComputedStyle(layout).getPropertyValue(varName)) || (which === "side" ? 320 : 264);
+        const startW = currentWidth();
         rz.setPointerCapture(e.pointerId);
         rz.classList.add("dragging");
         document.body.classList.add("col-resizing");
         const move = (ev) => {
-          const w = Math.max(min, Math.min(Math.round(startW + (ev.clientX - startX)), max));
-          layout.style.setProperty(varName, w + "px");
+          setWidth(startW + (ev.clientX - startX), false);
         };
         const up = () => {
           rz.classList.remove("dragging");
           document.body.classList.remove("col-resizing");
           window.removeEventListener("pointermove", move);
           window.removeEventListener("pointerup", up);
-          try { localStorage.setItem("dc.commit" + varName, layout.style.getPropertyValue(varName)); } catch (e) {}
+          setWidth(currentWidth());
         };
         window.addEventListener("pointermove", move);
         window.addEventListener("pointerup", up);
       });
       rz.addEventListener("dblclick", () => {
         layout.style.removeProperty(varName);
+        rz.setAttribute("aria-valuenow", String(Math.round(currentWidth())));
         try { localStorage.removeItem("dc.commit" + varName); } catch (e) {}
+      });
+      rz.addEventListener("keydown", (e) => {
+        let width = currentWidth();
+        const step = e.shiftKey ? 32 : 8;
+        if (e.key === "ArrowLeft") width -= step;
+        else if (e.key === "ArrowRight") width += step;
+        else if (e.key === "Home") width = min;
+        else if (e.key === "End") width = max;
+        else return;
+        e.preventDefault();
+        setWidth(width);
       });
     });
   }
@@ -1926,8 +2129,20 @@ const ChangesPage = (() => {
     const repoBtn = $("chgRepoBtn");
     if (!repoBtn) return;
     repoBtn.addEventListener("click", openRepoPicker);
-    $("chgRefreshBtn").addEventListener("click", () => (tab === "history" ? loadHistory() : tab === "pulls" ? loadRepoPulls() : loadChanges()));
     on(document, ".commit-tab", "click", (t) => switchTab(t.dataset.ctab));
+    on(document, ".commit-tab", "keydown", (t, e) => {
+      const tabs = [...document.querySelectorAll(".commit-tab")];
+      const index = tabs.indexOf(t);
+      let next = index;
+      if (e.key === "ArrowLeft") next = (index - 1 + tabs.length) % tabs.length;
+      else if (e.key === "ArrowRight") next = (index + 1) % tabs.length;
+      else if (e.key === "Home") next = 0;
+      else if (e.key === "End") next = tabs.length - 1;
+      else return;
+      e.preventDefault();
+      tabs[next].click();
+      tabs[next].focus();
+    });
     on(document, "#chgViewToggle .seg-btn", "click", (b) => setView(b.dataset.view));
     $("changeFilter").addEventListener("input", debounce(renderChanges));
     $("historyFilter").addEventListener("input", debounce(renderHistory));
