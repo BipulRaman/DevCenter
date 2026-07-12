@@ -1842,12 +1842,13 @@ textarea,
    doubles as the tab switcher; only the main panel's content toggles. */
 .prr-layout {
   flex: 1; min-height: 0; display: grid; grid-template-columns: 290px 1fr;
+  --prr-head-h: 47px;
   background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
   box-shadow: var(--shadow-row); overflow: hidden;
 }
 .prr-side { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--border); }
 .prr-side .conflict-files { background: transparent; border-right: none; flex: 1; }
-.prr-tabs { display: flex; padding: 6px; gap: 4px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.prr-tabs { display: flex; padding: 6px; gap: 4px; border-bottom: 1px solid var(--border); flex-shrink: 0; height: var(--prr-head-h); }
 .prr-tab {
   flex: 1; height: 34px; border: none; border-radius: 0; background: transparent;
   display: inline-flex; align-items: center; justify-content: center; gap: 7px;
@@ -1860,6 +1861,10 @@ textarea,
 #prrFilesView { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 #prrFilesView[hidden] { display: none; }
 #prrFilesView .diff-view { flex: 1; min-height: 0; }
+/* Align the diff header (file path bar) with the left file-list tabs bar: give
+   BOTH an identical explicit height (not min-height vs auto) so their boxes —
+   and therefore their bottom border lines — are pixel-identical at any DPI. */
+#page-pr-review .diff-head { height: var(--prr-head-h); min-height: var(--prr-head-h); }
 #prrConversationView { flex: 1; min-height: 0; overflow-y: auto; }
 #prrConversationView[hidden] { display: none; }
 
