@@ -314,12 +314,14 @@ pub async fn git_diff(
     path: String,
     sha: Option<String>,
     staged: Option<bool>,
+    context: Option<u32>,
 ) -> AppResult<FileDiff> {
     tauri::async_runtime::spawn_blocking(move || {
         let p = Path::new(&id);
+        let ctx = context.unwrap_or(3);
         match sha {
-            Some(s) => git::commit_file_diff(p, &s, &path),
-            None => git::file_diff(p, &path, staged.unwrap_or(false)),
+            Some(s) => git::commit_file_diff(p, &s, &path, ctx),
+            None => git::file_diff(p, &path, staged.unwrap_or(false), ctx),
         }
     })
     .await
@@ -342,9 +344,10 @@ pub async fn git_pr_file_diff(
     base: String,
     head: String,
     path: String,
+    context: Option<u32>,
 ) -> AppResult<FileDiff> {
     tauri::async_runtime::spawn_blocking(move || {
-        git::pr_file_diff(Path::new(&id), &base, &head, &path)
+        git::pr_file_diff(Path::new(&id), &base, &head, &path, context.unwrap_or(3))
     })
     .await
     .map_err(|e| AppError::msg(e.to_string()))?

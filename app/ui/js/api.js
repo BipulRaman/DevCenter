@@ -47,10 +47,10 @@
 
     // --- Changes / commit (GitHub Desktop–style) ---
     gitChanges: (id, sha) => invoke("git_changes", { id, sha: sha || null }),
-    gitDiff: (id, path, sha, staged) =>
-      invoke("git_diff", { id, path, sha: sha || null, staged: !!staged }),
+    gitDiff: (id, path, sha, staged, context) =>
+      invoke("git_diff", { id, path, sha: sha || null, staged: !!staged, context: context ?? null }),
     prChanges: (id, base, head) => invoke("git_pr_changes", { id, base, head }),
-    prFileDiff: (id, base, head, path) => invoke("git_pr_file_diff", { id, base, head, path }),
+    prFileDiff: (id, base, head, path, context) => invoke("git_pr_file_diff", { id, base, head, path, context: context ?? null }),
     gitStage: (id, files) => invoke("git_stage", { id, files: files || [] }),
     gitUnstage: (id, files) => invoke("git_unstage", { id, files: files || [] }),
     gitDiscard: (id, files) => invoke("git_discard", { id, files: files || [] }),

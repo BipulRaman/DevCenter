@@ -34,6 +34,7 @@ const PrReviewer = (() => {
   let threads = [];        // PrThread[] — general + inline, refreshed after any mutation
   let activeFile = null;
   let activeTab = "files"; // "files" | "conversation"
+  let wholeFile = false;   // when true, the diff shows the entire file, not just changed hunks
   let collapsed = new Set(); // collapsed folders in the file tree
   let busy = false;
   let returnPage = "changes"; // page to go back to — wherever "Review" was clicked from
@@ -67,7 +68,7 @@ const PrReviewer = (() => {
     // Provider decides the review options (Azure's 5 vote states vs GitHub's 3).
     provider = ((typeof repos !== "undefined" && repos.find((r) => r.id === id)) || {}).provider || "github";
     myVote = 0;
-    files = []; threads = []; activeFile = null; activeTab = "files"; collapsed = new Set();
+    files = []; threads = []; activeFile = null; activeTab = "files"; wholeFile = false; collapsed = new Set();
     document.querySelectorAll(".page").forEach((p) => p.classList.toggle("active", p.id === "page-pr-review"));
     syncTabState("files");
     renderHeader();
@@ -249,7 +250,7 @@ const PrReviewer = (() => {
     renderFileList();
     showDiffEmpty("Loading diff…");
     try {
-      const d = await DC.prFileDiff(forRepo, forPr.base, forPr.branch, path);
+      const d = await DC.prFileDiff(forRepo, forPr.base, forPr.branch, path, wholeFile ? 100000 : null);
       if (gen !== loadGen || repoId !== forRepo || pr !== forPr || activeFile !== path) return;
       renderDiff(d);
     } catch (e) {
@@ -267,13 +268,16 @@ const PrReviewer = (() => {
   function hl(s, path) { return window.Highlighter ? Highlighter.line(s, lang(path)) : esc(s); }
 
   function diffHeadHtml(d) {
-    return `<span class="diff-path" title="${esc(d.path)}">${esc(d.path)}</span><span class="diff-adds">+${d.additions}</span><span class="diff-dels">−${d.deletions}</span>`;
+    return `<span class="diff-path" title="${esc(d.path)}">${esc(d.path)}</span><span class="diff-adds">+${d.additions}</span><span class="diff-dels">−${d.deletions}</span>`
+      + `<button class="btn btn-ghost btn-sm diff-expand-btn" id="prrExpandBtn" type="button" title="${wholeFile ? "Show only changed lines" : "Show the whole file"}">${wholeFile ? "Collapse" : "Whole file"}</button>`;
   }
 
   function renderDiff(d) {
     $("prrDiffEmpty").hidden = true;
     $("prrDiffContent").hidden = false;
     $("prrDiffHead").innerHTML = diffHeadHtml(d);
+    const expandBtn = $("prrExpandBtn");
+    if (expandBtn) expandBtn.addEventListener("click", () => { wholeFile = !wholeFile; renderCurrentDiff(); });
     const bodyEl = $("prrDiffBody");
     if (d.oldImage || d.newImage) {
       bodyEl.innerHTML = `<div class="diff-binary">Image file — open the Changes page to preview it.</div>`;

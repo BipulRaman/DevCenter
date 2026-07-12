@@ -1580,10 +1580,10 @@ fn build_file_diff(repo: &Repository, diff: &git2::Diff, file: &str) -> AppResul
 /// Diff a single file. When `staged` is true, show the staged diff (HEAD vs the
 /// index); otherwise show the unstaged diff (index vs the working tree,
 /// including untracked content) — matching VS Code's split source-control view.
-pub fn file_diff(path: &Path, file: &str, staged: bool) -> AppResult<FileDiff> {
+pub fn file_diff(path: &Path, file: &str, staged: bool, context: u32) -> AppResult<FileDiff> {
     let repo = Repository::open(path)?;
     let mut opts = DiffOptions::new();
-    opts.context_lines(3).pathspec(file);
+    opts.context_lines(context).pathspec(file);
     let diff = if staged {
         let head_tree = repo.head().ok().and_then(|h| h.peel_to_tree().ok());
         repo.diff_tree_to_index(head_tree.as_ref(), None, Some(&mut opts))?
@@ -1786,13 +1786,13 @@ pub fn commit_changes(path: &Path, sha: &str) -> AppResult<ChangeSet> {
 }
 
 /// Diff a single file within a commit (vs its first parent).
-pub fn commit_file_diff(path: &Path, sha: &str, file: &str) -> AppResult<FileDiff> {
+pub fn commit_file_diff(path: &Path, sha: &str, file: &str, context: u32) -> AppResult<FileDiff> {
     let repo = Repository::open(path)?;
     let commit = repo.revparse_single(sha)?.peel_to_commit()?;
     let tree = commit.tree()?;
     let parent_tree = commit.parent(0).ok().and_then(|p| p.tree().ok());
     let mut opts = DiffOptions::new();
-    opts.context_lines(3).pathspec(file);
+    opts.context_lines(context).pathspec(file);
     let diff = repo.diff_tree_to_tree(parent_tree.as_ref(), Some(&tree), Some(&mut opts))?;
     build_file_diff(&repo, &diff, file)
 }
@@ -1895,11 +1895,11 @@ pub fn pr_changes(path: &Path, base: &str, head: &str) -> AppResult<ChangeSet> {
 }
 
 /// Diff a single file within a pull request (the `base...head` diff).
-pub fn pr_file_diff(path: &Path, base: &str, head: &str, file: &str) -> AppResult<FileDiff> {
+pub fn pr_file_diff(path: &Path, base: &str, head: &str, file: &str, context: u32) -> AppResult<FileDiff> {
     let repo = Repository::open(path)?;
     let (before, after) = pr_diff_trees(&repo, base, head)?;
     let mut opts = DiffOptions::new();
-    opts.context_lines(3).pathspec(file);
+    opts.context_lines(context).pathspec(file);
     let diff = repo.diff_tree_to_tree(Some(&before), Some(&after), Some(&mut opts))?;
     build_file_diff(&repo, &diff, file)
 }
