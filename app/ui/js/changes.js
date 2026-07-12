@@ -267,6 +267,7 @@ const ChangesPage = (() => {
   let pullsLoaded = false;  // whether the PR list has been fetched for the current repo
   let activePull = null;    // currently selected PR (drives the detail + diff panes)
   let prFetch = null;       // in-flight `git fetch` so PR branches are available locally for diffs
+  const repoPullsCache = new Map(); // repoId -> last-known PR[] (instant re-open, refreshed in bg)
 
   // Diff/navigation state.
   let activeFile = null;
@@ -285,6 +286,10 @@ const ChangesPage = (() => {
   // what prevents an old file/commit/PR/repo load from "winning" the race and
   // flashing stale data into the detail/diff panes.
   let loadGen = 0;
+  // Separate generation for the PR *list* fetch, so the optimistic selectPull
+  // (which bumps loadGen for its own diff race) can't abort loadRepoPulls'
+  // background refresh of the list.
+  let pullsGen = 0;
 
   const $ = (id) => document.getElementById(id);
   const esc = escapeHtml;
@@ -1959,31 +1964,70 @@ const ChangesPage = (() => {
   // ---- pull requests tab ----
   async function loadRepoPulls() {
     if (!repoId) return;
-    loadGen++;
-    const gen = loadGen;
+    loadGen++;                 // invalidate any in-flight loader from another tab
+    pullsGen++;                // dedicated generation for THIS list fetch
+    const pgen = pullsGen;
     const forRepo = repoId;
     pullsLoaded = false; activePull = null;
-    $("repoPrList").innerHTML = `<div class="changes-empty">Loading pull requests…</div>`;
     // Fetch in the background so the PR's head/base branches are present locally
-    // for the diff view (selectPull awaits this before the local base...head
-    // diff). Runs in parallel with the PR list load; non-fatal on failure
-    // (offline, no remote, auth, …).
+    // for the diff view. Runs in parallel with the PR list load; non-fatal on
+    // failure (offline, no remote, auth, …).
     prFetch = DC.hasBackend
       ? DC.fetchRepo(forRepo).catch((e) => console.warn("PR branch fetch failed", e))
       : null;
+    const sigPulls = (list) => (list || []).map((p) => `${p.id}:${p.status}:${p.updated}`).join("|");
+    // INSTANT: paint the last-known PR list for this repo (if any) while the live
+    // list refreshes below. The cache is keyed by repo, so another repo's list is
+    // never shown, and the fetch ALWAYS runs and replaces it — so a cached list
+    // can never linger as stale.
+    const cached = repoPullsCache.get(forRepo);
+    if (cached && cached.length) {
+      repoPulls = cached; pullsLoaded = true;
+      renderRepoPulls($("pullFilter").value || "");
+      selectPull(repoPulls[0].id);
+    } else {
+      repoPulls = [];
+      $("repoPrList").innerHTML = `<div class="changes-empty">Loading pull requests…</div>`;
+    }
     try {
       const data = await DC.listRepoPullRequests(forRepo);
-      if (gen !== loadGen || repoId !== forRepo) return; // superseded by a newer navigation
-      repoPulls = Array.isArray(data) ? data : [];
+      if (pgen !== pullsGen || repoId !== forRepo) return; // newer list load / repo switch won
+      const fresh = Array.isArray(data) ? data : [];
+      repoPullsCache.set(forRepo, fresh);
       pullsLoaded = true;
+      // Unchanged since the cached paint — already correct, avoid a needless
+      // re-render (and diff reload).
+      if (cached && cached.length && sigPulls(cached) === sigPulls(fresh)) {
+        repoPulls = fresh;
+        return;
+      }
+      const prevId = activePull ? String(activePull.id) : null;
+      repoPulls = fresh;
       renderRepoPulls($("pullFilter").value || "");
-      // Auto-open the newest PR so the detail + diff panes aren't left empty.
-      if (repoPulls.length && !activePull) selectPull(repoPulls[0].id);
+      if (!repoPulls.length) {
+        // The repo has no PRs anymore — clear any leftover detail/diff so nothing
+        // stale from a previous selection remains on screen.
+        activePull = null; activeSha = null; activeFile = null; navOrder = [];
+        commitFiles = [];
+        $("detailHead").innerHTML = "";
+        $("detailFiles").innerHTML = `<div class="changes-empty">No pull requests.</div>`;
+        $("detailCollapseBtn").hidden = true;
+        showDiffEmpty("No open pull requests.");
+        return;
+      }
+      // Rebind the selection to the FRESH list so its diff reflects the latest
+      // data; fall back to the newest PR when the selected one is gone.
+      const keep = prevId && repoPulls.find((p) => String(p.id) === prevId);
+      selectPull(keep ? keep.id : repoPulls[0].id);
     } catch (e) {
-      if (gen !== loadGen || repoId !== forRepo) return;
+      if (pgen !== pullsGen || repoId !== forRepo) return;
       console.error("listRepoPullRequests failed", e);
-      repoPulls = []; pullsLoaded = true;
-      $("repoPrList").innerHTML = `<div class="changes-empty">${esc(String(e))}</div>`;
+      // Keep a cached list on screen only if we had one; otherwise surface the
+      // error rather than leaving stale data.
+      if (!cached || !cached.length) {
+        repoPulls = []; pullsLoaded = true;
+        $("repoPrList").innerHTML = `<div class="changes-empty">${esc(String(e))}</div>`;
+      }
     }
   }
 
@@ -2060,34 +2104,52 @@ const ChangesPage = (() => {
     $("detailCollapseBtn").hidden = true;
     showDiffEmpty("Loading pull request…");
     collapsedDetail = new Set();
-    try {
-      // The base...head diff needs the PR's head/base branches present AND up to
-      // date locally. loadRepoPulls kicks off a background `git fetch`; wait for
-      // it to finish BEFORE diffing so a stale (or missing) local `origin/<branch>`
-      // ref can never leave the PR "loaded" with no/outdated file changes.
-      //
-      // Previously the diff ran immediately (fast path) and only re-fetched when
-      // that first call threw. But when `origin/<branch>` already existed from an
-      // earlier fetch, the call SUCCEEDED with the stale ref, so the fresh commits
-      // were never diffed and the branch changes silently failed to load.
-      if (prFetch) {
-        showDiffEmpty("Fetching pull request branches…");
-        try { await prFetch; } catch (_) { /* offline/auth — fall back to local refs */ }
-        if (gen !== loadGen || repoId !== forRepo || activePull !== pr) return;
-      }
-      const cs = await DC.prChanges(forRepo, pr.base, pr.branch);
-      if (gen !== loadGen || repoId !== forRepo || activePull !== pr) return; // a newer selection won
+
+    const stillCurrent = () => gen === loadGen && repoId === forRepo && activePull === pr;
+    const sig = (files) => (files || []).map((f) => f.status + ":" + f.path).join("|");
+    const apply = (cs) => {
+      if (!stillCurrent()) return;
+      const keep = activeFile;
       commitFiles = cs.files || [];
       renderDetail();
-      if (commitFiles.length) selectFile(commitFiles[0].path, null);
-      else showDiffEmpty("This pull request has no file changes.");
+      if (!commitFiles.length) { showDiffEmpty("This pull request has no file changes."); return; }
+      // Preserve the file the user is already viewing across a background refresh;
+      // otherwise open the first file.
+      const target = keep && commitFiles.some((f) => f.path === keep) ? keep : commitFiles[0].path;
+      selectFile(target, null);
+    };
+
+    // 1) INSTANT: diff against the PR branches already present locally — no
+    //    network wait, so the change list paints immediately in the common case
+    //    (the repo was fetched recently).
+    let shown = false;
+    try {
+      const cs = await DC.prChanges(forRepo, pr.base, pr.branch);
+      if (!stillCurrent()) return;
+      apply(cs); shown = true;
+    } catch (_) { /* refs not local yet — the fetch below makes them available */ }
+
+    // 2) FRESHEN: wait for the in-flight background fetch, then re-diff. Re-render
+    //    only if nothing was shown yet, or the PR's file set actually changed —
+    //    so the first paint stays instant while commits pushed since the last
+    //    fetch are still picked up (fixes stale/empty local refs).
+    try {
+      if (prFetch) {
+        if (!shown) showDiffEmpty("Fetching pull request branches…");
+        try { await prFetch; } catch (_) { /* offline/auth — keep local result */ }
+        if (!stillCurrent()) return;
+      }
+      const fresh = await DC.prChanges(forRepo, pr.base, pr.branch);
+      if (!stillCurrent()) return;
+      if (!shown || sig(fresh.files) !== sig(commitFiles)) apply(fresh);
     } catch (e) {
-      if (gen !== loadGen || repoId !== forRepo || activePull !== pr) return;
-      console.error("prChanges failed", e);
-      commitFiles = []; navOrder = [];
-      $("detailFileCount").textContent = "Files";
-      $("detailFiles").innerHTML = `<div class="changes-empty">${esc(String(e))}</div>`;
-      showDiffEmpty(String(e));
+      if (!shown && stillCurrent()) {
+        console.error("prChanges failed", e);
+        commitFiles = []; navOrder = [];
+        $("detailFileCount").textContent = "Files";
+        $("detailFiles").innerHTML = `<div class="changes-empty">${esc(String(e))}</div>`;
+        showDiffEmpty(String(e));
+      }
     }
   }
 

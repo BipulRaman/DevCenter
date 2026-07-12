@@ -117,11 +117,11 @@ function renderPulls(filter = "") {
         <div class="pr-icon ${status}">${status === "merged" ? ICON.merge : ICON.pr}</div>
         <div class="pr-main">
           <div class="pr-title-row">
-            <span class="pr-name">${escapeHtml(p.title || "")}</span>
+            <span class="pr-name${p.repoId ? " repo-open-link" : ""}"${p.repoId ? ` data-pr-open="${id}" data-pr-repo="${repoId}" title="Open in PR Review"` : ""}>${escapeHtml(p.title || "")}</span>
             ${statusTag}
           </div>
           <div class="pr-sub">
-            <span>${escapeHtml(p.repo || "")} #${id}</span>
+            <span>${p.repoId ? `<span class="repo-open-link" data-repo-open="${repoId}" title="Open in Changes">${escapeHtml(p.repo || "")}</span>` : escapeHtml(p.repo || "")} #${id}</span>
             <span class="repo-dot">·</span>
             <span><code>${escapeHtml(p.branch || "")}</code> → <code>${escapeHtml(p.base || "")}</code></span>
             <span class="repo-dot">·</span>
@@ -153,5 +153,19 @@ function renderPulls(filter = "") {
   on(document, "#prList [data-pr-review]", "click", (btn) => {
     const pr = pulls.find((p) => String(p.id) === btn.dataset.prReview && p.repoId === btn.dataset.prRepo);
     if (pr && window.PrReviewer) window.PrReviewer.open(pr.repoId, pr, { returnTo: "pull-requests" });
+  });
+  // PR title → open the PR Review page.
+  on(document, "#prList [data-pr-open]", "click", (el) => {
+    const pr = pulls.find((p) => String(p.id) === el.dataset.prOpen && p.repoId === el.dataset.prRepo);
+    if (pr && window.PrReviewer) window.PrReviewer.open(pr.repoId, pr, { returnTo: "pull-requests" });
+  });
+  // Repo name → open that repository on the Changes page.
+  on(document, "#prList [data-repo-open]", "click", (el) => {
+    const rid = el.dataset.repoOpen;
+    if (!rid) return;
+    showPage("changes");
+    const cp = window.ChangesPage;
+    if (cp && typeof cp.openRepoTab === "function") cp.openRepoTab(rid, "changes");
+    else if (cp && typeof cp.openRepoById === "function") cp.openRepoById(rid);
   });
 }
