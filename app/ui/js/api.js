@@ -14,6 +14,10 @@
   window.DevCenter = {
     hasBackend,
 
+    // Dismiss the native splash window and reveal the main window. Called once
+    // the UI has painted (see the window "load" handler below).
+    closeSplash: () => (hasBackend ? invoke("close_splashscreen") : Promise.resolve()),
+
     // --- App / OS helpers (implemented in Phase 0) ---
     appVersion: () => (hasBackend ? invoke("app_version") : Promise.resolve("browser")),
     checkForUpdates: () => (hasBackend ? invoke("check_for_updates") : Promise.resolve({ status: "browser" })),
@@ -149,4 +153,15 @@
     onAppLog: (cb) => (hasBackend ? listen("app_log", cb) : Promise.resolve(() => {})),
     onUpdateState: (cb) => (hasBackend ? listen("update_state", cb) : Promise.resolve(() => {})),
   };
+
+  // Once all resources (CSS, fonts, scripts) have loaded, wait for two frames so
+  // the first real paint is on screen, then dismiss the native splash window and
+  // reveal the fully-rendered main window (Office/Adobe-style launch).
+  window.addEventListener("load", () => {
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        window.DevCenter.closeSplash().catch(() => {});
+      })
+    );
+  });
 })();

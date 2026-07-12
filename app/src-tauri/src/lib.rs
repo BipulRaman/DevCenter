@@ -65,6 +65,26 @@ async fn auto_update_on_start(app: tauri::AppHandle) {
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
+/// Reveal the main window and close the splash screen. Safe to call more than
+/// once (the fallback timer and the frontend both call it) — missing or
+/// already-closed windows are simply ignored.
+fn reveal_main(app: &tauri::AppHandle) {
+    if let Some(main) = app.get_webview_window("main") {
+        let _ = main.show();
+        let _ = main.set_focus();
+    }
+    if let Some(splash) = app.get_webview_window("splashscreen") {
+        let _ = splash.close();
+    }
+}
+
+/// Called by the frontend once the UI has painted, to swap the splash window
+/// out for the fully-rendered main window.
+#[tauri::command]
+fn close_splashscreen(app: tauri::AppHandle) {
+    reveal_main(&app);
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -77,6 +97,15 @@ pub fn run() {
             let conn = store::open(&dir.join("devcenter.db"))?;
             app.manage(AppState::new(conn));
 
+            // Safety net: if the frontend never signals it's ready (JS error,
+            // etc.), reveal the main window and dismiss the splash after a delay
+            // so the app can never get stuck on the loading screen.
+            let handle = app.handle().clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_secs(12));
+                reveal_main(&handle);
+            });
+
             // Auto-update runs only in release builds.
             if !cfg!(debug_assertions) {
                 let app_handle = app.handle().clone();
@@ -88,6 +117,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            close_splashscreen,
             commands::os::app_version,
             commands::os::check_for_updates,
             commands::os::install_update,

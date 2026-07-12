@@ -17,6 +17,84 @@ const ACT_DISCARD = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"
 const statBadge = (s) =>
   ({ new: "A", untracked: "U", modified: "M", deleted: "D", renamed: "R", conflicted: "C", typechange: "T" }[s] || "M");
 
+// ---- VS Code–style file-type icons (inline SVG, no sprite/asset needed) ----
+// A compact "mini icon theme": one line-glyph per category + a per-extension
+// colour, so common file types read at a glance like VS Code's explorer.
+const FILE_GLYPHS = {
+  // document with < > brackets — source code
+  code: '<path d="M6 3h9l4 4v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M15 3v4h4"/><polyline points="10.5 12.5 8.5 14.5 10.5 16.5"/><polyline points="13.5 12.5 15.5 14.5 13.5 16.5"/>',
+  // document with </> — markup
+  markup: '<path d="M6 3h9l4 4v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M15 3v4h4"/><polyline points="10 13 8.5 14.5 10 16"/><line x1="12.5" y1="12.5" x2="11.5" y2="16.5"/><polyline points="14 13 15.5 14.5 14 16"/>',
+  // document with { } — data/config
+  data: '<path d="M6 3h9l4 4v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M15 3v4h4"/><path d="M11 12.5c-1 0-1 1-1 1.5s0 1-1 1c1 0 1 .5 1 1.5s0 1.5 1 1.5"/><path d="M14 12.5c1 0 1 1 1 1.5s0 1 1 1c-1 0-1 .5-1 1.5s0 1.5-1 1.5"/>',
+  // document with # — stylesheet
+  style: '<path d="M6 3h9l4 4v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M15 3v4h4"/><line x1="10" y1="12.5" x2="9" y2="17"/><line x1="14" y1="12.5" x2="13" y2="17"/><line x1="8.5" y1="14" x2="15" y2="14"/><line x1="8" y1="15.8" x2="14.5" y2="15.8"/>',
+  // document with text lines — prose/docs
+  doc: '<path d="M6 3h9l4 4v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M15 3v4h4"/><line x1="8.5" y1="12.5" x2="15" y2="12.5"/><line x1="8.5" y1="15" x2="15" y2="15"/><line x1="8.5" y1="17.5" x2="12.5" y2="17.5"/>',
+  // picture — images
+  image: '<rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="9" cy="9.5" r="1.4"/><path d="m5 17 4-4 3.5 3.5L15 14l4 4"/>',
+  // box — archives
+  archive: '<path d="M4 7 12 3l8 4v10l-8 4-8-4V7Z"/><path d="M4 7l8 4 8-4"/><line x1="12" y1="11" x2="12" y2="21"/>',
+  // plain document — fallback
+  file: '<path d="M6 3h9l4 4v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M15 3v4h4"/>',
+};
+// extension -> [category, colour]
+const FILE_ICONS = (() => {
+  const m = {};
+  const add = (exts, cat, color) => exts.split(" ").forEach((e) => (m[e] = [cat, color]));
+  add("js mjs cjs jsx", "code", "#f1dd35");
+  add("ts tsx", "code", "#3178c6");
+  add("rs", "code", "#ffa657");
+  add("py pyw", "code", "#ffd43b");
+  add("go", "code", "#00add8");
+  add("java class", "code", "#f89820");
+  add("c h", "code", "#659ad2");
+  add("cpp cxx cc hpp hxx", "code", "#659ad2");
+  add("cs", "code", "#a074c4");
+  add("rb", "code", "#cc342d");
+  add("php", "code", "#777bb4");
+  add("swift", "code", "#f05138");
+  add("kt kts", "code", "#a97bff");
+  add("sh bash zsh", "code", "#4eaa25");
+  add("ps1 psm1 psd1", "code", "#2b7cd3");
+  add("sql", "code", "#e38c00");
+  add("dart", "code", "#00b4ab");
+  add("lua", "code", "#3d6cd3");
+  add("html htm xhtml", "markup", "#e34c26");
+  add("xml xaml", "markup", "#f16529");
+  add("vue", "markup", "#41b883");
+  add("svelte", "markup", "#ff3e00");
+  add("css", "style", "#2965f1");
+  add("scss sass less styl", "style", "#cd6799");
+  add("json jsonc json5", "data", "#f1dd35");
+  add("yml yaml", "data", "#cb4b16");
+  add("toml", "data", "#9c6b4f");
+  add("ini cfg conf env properties", "data", "#9aa0aa");
+  add("lock", "data", "#8a8f98");
+  add("md markdown mdx", "doc", "#519aba");
+  add("txt log rst", "doc", "#9aa0aa");
+  add("pdf", "doc", "#e5534b");
+  add("csv tsv", "doc", "#4caf50");
+  add("png jpg jpeg gif webp bmp ico avif", "image", "#26a269");
+  add("svg", "image", "#ffb13b");
+  add("zip tar gz tgz 7z rar xz bz2", "archive", "#f0a500");
+  return m;
+})();
+function fileIcon(name) {
+  // Preferred: the official VS Code Seti icon font (window.SetiIcons), loaded
+  // from js/seti-icons.js. Falls back to the inline SVG mini-set when the font
+  // mapping isn't present (e.g. the browser design-mode build).
+  if (window.SetiIcons) {
+    const { char, color } = window.SetiIcons.forFile(name);
+    return `<span class="tree-ico seti-ico" style="color:${color}">${char}</span>`;
+  }
+  const dot = name.lastIndexOf(".");
+  const ext = dot > 0 ? name.slice(dot + 1).toLowerCase() : "";
+  const [cat, color] = FILE_ICONS[ext] || ["file", "#8a94a6"];
+  const glyph = FILE_GLYPHS[cat] || FILE_GLYPHS.file;
+  return `<span class="tree-ico file-ico" style="color:${color}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${glyph}</svg></span>`;
+}
+
 function buildTree(list) {
   const root = { name: "", path: "", dirs: new Map(), files: [] };
   for (const f of list) {
@@ -83,6 +161,7 @@ function renderFileTree(container, opts) {
     order.push({ path: f.path, group });
     return `<div class="tree-row tree-file${on ? " selected" : ""}" data-file="${esc(f.path)}" data-group="${group || ""}" style="--d:${depth}" title="${esc(f.path)}">
       <span class="tree-twisty" style="visibility:hidden">${TREE_CARET}</span>
+      ${fileIcon(f.name)}
       <span class="tree-name">${esc(f.name)}</span>
       ${actionsHtml("file", f.path)}
       ${badgeHtml(f.path)}
@@ -124,6 +203,7 @@ function renderFileTree(container, opts) {
         const on = opts.activeFile === f.path && (opts.activeGroup || null) === group;
         order.push({ path: f.path, group });
         rows.push(`<div class="tree-row tree-file${on ? " selected" : ""}" data-file="${esc(f.path)}" data-group="${group || ""}" title="${esc(f.path)}" style="--d:0">
+          ${fileIcon(name)}
           <span class="tree-name"><span class="change-dir">${esc(dir)}</span>${esc(name)}</span>
           ${actionsHtml("file", f.path)}
           ${badgeHtml(f.path)}
@@ -1981,20 +2061,21 @@ const ChangesPage = (() => {
     showDiffEmpty("Loading pull request…");
     collapsedDetail = new Set();
     try {
-      let cs;
-      try {
-        // Fast path: diff against the PR branches already present locally.
-        cs = await DC.prChanges(forRepo, pr.base, pr.branch);
-      } catch (err) {
-        // Branches probably aren't fetched yet — wait for the in-flight background
-        // fetch (kicked off in loadRepoPulls) and retry once.
-        if (!prFetch) throw err;
-        if (gen !== loadGen || repoId !== forRepo || activePull !== pr) return;
+      // The base...head diff needs the PR's head/base branches present AND up to
+      // date locally. loadRepoPulls kicks off a background `git fetch`; wait for
+      // it to finish BEFORE diffing so a stale (or missing) local `origin/<branch>`
+      // ref can never leave the PR "loaded" with no/outdated file changes.
+      //
+      // Previously the diff ran immediately (fast path) and only re-fetched when
+      // that first call threw. But when `origin/<branch>` already existed from an
+      // earlier fetch, the call SUCCEEDED with the stale ref, so the fresh commits
+      // were never diffed and the branch changes silently failed to load.
+      if (prFetch) {
         showDiffEmpty("Fetching pull request branches…");
-        await prFetch;
+        try { await prFetch; } catch (_) { /* offline/auth — fall back to local refs */ }
         if (gen !== loadGen || repoId !== forRepo || activePull !== pr) return;
-        cs = await DC.prChanges(forRepo, pr.base, pr.branch);
       }
+      const cs = await DC.prChanges(forRepo, pr.base, pr.branch);
       if (gen !== loadGen || repoId !== forRepo || activePull !== pr) return; // a newer selection won
       commitFiles = cs.files || [];
       renderDetail();
