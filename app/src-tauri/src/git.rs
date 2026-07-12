@@ -1527,7 +1527,16 @@ fn build_file_diff(repo: &Repository, diff: &git2::Diff, file: &str) -> AppResul
                 let mut lines = Vec::with_capacity(nlines);
                 for l in 0..nlines {
                     let line = patch.line_in_hunk(h, l)?;
-                    let kind = match line.origin() {
+                    let origin = line.origin();
+                    // Skip libgit2's synthetic "no newline at end of file"
+                    // markers. These use the EOFNL line origins ('=', '<', '>')
+                    // and carry only the "\ No newline at end of file" notice —
+                    // never real file content (which always uses ' ', '+', '-').
+                    // Matching on the origin guarantees no actual line is dropped.
+                    if matches!(origin, '=' | '<' | '>') {
+                        continue;
+                    }
+                    let kind = match origin {
                         '+' => {
                             result.additions += 1;
                             "add"
