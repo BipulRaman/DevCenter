@@ -247,3 +247,12 @@ pub fn my_vote(repo_ref: &RepoRef, pr_id: u64, token: &str) -> AppResult<i32> {
     }
 }
 
+/// Publish a draft pull request (mark it ready for review / clear the draft flag).
+pub fn publish(repo_ref: &RepoRef, pr_id: u64, token: &str) -> AppResult<()> {
+    match repo_ref.provider.as_str() {
+        "github" => github::publish(repo_ref, pr_id, token),
+        "azure" => azure::publish(repo_ref, pr_id, token),
+        _ => Err(AppError::msg("Unsupported provider.")),
+    }
+}
+

@@ -338,3 +338,35 @@ pub fn my_vote(r: &RepoRef, pr_number: u64, token: &str) -> AppResult<i32> {
     Ok(vote)
 }
 
+/// Publish a draft pull request (mark it ready for review). GitHub only exposes
+/// this via GraphQL, which needs the PR's node id.
+pub fn publish(r: &RepoRef, pr_number: u64, token: &str) -> AppResult<()> {
+    let url = format!(
+        "https://api.github.com/repos/{}/{}/pulls/{pr_number}",
+        r.owner, r.repo
+    );
+    let node_id = get(&url, token)?
+        .get("node_id")
+        .and_then(|x| x.as_str())
+        .unwrap_or("")
+        .to_string();
+    if node_id.is_empty() {
+        return Err(AppError::msg("Couldn't resolve the pull request id."));
+    }
+    let body = json!({
+        "query": "mutation($id:ID!){ markPullRequestReadyForReview(input:{pullRequestId:$id}){ pullRequest { isDraft } } }",
+        "variables": { "id": node_id },
+    });
+    let resp = send("POST", "https://api.github.com/graphql", token, &body)?;
+    if let Some(errs) = resp.get("errors").and_then(|e| e.as_array()) {
+        if let Some(first) = errs.first() {
+            let msg = first
+                .get("message")
+                .and_then(|m| m.as_str())
+                .unwrap_or("GitHub rejected the request.");
+            return Err(AppError::msg(msg.to_string()));
+        }
+    }
+    Ok(())
+}
+

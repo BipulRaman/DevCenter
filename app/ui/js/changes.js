@@ -2095,7 +2095,7 @@ const ChangesPage = (() => {
     $("detailHead").innerHTML = `<div class="detail-msg">${esc(pr.title)}</div>
       <div class="detail-meta"><span class="avatar">${esc(initials)}</span><span class="detail-author" title="${esc(pr.author)}">${esc(pr.author)}</span><span class="hm-dot">·</span><span class="history-when">${esc(pr.updated)}</span><span class="pr-state ${esc(pr.status)}">${prStateLabel(pr.status)}</span></div>
       <div class="pr-detail-branch"><code title="${esc(pr.branch)}">${esc(pr.branch)}</code><span class="pr-arrow">→</span><code title="${esc(pr.base)}">${esc(pr.base)}</code></div>
-      <div class="pr-detail-stats"><span class="chip review ${rev.cls}">${rev.icon}${rev.label}</span><span class="chip">${ICON.comment}${pr.comments}</span><span class="pr-diff"><span class="add">+${pr.additions}</span> <span class="del">−${pr.deletions}</span></span><button class="btn btn-primary btn-sm" id="prReviewBtn">Review</button><button class="btn btn-ghost btn-sm" id="prViewBtn">${ICON.external}View</button></div>`;
+      <div class="pr-detail-stats"><span class="chip review ${rev.cls}">${rev.icon}${rev.label}</span><button class="btn btn-primary btn-sm" id="prReviewBtn">Review</button><button class="btn btn-ghost btn-sm" id="prViewBtn">${ICON.external}View</button></div>`;
     const vb = $("prViewBtn");
     if (vb) vb.addEventListener("click", () => openPrUrl(pr.url));
     const rb = $("prReviewBtn");

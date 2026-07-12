@@ -371,3 +371,15 @@ pub fn my_vote(r: &RepoRef, pr_id: u64, token: &str) -> AppResult<i32> {
     Ok(0)
 }
 
+/// Publish a draft pull request (clear its draft flag so it's open for review).
+pub fn publish(r: &RepoRef, pr_id: u64, token: &str) -> AppResult<()> {
+    let project = r.project.as_deref().unwrap_or("");
+    let base = collection_base(&r.host, &r.owner);
+    let url = format!(
+        "{base}/{project}/_apis/git/repositories/{}/pullrequests/{pr_id}?api-version=7.1",
+        r.repo
+    );
+    send("PATCH", &url, token, &json!({ "isDraft": false }))?;
+    Ok(())
+}
+

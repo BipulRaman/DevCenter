@@ -132,8 +132,6 @@ function renderPulls(filter = "") {
         </div>
         <div class="pr-meta">
           <span class="chip review ${rev.cls}">${rev.icon}${rev.label}</span>
-          <span class="chip">${ICON.comment}${escapeHtml(p.comments ?? 0)}</span>
-          <span class="pr-diff"><span class="add">+${escapeHtml(p.additions ?? 0)}</span> <span class="del">−${escapeHtml(p.deletions ?? 0)}</span></span>
         </div>
         <div class="pr-actions">
           ${p.repoId ? `<button class="btn btn-primary btn-sm" data-pr-review="${id}" data-pr-repo="${repoId}">Review</button>` : ""}

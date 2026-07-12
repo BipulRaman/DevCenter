@@ -9,13 +9,21 @@ const PrReviewer = (() => {
   const esc = escapeHtml;
 
   const OPEN_ICON = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>';
+  const PUBLISH_ICON = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>';
   // Vote states, normalized to Azure's scale (GitHub uses only 10/0/-10).
+  // `btn` is a compact label shown on the button (full `label` stays in the menu).
   const VOTES = {
     "10": { label: "Approved", cls: "ok" },
-    "5": { label: "Approved with suggestions", cls: "ok" },
+    "5": { label: "Approved with suggestions", cls: "ok", btn: "Approved+" },
     "0": { label: "No vote", cls: "muted" },
-    "-5": { label: "Waiting for author", cls: "warn" },
+    "-5": { label: "Waiting for author", cls: "warn", btn: "Waiting" },
     "-10": { label: "Rejected", cls: "danger" },
+  };
+  // Aggregate PR review status (from pr.reviews) shown in the header.
+  const REVIEW = {
+    approved: { cls: "ok", label: "Approved" },
+    changes: { cls: "danger", label: "Changes requested" },
+    pending: { cls: "muted", label: "Review pending" },
   };
 
   let repoId = null;
@@ -77,7 +85,18 @@ const PrReviewer = (() => {
 
   function renderHeader() {
     $("prrTitle").textContent = pr.title || `Pull request #${pr.id}`;
-    $("prrMeta").innerHTML = `${esc(pr.repo || "")} #${esc(String(pr.id))} · by ${esc(pr.author || "")} · <code>${esc(pr.branch)}</code> → <code>${esc(pr.base)}</code>`;
+    $("prrMeta").innerHTML = `
+      <span class="prr-meta-row">
+        <span class="prr-repo">${esc(pr.repo || "")}</span>
+        <span class="prr-num">#${esc(String(pr.id))}</span>
+        <span class="prr-dot">·</span>
+        <span class="prr-by">${esc(pr.author || "")}</span>
+      </span>
+      <span class="prr-branches">
+        <span class="prr-branch-name" title="${esc(pr.branch)}">${esc(pr.branch)}</span>
+        <svg class="prr-arrow" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+        <span class="prr-branch-name base" title="${esc(pr.base)}">${esc(pr.base)}</span>
+      </span>`;
     renderActions();
   }
 
@@ -93,16 +112,24 @@ const PrReviewer = (() => {
   function renderActions() {
     const host = $("prrActions");
     if (!host) return;
+    const rv = REVIEW[pr.reviews] || REVIEW.pending;
+    const statusPill = `<span class="prr-status ${rv.cls}" title="Overall review status"><span class="prr-vote-dot ${rv.cls}"></span>${rv.label}</span>`;
     const openBtn = `<button class="btn btn-ghost btn-sm" data-prr="open" type="button">${OPEN_ICON}Open</button>`;
     const commentBtn = `<button class="btn btn-ghost btn-sm" data-prr="comment" type="button">Comment</button>`;
+    // Draft PRs can't be voted on — they offer a "Publish" action instead.
+    const isDraft = pr.status === "draft";
     let html;
-    if (provider === "azure") {
+    if (isDraft) {
+      // A draft shows Publish (mark ready for review) in place of the vote control.
+      html = `${statusPill}${openBtn}${commentBtn}
+        <button class="btn btn-primary btn-sm prr-publish-btn" data-prr="publish" type="button" title="Mark this draft ready for review">${PUBLISH_ICON}Publish</button>`;
+    } else if (provider === "azure") {
       const voted = myVote !== 0;
       const cur = VOTES[String(myVote)] || VOTES["0"];
-      html = `${openBtn}${commentBtn}
+      html = `${statusPill}${openBtn}${commentBtn}
         <div class="prr-vote" id="prrVote">
           <button class="btn ${voted ? "btn-primary" : "btn-ghost"} btn-sm prr-vote-btn" id="prrVoteBtn" type="button" aria-haspopup="true" aria-expanded="false">
-            <span class="prr-vote-dot ${cur.cls}"></span><span>${voted ? esc(cur.label) : "Vote"}</span>
+            <span class="prr-vote-dot ${cur.cls}"></span><span>${voted ? esc(cur.btn || cur.label) : "Vote"}</span>
             <svg class="caret" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
           </button>
           <div class="prr-vote-menu" id="prrVoteMenu" role="menu" hidden>
@@ -118,7 +145,7 @@ const PrReviewer = (() => {
       // GitHub: three fixed review actions; the current one is highlighted.
       const approved = myVote >= 5;
       const rejected = myVote <= -5;
-      html = `${openBtn}${commentBtn}
+      html = `${statusPill}${openBtn}${commentBtn}
         <button class="btn btn-danger btn-sm${rejected ? " is-current" : ""}" data-prr="changes" type="button">${rejected ? "Changes requested ✓" : "Request changes"}</button>
         <button class="btn btn-primary btn-sm${approved ? " is-current" : ""}" data-prr="approve" type="button">${approved ? "Approved ✓" : "Approve"}</button>`;
     }
@@ -127,6 +154,7 @@ const PrReviewer = (() => {
       const act = el.dataset.prr;
       closeVoteMenu();
       if (act === "open") { if (pr && pr.url) DC.openUrl(pr.url); return; }
+      if (act === "publish") { publishDraft(); return; }
       submitReview(act);
     });
     const voteBtn = $("prrVoteBtn");
@@ -430,8 +458,42 @@ const PrReviewer = (() => {
     else showDiffEmpty("This pull request has no file changes.");
   }
 
+  // Publish a draft PR (mark it ready for review), then flip the header to the
+  // normal (non-draft) review controls.
+  async function publishDraft() {
+    if (busy) return;
+    const ok = await Modal.confirm({
+      title: "Publish pull request",
+      message: "Publish this draft pull request so it's ready for review?",
+      confirmText: "Publish",
+    });
+    if (!ok) return;
+    const gen = loadGen;
+    const forRepo = repoId;
+    const forPr = pr;
+    busy = true;
+    try {
+      await DC.publishPr(forRepo, forPr.id);
+      if (gen !== loadGen || repoId !== forRepo || pr !== forPr) return;
+      forPr.status = "open"; // reflect the change locally
+      renderHeader();
+      await Modal.alert({ title: "Published", message: "The pull request is now open for review." });
+    } catch (e) {
+      if (gen !== loadGen || repoId !== forRepo || pr !== forPr) return;
+      console.error("publishPr failed", e);
+      await Modal.alert({ title: "Couldn't publish", message: String(e) });
+    } finally {
+      if (gen === loadGen && repoId === forRepo && pr === forPr) busy = false;
+    }
+  }
+
   async function submitReview(type) {
     if (busy) return;
+    // Draft PRs can't be voted on — only "comment" is allowed.
+    if (pr && pr.status === "draft" && type !== "comment") {
+      await Modal.alert({ title: "Draft pull request", message: "This pull request is a draft and can't be approved yet." });
+      return;
+    }
     const META = {
       approve: { title: "Approve pull request", confirm: "Approve", danger: false, require: false },
       approve_suggestions: { title: "Approve with suggestions", confirm: "Approve with suggestions", danger: false, require: false },

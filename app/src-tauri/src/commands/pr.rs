@@ -319,3 +319,18 @@ pub async fn pr_my_vote(
     .map_err(|e| AppError::msg(e.to_string()))?
 }
 
+/// Publish a draft pull request (mark it ready for review). Returns nothing.
+#[tauri::command]
+pub async fn publish_pr(
+    repo_id: String,
+    pr_id: u64,
+    state: State<'_, AppState>,
+) -> AppResult<()> {
+    let st = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || -> AppResult<()> {
+        with_repo_token(&st, &repo_id, |rref, token| pr::publish(rref, pr_id, token))
+    })
+    .await
+    .map_err(|e| AppError::msg(e.to_string()))?
+}
+
