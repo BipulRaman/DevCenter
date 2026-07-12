@@ -10,6 +10,11 @@ use crate::models::Account;
 /// they live in the OS keychain. All live Git state is computed on demand.
 pub fn open(path: &std::path::Path) -> AppResult<Connection> {
     let conn = Connection::open(path)?;
+    // Wait (rather than immediately erroring with SQLITE_BUSY) if another
+    // connection briefly holds a write lock — e.g. a second app instance, or the
+    // dev hot-reload relaunch overlapping the exiting process. Without this the
+    // schema init below can fail and leave AppState unmanaged.
+    conn.busy_timeout(std::time::Duration::from_secs(5))?;
     conn.execute_batch(
         "PRAGMA journal_mode = WAL;
          CREATE TABLE IF NOT EXISTS repos (

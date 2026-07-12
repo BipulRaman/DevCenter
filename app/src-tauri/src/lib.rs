@@ -85,18 +85,54 @@ fn close_splashscreen(app: tauri::AppHandle) {
     reveal_main(&app);
 }
 
+/// Resolve the per-user application data directory, mirroring Tauri's
+/// `app_data_dir()` (`<platform data dir>/<identifier>`), but WITHOUT needing an
+/// `AppHandle`. This lets us open the database and register state on the builder
+/// before the event loop starts (see `run`), avoiding the startup race where the
+/// frontend's first command call could beat `.manage()`.
+///
+/// The identifier must match `tauri.conf.json` so the same database file is used.
+fn resolve_app_data_dir() -> std::path::PathBuf {
+    use std::path::PathBuf;
+    const IDENTIFIER: &str = "com.devcenter.desktop";
+
+    #[cfg(target_os = "windows")]
+    let base = std::env::var_os("APPDATA")
+        .map(PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir);
+
+    #[cfg(target_os = "macos")]
+    let base = std::env::var_os("HOME")
+        .map(|h| PathBuf::from(h).join("Library/Application Support"))
+        .unwrap_or_else(std::env::temp_dir);
+
+    #[cfg(target_os = "linux")]
+    let base = std::env::var_os("XDG_DATA_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share")))
+        .unwrap_or_else(std::env::temp_dir);
+
+    base.join(IDENTIFIER)
+}
+
 pub fn run() {
+    // Open the database and register application state BEFORE the Tauri event
+    // loop starts. The main window is created (hidden) at startup and its
+    // frontend invokes `list_repos` immediately — if the state were only
+    // managed inside `.setup()`, that first call could race ahead of
+    // `app.manage()` and fail with "state not managed" (seen intermittently on
+    // a cold first launch). Managing on the builder eliminates the race.
+    let dir = resolve_app_data_dir();
+    let _ = std::fs::create_dir_all(&dir);
+    let conn = store::open(&dir.join("devcenter.db")).expect("failed to open DevCenter database");
+    let app_state = AppState::new(conn);
+
     tauri::Builder::default()
+        .manage(app_state)
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
-            // Per-user app data dir (e.g. %APPDATA%\com.devcenter.desktop on Windows).
-            let dir = app.path().app_data_dir()?;
-            std::fs::create_dir_all(&dir)?;
-            let conn = store::open(&dir.join("devcenter.db"))?;
-            app.manage(AppState::new(conn));
-
             // Safety net: if the frontend never signals it's ready (JS error,
             // etc.), reveal the main window and dismiss the splash after a delay
             // so the app can never get stuck on the loading screen.
