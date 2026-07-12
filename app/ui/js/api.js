@@ -28,6 +28,8 @@
     openTerminal: (path) => (hasBackend ? invoke("open_terminal", { path }) : Promise.resolve()),
     vscodeAvailable: () => (hasBackend ? invoke("vscode_available") : Promise.resolve(false)),
     openInVscode: (path) => (hasBackend ? invoke("open_in_vscode", { path }) : Promise.resolve()),
+    vscodeInsidersAvailable: () => (hasBackend ? invoke("vscode_insiders_available") : Promise.resolve(false)),
+    openInVscodeInsiders: (path) => (hasBackend ? invoke("open_in_vscode_insiders", { path }) : Promise.resolve()),
 
     // --- Git Board (Phase 1) ---
     listRepos: () => (hasBackend ? invoke("list_repos") : Promise.resolve(null)),

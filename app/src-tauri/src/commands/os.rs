@@ -74,34 +74,53 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 /// Locate the VS Code executable if it's installed. Checks well-known install
 /// locations first, then falls back to a PATH lookup. Returns None when VS Code
-/// can't be found.
-fn vscode_path() -> Option<std::path::PathBuf> {
+/// can't be found. When `insiders` is true, looks for the VS Code Insiders build.
+fn vscode_path(insiders: bool) -> Option<std::path::PathBuf> {
     use std::path::PathBuf;
 
     #[cfg(target_os = "windows")]
     let known: Vec<PathBuf> = {
+        let (dir, exe) = if insiders {
+            (r"Microsoft VS Code Insiders", "Code - Insiders.exe")
+        } else {
+            (r"Microsoft VS Code", "Code.exe")
+        };
         let mut v = Vec::new();
         if let Ok(p) = std::env::var("LOCALAPPDATA") {
-            v.push(PathBuf::from(p).join(r"Programs\Microsoft VS Code\Code.exe"));
+            v.push(PathBuf::from(p).join("Programs").join(dir).join(exe));
         }
         if let Ok(p) = std::env::var("ProgramFiles") {
-            v.push(PathBuf::from(p).join(r"Microsoft VS Code\Code.exe"));
+            v.push(PathBuf::from(p).join(dir).join(exe));
         }
         if let Ok(p) = std::env::var("ProgramFiles(x86)") {
-            v.push(PathBuf::from(p).join(r"Microsoft VS Code\Code.exe"));
+            v.push(PathBuf::from(p).join(dir).join(exe));
         }
         v
     };
     #[cfg(target_os = "macos")]
-    let known: Vec<PathBuf> = vec![PathBuf::from(
-        "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code",
-    )];
+    let known: Vec<PathBuf> = if insiders {
+        vec![PathBuf::from(
+            "/Applications/Visual Studio Code - Insiders.app/Contents/Resources/app/bin/code",
+        )]
+    } else {
+        vec![PathBuf::from(
+            "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code",
+        )]
+    };
     #[cfg(target_os = "linux")]
-    let known: Vec<PathBuf> = vec![
-        PathBuf::from("/usr/bin/code"),
-        PathBuf::from("/usr/local/bin/code"),
-        PathBuf::from("/snap/bin/code"),
-    ];
+    let known: Vec<PathBuf> = if insiders {
+        vec![
+            PathBuf::from("/usr/bin/code-insiders"),
+            PathBuf::from("/usr/local/bin/code-insiders"),
+            PathBuf::from("/snap/bin/code-insiders"),
+        ]
+    } else {
+        vec![
+            PathBuf::from("/usr/bin/code"),
+            PathBuf::from("/usr/local/bin/code"),
+            PathBuf::from("/snap/bin/code"),
+        ]
+    };
 
     if let Some(p) = known.into_iter().find(|p| p.exists()) {
         return Some(p);
@@ -113,8 +132,9 @@ fn vscode_path() -> Option<std::path::PathBuf> {
     } else {
         "which"
     };
+    let cli = if insiders { "code-insiders" } else { "code" };
     let mut cmd = std::process::Command::new(finder);
-    cmd.arg("code");
+    cmd.arg(cli);
     #[cfg(target_os = "windows")]
     {
         use std::os::windows::process::CommandExt;
@@ -141,13 +161,36 @@ fn vscode_path() -> Option<std::path::PathBuf> {
 /// "Open in VS Code" menu item).
 #[tauri::command]
 pub fn vscode_available() -> bool {
-    vscode_path().is_some()
+    vscode_path(false).is_some()
+}
+
+/// Whether VS Code Insiders appears to be installed on this machine (drives the
+/// optional "Open in VS Code (I)" menu item).
+#[tauri::command]
+pub fn vscode_insiders_available() -> bool {
+    vscode_path(true).is_some()
 }
 
 /// Opens the given folder in VS Code. Errors if VS Code can't be located.
 #[tauri::command]
 pub fn open_in_vscode(path: String) -> Result<(), String> {
-    let exe = vscode_path().ok_or_else(|| "VS Code was not found on this machine.".to_string())?;
+    open_in_vscode_variant(path, false)
+}
+
+/// Opens the given folder in VS Code Insiders. Errors if it can't be located.
+#[tauri::command]
+pub fn open_in_vscode_insiders(path: String) -> Result<(), String> {
+    open_in_vscode_variant(path, true)
+}
+
+fn open_in_vscode_variant(path: String, insiders: bool) -> Result<(), String> {
+    let exe = vscode_path(insiders).ok_or_else(|| {
+        if insiders {
+            "VS Code Insiders was not found on this machine.".to_string()
+        } else {
+            "VS Code was not found on this machine.".to_string()
+        }
+    })?;
     // `.cmd`/`.bat` wrappers can't be spawned directly on Windows — run via cmd.
     let is_script = exe
         .extension()

@@ -6,6 +6,8 @@ renderPrStats();
 
 // Whether VS Code is installed (drives the optional "Open in VS Code" menu item).
 let hasVscode = false;
+// Whether VS Code Insiders is installed (drives the optional "Open in VS Code (I)" item).
+let hasVscodeInsiders = false;
 
 if (DC && DC.hasBackend) {
   // Repositories and pull requests load from the backend (see hydration below).
@@ -13,6 +15,7 @@ if (DC && DC.hasBackend) {
   document.getElementById("repoGrid").innerHTML = empty("Loading repositories…");
   document.getElementById("prList").innerHTML = empty("Loading pull requests…");
   DC.vscodeAvailable().then((v) => { hasVscode = !!v; }).catch(() => {});
+  DC.vscodeInsidersAvailable().then((v) => { hasVscodeInsiders = !!v; }).catch(() => {});
 } else {
   renderRepos();
   renderPulls();
@@ -39,6 +42,9 @@ async function hydrateFromBackend() {
     }
   } catch (e) {
     console.error("listRepos failed", e);
+    // Never leave the "Loading repositories…" placeholder stuck on error.
+    const grid = document.getElementById("repoGrid");
+    if (grid) grid.innerHTML = empty("Couldn't load repositories: " + String(e));
   }
 }
 

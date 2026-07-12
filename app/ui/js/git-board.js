@@ -281,6 +281,7 @@ function renderRepos(filter = "") {
         { label: "Open terminal", icon: ICON.terminal, onClick: () => DC.openTerminal(r.path).catch((e) => console.error("openTerminal failed", e)) }
       );
       if (hasVscode) items.push({ label: "Open in VS Code", icon: ICON.vscode, onClick: () => DC.openInVscode(r.path).catch((e) => console.error("openInVscode failed", e)) });
+      if (hasVscodeInsiders) items.push({ label: "Open in VS Code (I)", icon: ICON.vscode, onClick: () => DC.openInVscodeInsiders(r.path).catch((e) => console.error("openInVscodeInsiders failed", e)) });
       const web = repoWebUrl(r.remote);
       if (web) items.push({ label: "Open in browser", icon: ICON.external, onClick: () => DC.openUrl(web).catch((e) => console.error("openUrl failed", e)) });
     }

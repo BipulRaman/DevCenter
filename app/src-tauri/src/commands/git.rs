@@ -39,26 +39,48 @@ fn meta_for(state: &AppState, id: &str) -> (bool, Vec<String>) {
 }
 
 /// List all registered repositories with live status. On first run (empty
-/// registry) this performs a one-time scan of common developer roots.
+/// registry) the UI would otherwise block while a full recursive scan of the
+/// developer folders runs — so the scan is performed in the background and its
+/// results are pushed to the UI via the `repos_updated` event, keeping the
+/// initial landing instant.
 #[tauri::command]
-pub async fn list_repos(state: State<'_, AppState>) -> AppResult<Vec<Repo>> {
+pub async fn list_repos(state: State<'_, AppState>, app: AppHandle) -> AppResult<Vec<Repo>> {
     let st = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || -> AppResult<Vec<Repo>> {
-        let empty = {
-            let conn = st.db.lock().unwrap();
-            store::is_empty(&conn)?
-        };
-        if empty {
-            let found = git::scan(&git::default_scan_roots(), SCAN_DEPTH);
-            let conn = st.db.lock().unwrap();
-            for p in &found {
-                store::ensure_repo(&conn, p)?;
-            }
-        }
-        collect_repos(&st)
-    })
+    let (repos, need_scan) = tauri::async_runtime::spawn_blocking(
+        move || -> AppResult<(Vec<Repo>, bool)> {
+            let empty = {
+                let conn = st.db.lock().unwrap();
+                store::is_empty(&conn)?
+            };
+            let repos = collect_repos(&st)?;
+            Ok((repos, empty))
+        },
+    )
     .await
-    .map_err(|e| AppError::msg(e.to_string()))?
+    .map_err(|e| AppError::msg(e.to_string()))??;
+
+    // First run: discover repositories in the background, then notify the UI.
+    if need_scan {
+        let st = state.inner().clone();
+        tauri::async_runtime::spawn(async move {
+            let scanned = tauri::async_runtime::spawn_blocking(move || -> AppResult<Vec<Repo>> {
+                let found = git::scan(&git::default_scan_roots(), SCAN_DEPTH);
+                {
+                    let conn = st.db.lock().unwrap();
+                    for p in &found {
+                        store::ensure_repo(&conn, p)?;
+                    }
+                }
+                collect_repos(&st)
+            })
+            .await;
+            if let Ok(Ok(repos)) = scanned {
+                let _ = app.emit("repos_updated", &repos);
+            }
+        });
+    }
+
+    Ok(repos)
 }
 
 /// Discover repositories under the given roots (or the default roots when the
