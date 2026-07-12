@@ -46,6 +46,12 @@
 
   --sidebar-w: 56px;
   --content-x: 10px;
+  /* One physical device pixel, whatever the display scaling. `--dpr` is set by
+     theme.js from window.devicePixelRatio (falls back to 1). Use --hairline for
+     every layout separator so borders and element-lines render at the SAME
+     single-device-pixel thickness (no crisp-vs-soft mismatch at 125% etc.). */
+  --dpr: 1;
+  --hairline: calc(1px / var(--dpr));
   --font: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
 }
@@ -1270,7 +1276,7 @@ select.modal-input { cursor: pointer; appearance: none; background-image: url("d
   flex: 1 1 auto;
   min-height: 0;
   background: var(--card);
-  border: 1px solid var(--border);
+  border: var(--hairline) solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow-row);
   overflow: hidden;
@@ -1288,13 +1294,13 @@ select.modal-input { cursor: pointer; appearance: none; background-image: url("d
   z-index: 5;
 }
 .pane-resizer::before {
-  content: ""; width: 1px; height: 100%;
-  background: var(--border);
-  transition: width .14s var(--ease), background .14s var(--ease), box-shadow .14s var(--ease);
+  content: ""; position: absolute; top: 0; bottom: 0; left: -1.5px; width: 3px;
+  background: transparent; border-radius: 2px;
+  transition: background .14s var(--ease), box-shadow .14s var(--ease);
 }
 .pane-resizer:hover::before,
 .pane-resizer.dragging::before,
-.pane-resizer:focus-visible::before { width: 3px; background: var(--accent); box-shadow: 0 0 10px var(--accent-glow); }
+.pane-resizer:focus-visible::before { background: var(--accent); box-shadow: 0 0 10px var(--accent-glow); }
 body.col-resizing { cursor: col-resize; user-select: none; }
 body.col-resizing * { cursor: col-resize !important; }
 
@@ -1302,8 +1308,11 @@ body.col-resizing * { cursor: col-resize !important; }
 .commit-detail {
   display: flex; flex-direction: column; min-height: 0;
   background: transparent; overflow: hidden;
+  /* Resting divider = a real border (pixel-snapped) so it matches every other
+     separator exactly; the resizer element above only paints the hover accent. */
+  border-right: var(--hairline) solid var(--border);
 }
-.commit-tabs { display: flex; padding: 6px; gap: 4px; border-bottom: 1px solid var(--border); flex-shrink: 0; container-type: inline-size; }
+.commit-tabs { display: flex; padding: 6px; gap: 4px; border-bottom: var(--hairline) solid var(--border); flex-shrink: 0; container-type: inline-size; }
 .commit-tab {
   flex: 1; height: 34px; border: none; border-radius: 0; background: transparent;
   display: inline-flex; align-items: center; justify-content: center; gap: 7px;
@@ -1341,7 +1350,7 @@ body.col-resizing * { cursor: col-resize !important; }
   display: flex; align-items: center; gap: 9px; padding: 4px 12px 8px; flex-shrink: 0;
   font-size: 11.5px; font-weight: 600; color: var(--text-dim);
 }
-.detail-filebar { padding: 10px 12px 8px; border-top: 1px solid var(--border); text-transform: uppercase; letter-spacing: .4px; color: var(--text-faint); }
+.detail-filebar { padding: 10px 12px 8px; border-top: var(--hairline) solid var(--border); text-transform: uppercase; letter-spacing: .4px; color: var(--text-faint); }
 .changes-head-title { flex: 1; min-width: 0; min-height: 26px; display: flex; align-items: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .icon-mini {
   flex-shrink: 0; width: 26px; height: 26px; display: grid; place-items: center;
@@ -1487,7 +1496,7 @@ body.col-resizing * { cursor: col-resize !important; }
 .stash-meta { font-size: 11px; color: var(--text-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
 
 /* commit message box pinned to the bottom of the side panel */
-.commit-box { border-top: 1px solid var(--border); padding: 12px; display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
+.commit-box { border-top: var(--hairline) solid var(--border); padding: 12px; display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
 
 .commit-branch-btn {
   width: 100%;
@@ -1568,7 +1577,7 @@ body.col-resizing * { cursor: col-resize !important; }
 .history-unpushed svg { width: 13px; height: 13px; }
 
 /* Commit detail (history): metadata + file list */
-.detail-head { padding: 16px 16px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.detail-head { padding: 16px 16px 14px; border-bottom: var(--hairline) solid var(--border); flex-shrink: 0; }
 .detail-msg { font-size: 14px; font-weight: 600; color: var(--text); line-height: 1.4; word-break: break-word; }
 .detail-body { margin-top: 8px; font-size: 12.5px; color: var(--text-dim); line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
 .detail-meta { display: flex; flex-wrap: nowrap; gap: 8px; align-items: center; margin-top: 12px; font-size: 12px; color: var(--text-faint); min-width: 0; }
@@ -1606,7 +1615,7 @@ body.col-resizing * { cursor: col-resize !important; }
 .diff-content[hidden] { display: none; }
 .diff-head {
   display: flex; align-items: center; gap: 12px; padding: 9px 14px; flex-shrink: 0;
-  border-bottom: 1px solid var(--border); font-family: var(--mono); font-size: 13px;
+  border-bottom: var(--hairline) solid var(--border); font-family: var(--mono); font-size: 13px;
 }
 .diff-path { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); font-weight: 600; }
 .diff-nav { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
@@ -1822,7 +1831,7 @@ textarea,
   flex: 1; min-height: 0; display: grid; grid-template-columns: 290px 1fr;
   border-top: 1px solid var(--border);
 }
-.conflict-files { border-right: 1px solid var(--border); overflow-y: auto; padding: 8px; background: var(--bg-elev); }
+.conflict-files { border-right: var(--hairline) solid var(--border); overflow-y: auto; padding: 8px; background: var(--bg-elev); }
 .conflict-main { min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
 .conflict-empty { flex: 1; display: grid; place-items: center; padding: 40px; color: var(--text-faint); font-size: 13px; text-align: center; }
 
@@ -1841,14 +1850,14 @@ textarea,
    of the side column — the side stays visible in both tabs so it always
    doubles as the tab switcher; only the main panel's content toggles. */
 .prr-layout {
-  flex: 1; min-height: 0; display: grid; grid-template-columns: 290px 1fr;
-  --prr-head-h: 47px;
-  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+  flex: 1; min-height: 0; display: grid; grid-template-columns: var(--prr-side) var(--rz) 1fr;
+  --prr-head-h: 47px; --prr-side: 290px; --rz: 7px;
+  background: var(--card); border: var(--hairline) solid var(--border); border-radius: var(--radius);
   box-shadow: var(--shadow-row); overflow: hidden;
 }
-.prr-side { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--border); }
+.prr-side { display: flex; flex-direction: column; min-height: 0; border-right: var(--hairline) solid var(--border); }
 .prr-side .conflict-files { background: transparent; border-right: none; flex: 1; }
-.prr-tabs { display: flex; padding: 6px; gap: 4px; border-bottom: 1px solid var(--border); flex-shrink: 0; height: var(--prr-head-h); }
+.prr-tabs { display: flex; padding: 6px; gap: 4px; border-bottom: var(--hairline) solid var(--border); flex-shrink: 0; height: var(--prr-head-h); }
 .prr-tab {
   flex: 1; height: 34px; border: none; border-radius: 0; background: transparent;
   display: inline-flex; align-items: center; justify-content: center; gap: 7px;
@@ -1865,6 +1874,34 @@ textarea,
    BOTH an identical explicit height (not min-height vs auto) so their boxes —
    and therefore their bottom border lines — are pixel-identical at any DPI. */
 #page-pr-review .diff-head { height: var(--prr-head-h); min-height: var(--prr-head-h); }
+
+/* ---- PR review action bar: provider-aware vote controls ---- */
+.prr-vote { position: relative; display: inline-flex; }
+.prr-vote-btn { gap: 7px; }
+.prr-vote-menu {
+  position: absolute; top: calc(100% + 6px); right: 0; min-width: 246px;
+  background: var(--bg-elev-2); border: 1px solid var(--border); border-radius: 11px;
+  box-shadow: var(--shadow); padding: 6px; z-index: 200; animation: fade .14s var(--ease-out);
+}
+.prr-vote-menu[hidden] { display: none; }
+.prr-vote-item {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 8px 10px; border: none; border-radius: 8px; background: transparent;
+  color: var(--text); font-family: inherit; font-size: 13px; cursor: pointer; text-align: left;
+  transition: background .12s var(--ease), color .12s var(--ease);
+}
+.prr-vote-item:hover { background: var(--bg-hover); }
+.prr-vote-item.active { background: var(--accent-soft); color: var(--accent-hover); }
+.prr-vote-label { flex: 1; min-width: 0; }
+.prr-vote-check { color: var(--accent-hover); font-weight: 600; }
+.prr-vote-sep { height: 1px; background: var(--border); margin: 5px 4px; }
+.prr-vote-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--text-faint); }
+.prr-vote-dot.ok { background: var(--green); }
+.prr-vote-dot.warn { background: var(--amber); }
+.prr-vote-dot.danger { background: var(--red); }
+.prr-vote-dot.muted { background: var(--text-faint); }
+/* The active review action (GitHub) reads as "already cast" with a soft ring. */
+#prrActions .btn.is-current { box-shadow: inset 0 0 0 2px color-mix(in srgb, currentColor 50%, transparent); }
 #prrConversationView { flex: 1; min-height: 0; overflow-y: auto; }
 #prrConversationView[hidden] { display: none; }
 
@@ -1923,7 +1960,7 @@ textarea,
 
 
 /* Merge view toolbar. */
-.cv-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 14px; border-bottom: 1px solid var(--border); background: var(--bg-elev); flex-shrink: 0; }
+.cv-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 14px; border-bottom: var(--hairline) solid var(--border); background: var(--bg-elev); flex-shrink: 0; }
 .cv-path { font-family: var(--mono); font-size: 12.5px; color: var(--text); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cv-count { font-size: 11px; color: var(--text-dim); flex-shrink: 0; }
 .cv-actions { display: flex; gap: 6px; margin-left: auto; flex-shrink: 0; }

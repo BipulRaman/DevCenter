@@ -302,3 +302,20 @@ pub async fn submit_pr_review(
     .map_err(|e| AppError::msg(e.to_string()))?
 }
 
+/// The signed-in user's own vote on a PR, normalized to the Azure scale
+/// (10 approved, 5 approved-with-suggestions, 0 none, -5 waiting, -10 rejected).
+/// GitHub maps onto 10 / 0 / -10. Backs the PR Review page's live vote status.
+#[tauri::command]
+pub async fn pr_my_vote(
+    repo_id: String,
+    pr_id: u64,
+    state: State<'_, AppState>,
+) -> AppResult<i32> {
+    let st = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || -> AppResult<i32> {
+        with_repo_token(&st, &repo_id, |rref, token| pr::my_vote(rref, pr_id, token))
+    })
+    .await
+    .map_err(|e| AppError::msg(e.to_string()))?
+}
+

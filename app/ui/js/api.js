@@ -123,6 +123,8 @@
       invoke("resolve_pr_thread", { repoId, prId, threadId, resolved: !!resolved }),
     submitPrReview: (repoId, prId, reviewType, body) =>
       invoke("submit_pr_review", { repoId, prId, reviewType, body: body || "" }),
+    prMyVote: (repoId, prId) =>
+      hasBackend ? invoke("pr_my_vote", { repoId, prId }) : Promise.resolve(0),
 
     // --- Accounts (Phase 3) ---
     listAccounts: () => (hasBackend ? invoke("list_accounts") : Promise.resolve(null)),

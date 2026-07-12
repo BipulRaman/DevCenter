@@ -300,3 +300,41 @@ pub fn submit_review(r: &RepoRef, pr_number: u64, event: &str, body: &str, token
     Ok(())
 }
 
+/// The authenticated user's login (to identify your own review among a PR's
+/// reviews).
+fn current_login(token: &str) -> AppResult<String> {
+    let v = get("https://api.github.com/user", token)?;
+    Ok(v.get("login")
+        .and_then(|x| x.as_str())
+        .unwrap_or("")
+        .to_string())
+}
+
+/// The signed-in user's own vote on a PR, normalized to the Azure scale so the
+/// UI can treat both providers uniformly: 10 approved, -10 changes requested,
+/// 0 none. (GitHub has no "approve with suggestions" / "waiting" states.)
+pub fn my_vote(r: &RepoRef, pr_number: u64, token: &str) -> AppResult<i32> {
+    let login = current_login(token)?;
+    if login.is_empty() {
+        return Ok(0);
+    }
+    let url = format!(
+        "https://api.github.com/repos/{}/{}/pulls/{pr_number}/reviews?per_page=100",
+        r.owner, r.repo
+    );
+    // Reviews come back in chronological order — the last decisive one wins.
+    let mut vote = 0;
+    for rv in get(&url, token)?.as_array().cloned().unwrap_or_default() {
+        if rv.pointer("/user/login").and_then(|x| x.as_str()).unwrap_or("") != login {
+            continue;
+        }
+        match rv.get("state").and_then(|x| x.as_str()).unwrap_or("") {
+            "APPROVED" => vote = 10,
+            "CHANGES_REQUESTED" => vote = -10,
+            "DISMISSED" => vote = 0,
+            _ => {} // COMMENTED leaves the standing vote unchanged
+        }
+    }
+    Ok(vote)
+}
+

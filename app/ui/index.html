@@ -297,15 +297,7 @@
               <p class="page-desc" id="prrMeta">…</p>
             </div>
           </div>
-          <div class="page-actions">
-            <button class="btn btn-ghost btn-sm" id="prrOpenBtn" type="button">
-              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
-              Open
-            </button>
-            <button class="btn btn-ghost btn-sm" id="prrCommentReviewBtn" type="button">Comment</button>
-            <button class="btn btn-danger btn-sm" id="prrChangesBtn" type="button">Request changes</button>
-            <button class="btn btn-primary btn-sm" id="prrApproveBtn" type="button">Approve</button>
-          </div>
+          <div class="page-actions" id="prrActions"></div>
         </header>
         <div class="prr-layout" id="prrLayout">
           <aside class="prr-side">
@@ -315,6 +307,7 @@
             </div>
             <div class="conflict-files" id="prrFiles"></div>
           </aside>
+          <div class="pane-resizer" data-resize="prr-side" role="separator" aria-label="Resize file list" aria-orientation="vertical" tabindex="0" title="Drag to resize · double-click to reset"></div>
           <section class="prr-main" id="prrMain">
             <div id="prrFilesView" role="tabpanel" aria-labelledby="prrtab-files">
               <div class="diff-view">

@@ -8,8 +8,20 @@ const PrReviewer = (() => {
   const $ = (id) => document.getElementById(id);
   const esc = escapeHtml;
 
+  const OPEN_ICON = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>';
+  // Vote states, normalized to Azure's scale (GitHub uses only 10/0/-10).
+  const VOTES = {
+    "10": { label: "Approved", cls: "ok" },
+    "5": { label: "Approved with suggestions", cls: "ok" },
+    "0": { label: "No vote", cls: "muted" },
+    "-5": { label: "Waiting for author", cls: "warn" },
+    "-10": { label: "Rejected", cls: "danger" },
+  };
+
   let repoId = null;
   let pr = null;           // the PullRequest object passed in from the PR tab
+  let provider = "github"; // "github" | "azure" — drives which review options show
+  let myVote = 0;          // the signed-in user's current vote (Azure scale)
   let files = [];          // FileChange[] for the PR's base...head diff
   let threads = [];        // PrThread[] — general + inline, refreshed after any mutation
   let activeFile = null;
@@ -44,10 +56,17 @@ const PrReviewer = (() => {
     pr = pullRequest;
     busy = false;
     returnPage = (opts && opts.returnTo) || "changes";
+    // Provider decides the review options (Azure's 5 vote states vs GitHub's 3).
+    provider = ((typeof repos !== "undefined" && repos.find((r) => r.id === id)) || {}).provider || "github";
+    myVote = 0;
     files = []; threads = []; activeFile = null; activeTab = "files"; collapsed = new Set();
     document.querySelectorAll(".page").forEach((p) => p.classList.toggle("active", p.id === "page-pr-review"));
     syncTabState("files");
     renderHeader();
+    // Reflect the signed-in user's current vote in the action bar once known.
+    DC.prMyVote(id, pullRequest.id)
+      .then((v) => { if (gen === loadGen && repoId === id && pr === pullRequest) { myVote = v || 0; renderHeader(); } })
+      .catch(() => {});
     $("prrFiles").innerHTML = `<div class="changes-empty">Loading…</div>`;
     showDiffEmpty("Loading…");
     await Promise.all([loadFiles(gen, id, pullRequest), loadThreads(gen, id, pullRequest)]);
@@ -59,6 +78,76 @@ const PrReviewer = (() => {
   function renderHeader() {
     $("prrTitle").textContent = pr.title || `Pull request #${pr.id}`;
     $("prrMeta").innerHTML = `${esc(pr.repo || "")} #${esc(String(pr.id))} · by ${esc(pr.author || "")} · <code>${esc(pr.branch)}</code> → <code>${esc(pr.base)}</code>`;
+    renderActions();
+  }
+
+  // A single menu row inside the Azure "Vote" dropdown.
+  function voteOpt(type, label, val) {
+    const active = myVote === val;
+    const cls = (VOTES[String(val)] || {}).cls || "";
+    return `<button class="prr-vote-item${active ? " active" : ""}" data-prr="${type}" role="menuitem" type="button">
+      <span class="prr-vote-dot ${cls}"></span><span class="prr-vote-label">${esc(label)}</span>${active ? '<span class="prr-vote-check">✓</span>' : ""}</button>`;
+  }
+
+  // Build the provider-aware review action bar, reflecting the current vote.
+  function renderActions() {
+    const host = $("prrActions");
+    if (!host) return;
+    const openBtn = `<button class="btn btn-ghost btn-sm" data-prr="open" type="button">${OPEN_ICON}Open</button>`;
+    const commentBtn = `<button class="btn btn-ghost btn-sm" data-prr="comment" type="button">Comment</button>`;
+    let html;
+    if (provider === "azure") {
+      const voted = myVote !== 0;
+      const cur = VOTES[String(myVote)] || VOTES["0"];
+      html = `${openBtn}${commentBtn}
+        <div class="prr-vote" id="prrVote">
+          <button class="btn ${voted ? "btn-primary" : "btn-ghost"} btn-sm prr-vote-btn" id="prrVoteBtn" type="button" aria-haspopup="true" aria-expanded="false">
+            <span class="prr-vote-dot ${cur.cls}"></span><span>${voted ? esc(cur.label) : "Vote"}</span>
+            <svg class="caret" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="prr-vote-menu" id="prrVoteMenu" role="menu" hidden>
+            ${voteOpt("approve", "Approve", 10)}
+            ${voteOpt("approve_suggestions", "Approve with suggestions", 5)}
+            ${voteOpt("wait", "Wait for author", -5)}
+            ${voteOpt("reject", "Reject", -10)}
+            <div class="prr-vote-sep"></div>
+            <button class="prr-vote-item" data-prr="reset" role="menuitem" type="button"><span class="prr-vote-dot muted"></span><span class="prr-vote-label">Reset feedback</span></button>
+          </div>
+        </div>`;
+    } else {
+      // GitHub: three fixed review actions; the current one is highlighted.
+      const approved = myVote >= 5;
+      const rejected = myVote <= -5;
+      html = `${openBtn}${commentBtn}
+        <button class="btn btn-danger btn-sm${rejected ? " is-current" : ""}" data-prr="changes" type="button">${rejected ? "Changes requested ✓" : "Request changes"}</button>
+        <button class="btn btn-primary btn-sm${approved ? " is-current" : ""}" data-prr="approve" type="button">${approved ? "Approved ✓" : "Approve"}</button>`;
+    }
+    host.innerHTML = html;
+    on(host, "[data-prr]", "click", (el) => {
+      const act = el.dataset.prr;
+      closeVoteMenu();
+      if (act === "open") { if (pr && pr.url) DC.openUrl(pr.url); return; }
+      submitReview(act);
+    });
+    const voteBtn = $("prrVoteBtn");
+    if (voteBtn) voteBtn.addEventListener("click", (e) => { e.stopPropagation(); toggleVoteMenu(); });
+  }
+
+  function onDocClickVote(e) { if (!e.target.closest("#prrVote")) closeVoteMenu(); }
+  function closeVoteMenu() {
+    const m = $("prrVoteMenu"), b = $("prrVoteBtn");
+    if (m) m.hidden = true;
+    if (b) b.setAttribute("aria-expanded", "false");
+    document.removeEventListener("click", onDocClickVote, true);
+  }
+  function toggleVoteMenu() {
+    const m = $("prrVoteMenu"), b = $("prrVoteBtn");
+    if (!m) return;
+    const willOpen = m.hidden;
+    m.hidden = !willOpen;
+    if (b) b.setAttribute("aria-expanded", String(willOpen));
+    if (willOpen) setTimeout(() => document.addEventListener("click", onDocClickVote, true), 0);
+    else document.removeEventListener("click", onDocClickVote, true);
   }
 
   async function loadFiles(gen = loadGen, forRepo = repoId, forPr = pr) {
@@ -341,30 +430,50 @@ const PrReviewer = (() => {
     else showDiffEmpty("This pull request has no file changes.");
   }
 
-  async function openReviewDialog(type) {
+  async function submitReview(type) {
     if (busy) return;
-    const titles = { approve: "Approve pull request", changes: "Request changes", comment: "Add a review comment" };
-    const confirmLabels = { approve: "Approve", changes: "Request changes", comment: "Submit" };
-    const requireBody = type === "comment";
-    const res = await openFieldsDialogArea({
-      title: titles[type],
-      label: requireBody ? "Comment (required)" : "Summary comment (optional)",
-      confirmText: confirmLabels[type],
-      danger: type === "changes",
-      required: requireBody,
-    });
-    if (res === null) return;
+    const META = {
+      approve: { title: "Approve pull request", confirm: "Approve", danger: false, require: false },
+      approve_suggestions: { title: "Approve with suggestions", confirm: "Approve with suggestions", danger: false, require: false },
+      wait: { title: "Wait for author", confirm: "Wait for author", danger: false, require: false },
+      reject: { title: "Reject pull request", confirm: "Reject", danger: true, require: false },
+      changes: { title: "Request changes", confirm: "Request changes", danger: true, require: false },
+      reset: { title: "Reset feedback", confirm: "Reset", danger: false, require: false },
+      comment: { title: "Add a review comment", confirm: "Submit", danger: false, require: true },
+    };
+    const meta = META[type] || META.comment;
+    let body = "";
+    if (type === "reset") {
+      const ok = await Modal.confirm({ title: meta.title, message: "Remove your vote from this pull request?", confirmText: "Reset" });
+      if (!ok) return;
+    } else {
+      const res = await openFieldsDialogArea({
+        title: meta.title,
+        label: meta.require ? "Comment (required)" : "Summary comment (optional)",
+        confirmText: meta.confirm,
+        danger: meta.danger,
+        required: meta.require,
+      });
+      if (res === null) return;
+      body = res;
+    }
     const gen = loadGen;
     const forRepo = repoId;
     const forPr = pr;
     busy = true;
     try {
-      const data = await DC.submitPrReview(forRepo, forPr.id, type, res);
+      const data = await DC.submitPrReview(forRepo, forPr.id, type, body);
       if (gen !== loadGen || repoId !== forRepo || pr !== forPr) return;
       threads = data;
       renderFileList();
       if (activeTab === "conversation") renderConversation();
-      await Modal.alert({ title: "Review submitted", message: titles[type] + " — done." });
+      // Refresh the live vote so the action bar reflects the new state.
+      try {
+        const v = await DC.prMyVote(forRepo, forPr.id);
+        if (gen === loadGen && repoId === forRepo && pr === forPr) myVote = v || 0;
+      } catch (_) {}
+      if (gen === loadGen && repoId === forRepo && pr === forPr) renderHeader();
+      await Modal.alert({ title: "Review submitted", message: meta.title + " — done." });
     } catch (e) {
       if (gen !== loadGen || repoId !== forRepo || pr !== forPr) return;
       console.error("submitPrReview failed", e);
@@ -417,10 +526,59 @@ const PrReviewer = (() => {
     tabs[next].focus();
   });
   $("prrBackBtn") && $("prrBackBtn").addEventListener("click", () => showPage(returnPage));
-  $("prrOpenBtn") && $("prrOpenBtn").addEventListener("click", () => { if (pr && pr.url) DC.openUrl(pr.url); });
-  $("prrApproveBtn") && $("prrApproveBtn").addEventListener("click", () => openReviewDialog("approve"));
-  $("prrChangesBtn") && $("prrChangesBtn").addEventListener("click", () => openReviewDialog("changes"));
-  $("prrCommentReviewBtn") && $("prrCommentReviewBtn").addEventListener("click", () => openReviewDialog("comment"));
+
+  // Draggable divider between the file list and the diff pane (persisted).
+  (function initPrrResizer() {
+    const layout = $("prrLayout");
+    const rz = layout && layout.querySelector(".pane-resizer");
+    if (!layout || !rz) return;
+    const VAR = "--prr-side", KEY = "dc.prr.side", MIN = 200, MAX = 620, DEF = 290;
+    try { const s = localStorage.getItem(KEY); if (s) layout.style.setProperty(VAR, s); } catch (e) {}
+    const cur = () => parseFloat(getComputedStyle(layout).getPropertyValue(VAR)) || DEF;
+    const set = (w, persist = true) => {
+      const v = Math.max(MIN, Math.min(Math.round(w), MAX));
+      layout.style.setProperty(VAR, v + "px");
+      rz.setAttribute("aria-valuenow", String(v));
+      if (persist) { try { localStorage.setItem(KEY, v + "px"); } catch (e) {} }
+    };
+    rz.setAttribute("aria-valuemin", String(MIN));
+    rz.setAttribute("aria-valuemax", String(MAX));
+    rz.setAttribute("aria-valuenow", String(Math.round(cur())));
+    rz.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      const startX = e.clientX;
+      const startW = cur();
+      rz.setPointerCapture(e.pointerId);
+      rz.classList.add("dragging");
+      document.body.classList.add("col-resizing");
+      const move = (ev) => set(startW + (ev.clientX - startX), false);
+      const up = () => {
+        rz.classList.remove("dragging");
+        document.body.classList.remove("col-resizing");
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", up);
+        set(cur());
+      };
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", up);
+    });
+    rz.addEventListener("dblclick", () => {
+      layout.style.removeProperty(VAR);
+      rz.setAttribute("aria-valuenow", String(Math.round(cur())));
+      try { localStorage.removeItem(KEY); } catch (e) {}
+    });
+    rz.addEventListener("keydown", (e) => {
+      let w = cur();
+      const step = e.shiftKey ? 32 : 8;
+      if (e.key === "ArrowLeft") w -= step;
+      else if (e.key === "ArrowRight") w += step;
+      else if (e.key === "Home") w = MIN;
+      else if (e.key === "End") w = MAX;
+      else return;
+      e.preventDefault();
+      set(w);
+    });
+  })();
 
   return { open };
 })();

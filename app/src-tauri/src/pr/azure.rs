@@ -344,3 +344,30 @@ pub fn submit_review(r: &RepoRef, pr_id: u64, vote: i32, token: &str) -> AppResu
     Ok(())
 }
 
+/// The signed-in user's own vote on a PR (Azure scale: 10 approved,
+/// 5 approved-with-suggestions, 0 none, -5 waiting, -10 rejected).
+pub fn my_vote(r: &RepoRef, pr_id: u64, token: &str) -> AppResult<i32> {
+    let uid = current_user_id(r, token)?;
+    if uid.is_empty() {
+        return Ok(0);
+    }
+    let project = r.project.as_deref().unwrap_or("");
+    let base = collection_base(&r.host, &r.owner);
+    let url = format!(
+        "{base}/{project}/_apis/git/repositories/{}/pullRequests/{pr_id}/reviewers?api-version=7.1",
+        r.repo
+    );
+    let v = get(&url, token)?;
+    let arr = v
+        .get("value")
+        .and_then(|x| x.as_array())
+        .cloned()
+        .unwrap_or_default();
+    for rv in arr {
+        if rv.get("id").and_then(|x| x.as_str()).unwrap_or("") == uid {
+            return Ok(rv.get("vote").and_then(|x| x.as_i64()).unwrap_or(0) as i32);
+        }
+    }
+    Ok(0)
+}
+

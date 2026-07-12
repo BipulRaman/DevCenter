@@ -192,13 +192,18 @@ pub fn resolve_thread(repo_ref: &RepoRef, pr_id: u64, thread_id: &str, resolved:
     }
 }
 
-/// Submit a review. `review_type` is "approve" | "changes" | "comment".
+/// Submit a review. `review_type` is one of:
+///   "approve" | "approve_suggestions" | "wait" | "changes" | "reject" |
+///   "reset" | "comment".
+/// GitHub only has approve / request-changes / comment, so the extra Azure
+/// states are folded into the closest GitHub equivalent.
 pub fn submit_review(repo_ref: &RepoRef, pr_id: u64, review_type: &str, body: &str, token: &str) -> AppResult<()> {
     match repo_ref.provider.as_str() {
         "github" => {
             let event = match review_type {
-                "approve" => "APPROVE",
-                "changes" => "REQUEST_CHANGES",
+                "approve" | "approve_suggestions" => "APPROVE",
+                "changes" | "reject" => "REQUEST_CHANGES",
+                // "comment" | "wait" | "reset" — no GitHub vote equivalent.
                 _ => "COMMENT",
             };
             github::submit_review(repo_ref, pr_id, event, body, token)
@@ -207,18 +212,38 @@ pub fn submit_review(repo_ref: &RepoRef, pr_id: u64, review_type: &str, body: &s
             // Azure DevOps "review" = casting your own vote; a body (if any)
             // is posted as a separate general comment since votes have no
             // attached message of their own.
-            let vote = match review_type {
-                "approve" => 10,
-                "changes" => -10,
-                _ => 0,
-            };
-            azure::submit_review(repo_ref, pr_id, vote, token)?;
+            let is_vote = matches!(
+                review_type,
+                "approve" | "approve_suggestions" | "wait" | "changes" | "reject" | "reset"
+            );
+            if is_vote {
+                let vote = match review_type {
+                    "approve" => 10,
+                    "approve_suggestions" => 5,
+                    "wait" => -5,
+                    "changes" | "reject" => -10,
+                    "reset" => 0,
+                    _ => 0,
+                };
+                azure::submit_review(repo_ref, pr_id, vote, token)?;
+            }
             if !body.trim().is_empty() {
                 azure::create_thread(repo_ref, pr_id, body, None, None, token)?;
             }
             Ok(())
         }
         _ => Err(AppError::msg("Unsupported provider.")),
+    }
+}
+
+/// The signed-in user's own vote on a PR (Azure scale: 10 approved,
+/// 5 approved-with-suggestions, 0 none, -5 waiting, -10 rejected). GitHub is
+/// normalized onto the same scale (10 / 0 / -10).
+pub fn my_vote(repo_ref: &RepoRef, pr_id: u64, token: &str) -> AppResult<i32> {
+    match repo_ref.provider.as_str() {
+        "github" => github::my_vote(repo_ref, pr_id, token),
+        "azure" => azure::my_vote(repo_ref, pr_id, token),
+        _ => Ok(0),
     }
 }
 

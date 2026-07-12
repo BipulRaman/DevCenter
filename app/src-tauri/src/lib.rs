@@ -198,6 +198,7 @@ pub fn run() {
             commands::pr::post_pr_comment,
             commands::pr::resolve_pr_thread,
             commands::pr::submit_pr_review,
+            commands::pr::pr_my_vote,
             commands::apps::list_presets,
             commands::apps::list_apps,
             commands::apps::create_app,
