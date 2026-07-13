@@ -76,6 +76,22 @@ fn reveal_main(app: &tauri::AppHandle) {
     }
     if let Some(splash) = app.get_webview_window("splashscreen") {
         let _ = splash.close();
+    } else {
+        // Startup race: the frontend's `load` fired before the splash window
+        // finished coming up, so there is nothing to close yet. If we did
+        // nothing, the splash would appear afterwards (alwaysOnTop) and linger
+        // on top of the already-revealed main window. Retry briefly so a
+        // late-created splash is dismissed as soon as it exists.
+        let handle = app.clone();
+        std::thread::spawn(move || {
+            for _ in 0..50 {
+                std::thread::sleep(std::time::Duration::from_millis(100));
+                if let Some(splash) = handle.get_webview_window("splashscreen") {
+                    let _ = splash.close();
+                    break;
+                }
+            }
+        });
     }
 }
 

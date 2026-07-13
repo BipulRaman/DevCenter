@@ -10,17 +10,6 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "label": "main",
-        "title": "DevCenter",
-        "width": 1280,
-        "height": 800,
-        "minWidth": 940,
-        "minHeight": 600,
-        "resizable": true,
-        "fullscreen": false,
-        "visible": false
-      },
-      {
         "label": "splashscreen",
         "url": "splash.html",
         "title": "DevCenter",
@@ -33,6 +22,17 @@
         "skipTaskbar": true,
         "shadow": false,
         "alwaysOnTop": true
+      },
+      {
+        "label": "main",
+        "title": "DevCenter",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 940,
+        "minHeight": 600,
+        "resizable": true,
+        "fullscreen": false,
+        "visible": false
       }
     ],
     "security": {
