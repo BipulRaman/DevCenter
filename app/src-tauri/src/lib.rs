@@ -2,6 +2,7 @@ mod apps;
 mod commands;
 mod error;
 mod git;
+mod gitconfig;
 mod models;
 mod pr;
 mod secrets;
@@ -230,6 +231,8 @@ pub fn run() {
             commands::accounts::test_account,
             commands::accounts::remove_account,
             commands::accounts::git_token,
+            commands::gitconfig::read_git_identity,
+            commands::gitconfig::save_git_identity,
             commands::pr::list_pull_requests,
             commands::pr::list_repo_pull_requests,
             commands::pr::fetch_pr_threads,

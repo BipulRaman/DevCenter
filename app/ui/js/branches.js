@@ -361,3 +361,12 @@ async function performBranchSwitch({ repoId, current, target, dirty }) {
   }
   return DC.checkoutBranch(repoId, target, stash);
 }
+
+// Choose a repo's default branch from a list: prefer "main", then "master",
+// otherwise the first available branch. Returns null for an empty list.
+function defaultBranchFrom(branches) {
+  if (!branches || !branches.length) return null;
+  if (branches.includes("main")) return "main";
+  if (branches.includes("master")) return "master";
+  return branches[0];
+}

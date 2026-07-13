@@ -1016,6 +1016,60 @@ button.chip { font-family: var(--mono); font-size: 11px; font-weight: 500; }
 }
 .account-empty svg { width: 30px; height: 30px; color: var(--text-faint); }
 
+/* ============ GIT IDENTITIES ============ */
+.identity-root { max-width: 820px; }
+.identity-default {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px 16px; margin-bottom: 22px;
+}
+.identity-default-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.identity-default-label { font-weight: 600; font-size: 14px; letter-spacing: -.2px; }
+.identity-default-desc { font-size: 12.5px; color: var(--text-faint); margin-top: 3px; }
+.identity-default-body { display: flex; gap: 40px; margin-top: 14px; flex-wrap: wrap; }
+.identity-kv { display: flex; flex-direction: column; gap: 4px; }
+.identity-kv span { font-size: 11px; text-transform: uppercase; letter-spacing: .4px; color: var(--text-faint); font-weight: 600; }
+.identity-kv strong { font-size: 13.5px; font-weight: 550; }
+.identity-kv em { color: var(--text-faint); font-weight: 400; font-style: normal; }
+
+.identity-section-title { font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--text-faint); font-weight: 600; margin: 0 0 10px 2px; }
+.identity-section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.identity-section-head .identity-section-title { margin: 0; }
+.identity-list { display: flex; flex-direction: column; gap: 8px; }
+.identity-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 12px 14px;
+}
+.identity-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.identity-card-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
+.identity-name { font-weight: 600; font-size: 14px; letter-spacing: -.2px; }
+.identity-file { background: var(--bg-elev-2); padding: 2px 7px; border-radius: 5px; font-size: 11px; font-family: var(--mono); color: var(--text-dim); }
+.identity-card-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.identity-sub { font-size: 12.5px; color: var(--text-faint); margin-top: 4px; font-family: var(--mono); }
+.identity-conds { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.identity-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--bg-elev-2); border: 1px solid var(--border-soft);
+  border-radius: 6px; padding: 3px 9px; font-size: 12px; color: var(--text-dim);
+  font-family: var(--mono); max-width: 100%; overflow-wrap: anywhere;
+}
+.identity-chip-k { font-family: var(--font); font-size: 10px; text-transform: uppercase; letter-spacing: .3px; font-weight: 600; color: var(--accent-hover); }
+.identity-chip-warn { color: var(--text-faint); font-family: var(--font); font-style: italic; }
+.identity-creds { display: flex; align-items: center; gap: 7px; margin-top: 10px; font-size: 12px; color: var(--text-faint); }
+.identity-creds svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+.identity-foot { display: flex; align-items: flex-start; gap: 9px; margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--border-soft); font-size: 12px; color: var(--text-faint); line-height: 1.6; }
+.identity-foot svg { width: 15px; height: 15px; flex-shrink: 0; margin-top: 1px; }
+.identity-foot code { background: var(--bg-elev-2); padding: 1px 5px; border-radius: 4px; font-family: var(--mono); font-size: 11px; color: var(--text-dim); }
+
+/* identity form (inside modal) */
+.form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.identity-rows { display: flex; flex-direction: column; gap: 8px; }
+.identity-row { display: grid; grid-template-columns: 190px 1fr auto; gap: 8px; align-items: center; }
+.identity-row-cred { grid-template-columns: 1fr 1fr auto; }
+.identity-advanced { margin: 4px 0 14px; border-top: 1px solid var(--border-soft); padding-top: 12px; }
+.identity-advanced summary { cursor: pointer; font-size: 12.5px; color: var(--text-dim); font-weight: 550; user-select: none; }
+.identity-advanced summary::marker { color: var(--text-faint); }
+
 /* add-account form (inside modal) */
 .form-row { margin-bottom: 14px; }
 .form-row:last-child { margin-bottom: 0; }

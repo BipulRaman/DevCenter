@@ -885,7 +885,33 @@ pub fn delete_branch(path: &Path, name: &str, force: bool) -> AppResult<()> {
             String::from_utf8_lossy(&output.stderr).trim().to_string(),
         ));
     }
+    // The local branch is gone, but its remote-tracking ref (e.g. `origin/<name>`)
+    // lingers until a prune — and because the branch list merges local and
+    // remote-tracking names, the just-deleted branch would keep showing in the
+    // switch dropdown. Drop those stale local tracking refs so it disappears
+    // immediately. Best-effort: a later fetch restores the ref if the branch
+    // still exists on the remote.
+    prune_local_tracking_refs(path, name);
     Ok(())
+}
+
+/// Delete local remote-tracking references (`refs/remotes/<remote>/<name>`) for a
+/// branch name, across every remote. Best-effort — any error is ignored.
+fn prune_local_tracking_refs(path: &Path, name: &str) {
+    let repo = match Repository::open(path) {
+        Ok(r) => r,
+        Err(_) => return,
+    };
+    let remotes = match repo.remotes() {
+        Ok(r) => r,
+        Err(_) => return,
+    };
+    for remote in remotes.iter().flatten() {
+        let refname = format!("refs/remotes/{remote}/{name}");
+        if let Ok(mut r) = repo.find_reference(&refname) {
+            let _ = r.delete();
+        }
+    }
 }
 
 /// Retrieve a credential for `url` from Git Credential Manager via

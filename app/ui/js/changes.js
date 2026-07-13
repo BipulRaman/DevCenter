@@ -523,6 +523,24 @@ const ChangesPage = (() => {
       btn.disabled = false;
     }
 
+    // If the selected branch no longer exists (e.g. it was deleted), fall back
+    // to the repo's default branch so the page never points at a missing branch.
+    if (branch && branches.length && !branches.includes(branch)) {
+      const fallback = defaultBranchFrom(branches);
+      if (fallback && fallback !== branch) {
+        try {
+          const updated = await DC.checkoutBranch(repoId, fallback, false);
+          const at = repos.findIndex((x) => x.id === updated.id);
+          if (at >= 0) repos[at] = updated;
+          branch = updated.branch || fallback;
+          $("chgBranchLabel").textContent = branch;
+          if (tab === "history") loadHistory(); else loadChanges();
+        } catch (e) {
+          console.error("auto-switch to default branch failed", e);
+        }
+      }
+    }
+
     Dropdown.open(btn, {
       header: "Switch branch",
       headerAction: {

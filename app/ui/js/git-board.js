@@ -340,6 +340,23 @@ function renderRepos(filter = "") {
         return;
       }
       chip.classList.remove("loading");
+
+      // If this repo's current branch no longer exists (e.g. it was deleted),
+      // switch it to the default branch instead of showing a missing branch.
+      if (r.branch && branches.length && !branches.includes(r.branch)) {
+        const fallback = defaultBranchFrom(branches);
+        if (fallback && fallback !== r.branch) {
+          try {
+            const updated = await DC.checkoutBranch(r.id, fallback, false);
+            const at = repos.findIndex((x) => x.id === updated.id);
+            if (at >= 0) repos[at] = updated;
+            renderRepos(document.getElementById("repoSearch").value);
+            return; // the chip was re-rendered; reopen to pick a branch
+          } catch (e) {
+            console.error("auto-switch to default branch failed", e);
+          }
+        }
+      }
       Dropdown.open(chip, {
         header: "Switch branch",
         headerAction: {

@@ -136,6 +136,10 @@
     removeAccount: (id) => invoke("remove_account", { id }),
     gitToken: (host) => invoke("git_token", { host }),
 
+    // --- Git Identities (multi-account gitconfig) ---
+    readGitIdentity: () => (hasBackend ? invoke("read_git_identity") : Promise.resolve(null)),
+    saveGitIdentity: (config) => invoke("save_git_identity", { config }),
+
     // --- App Center (Phase 2) ---
     listApps: () => (hasBackend ? invoke("list_apps") : Promise.resolve(null)),
     listPresets: () => (hasBackend ? invoke("list_presets") : Promise.resolve(null)),
