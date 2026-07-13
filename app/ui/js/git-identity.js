@@ -14,12 +14,14 @@ const IDENTITY_COND = {
     short: "URL",
     placeholder: "https://dev.azure.com/Contoso/**",
     hint: "Glob against the repository's remote URL (needs Git 2.36+). Use ** to match anything.",
+    example: "https://dev.azure.com/Contoso/**",
   },
   gitdir: {
     label: "Repository folder",
     short: "Folder",
-    placeholder: "~/work/",
-    hint: "Matches repositories located under this folder path.",
+    placeholder: "C:/Users/you/work/",
+    hint: "Matches any repository located under this folder. End with a / so it includes everything inside. Use / (not \\), and ~ for your home folder.",
+    example: "C:/Users/you/work/",
   },
 };
 
@@ -52,29 +54,39 @@ function renderGitIdentity() {
             ? p.conditions
                 .map(
                   (c) =>
-                    `<span class="identity-chip"><span class="identity-chip-k">${condLabel(c.kind)}</span>${escapeHtml(c.value || "")}</span>`
+                    `<div class="identity-cond-line"><span class="identity-chip-k">${condLabel(c.kind)}</span><code>${escapeHtml(c.value || "")}</code></div>`
                 )
                 .join("")
-            : `<span class="identity-chip identity-chip-warn">No conditions — never activates</span>`;
+            : `<div class="identity-cond-line identity-chip-warn">No conditions — never activates</div>`;
           const creds = p.credentials && p.credentials.length
-            ? `<div class="identity-creds">${ICON.key}<span>${p.credentials
-                .map((c) => `${escapeHtml(c.org)} · ${escapeHtml(c.username)}`)
-                .join(", ")}</span></div>`
+            ? `<div class="identity-creds">
+                 <span class="identity-creds-label">${ICON.key}Azure credentials</span>
+                 <div class="identity-cred-chips">${p.credentials
+                   .map(
+                     (c) =>
+                       `<div class="identity-cond-line"><span class="identity-chip-k identity-chip-org">${escapeHtml(c.org)}</span><code>${escapeHtml(c.username)}</code></div>`
+                   )
+                   .join("")}</div>
+               </div>`
             : "";
+          const pName = p.name ? escapeHtml(p.name) : "<em>Not set</em>";
+          const pEmail = p.email ? escapeHtml(p.email) : "<em>Not set</em>";
           return `
       <div class="identity-card">
         <div class="identity-card-head">
           <div class="identity-card-title">
-            <span class="identity-name">${escapeHtml(p.name || p.key)}</span>
-            <code class="identity-file">~/.gitconfig-${escapeHtml(p.key)}</code>
+            <code class="identity-file identity-file-strong">~/.gitconfig-${escapeHtml(p.key)}</code>
           </div>
           <div class="identity-card-actions">
             <button class="btn btn-ghost btn-sm" data-edit="${i}">${ICON.pencil}Edit</button>
             <button class="btn btn-icon btn-sm" data-remove="${i}" title="Remove identity">${ICON.trash}</button>
           </div>
         </div>
-        <div class="identity-sub">${escapeHtml(p.email || "no email")}</div>
-        <div class="identity-conds">${conds}</div>
+        <div class="identity-default-body">
+          <div class="identity-kv"><span>Name</span><strong>${pName}</strong></div>
+          <div class="identity-kv"><span>Email</span><strong>${pEmail}</strong></div>
+        </div>
+        <div class="identity-conds-list">${conds}</div>
         ${creds}
       </div>`;
         })
@@ -291,16 +303,22 @@ function openIdentityForm(existing) {
             <option value="gitdir">${IDENTITY_COND.gitdir.label}</option>
           </select>
           <input class="modal-input identity-row-val" spellcheck="false" autocomplete="off" />
+          <span class="identity-info" tabindex="0" role="img" aria-label="About this condition"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></span>
           <button type="button" class="btn btn-icon btn-sm identity-row-del" title="Remove">${ICON.x}</button>`;
         const sel = row.querySelector(".identity-row-kind");
         const val = row.querySelector(".identity-row-val");
+        const info = row.querySelector(".identity-info");
         sel.value = kind;
         val.value = cond ? cond.value || "" : "";
-        const applyPlaceholder = () => {
-          val.placeholder = (IDENTITY_COND[sel.value] || IDENTITY_COND.remoteUrl).placeholder;
+        const applyKind = () => {
+          const meta = IDENTITY_COND[sel.value] || IDENTITY_COND.remoteUrl;
+          val.placeholder = meta.placeholder;
+          const tip = `${meta.hint}\n\ne.g. ${meta.example}`;
+          info.title = tip;
+          info.setAttribute("aria-label", tip);
         };
-        applyPlaceholder();
-        sel.addEventListener("change", applyPlaceholder);
+        applyKind();
+        sel.addEventListener("change", applyKind);
         row.querySelector(".identity-row-del").addEventListener("click", () => row.remove());
         condsHost.appendChild(row);
       };
