@@ -136,6 +136,27 @@ pub fn short_date(s: &str) -> String {
     s.chars().take(10).collect()
 }
 
+/// Create a pull request from `head` into `base` (branch names) and return it
+/// modeled for the UI.
+#[allow(clippy::too_many_arguments)]
+pub fn create_pr(
+    repo_ref: &RepoRef,
+    title: &str,
+    body: &str,
+    base: &str,
+    head: &str,
+    draft: bool,
+    display: &str,
+    repo_id: &str,
+    token: &str,
+) -> AppResult<PullRequest> {
+    match repo_ref.provider.as_str() {
+        "github" => github::create_pr(repo_ref, title, body, base, head, draft, display, repo_id, token),
+        "azure" => azure::create_pr(repo_ref, title, body, base, head, draft, display, repo_id, token),
+        _ => Err(AppError::msg("Creating pull requests isn't supported for this provider.")),
+    }
+}
+
 // ===================== PR review: comments + threads =====================
 
 /// All comment threads (general discussion + inline code review) for a PR.

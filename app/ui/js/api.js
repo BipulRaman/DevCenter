@@ -128,6 +128,7 @@
     prMyVote: (repoId, prId) =>
       hasBackend ? invoke("pr_my_vote", { repoId, prId }) : Promise.resolve(0),
     publishPr: (repoId, prId) => invoke("publish_pr", { repoId, prId }),
+    createPullRequest: (opts) => invoke("create_pull_request", opts),
 
     // --- Accounts (Phase 3) ---
     listAccounts: () => (hasBackend ? invoke("list_accounts") : Promise.resolve(null)),

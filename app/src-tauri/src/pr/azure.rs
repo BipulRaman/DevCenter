@@ -326,6 +326,58 @@ fn current_user_id(r: &RepoRef, token: &str) -> AppResult<String> {
         .to_string())
 }
 
+/// Open a pull request from `head` into `base` (both branch names in the same
+/// repository). Returns the created PR modeled for the UI.
+pub fn create_pr(
+    r: &RepoRef,
+    title: &str,
+    body: &str,
+    base: &str,
+    head: &str,
+    draft: bool,
+    display: &str,
+    repo_id: &str,
+    token: &str,
+) -> AppResult<PullRequest> {
+    let org = &r.owner;
+    let project = r.project.as_deref().unwrap_or("");
+    let base_url = collection_base(&r.host, org);
+    let url = format!(
+        "{base_url}/{project}/_apis/git/repositories/{}/pullrequests?api-version=7.1",
+        r.repo
+    );
+    let payload = json!({
+        "sourceRefName": format!("refs/heads/{head}"),
+        "targetRefName": format!("refs/heads/{base}"),
+        "title": title,
+        "description": body,
+        "isDraft": draft,
+    });
+    let p = send("POST", &url, token, &payload)?;
+    let id = p.get("pullRequestId").and_then(|x| x.as_u64()).unwrap_or(0);
+    let is_draft = p.get("isDraft").and_then(|x| x.as_bool()).unwrap_or(draft);
+    Ok(PullRequest {
+        id,
+        title: p.get("title").and_then(|x| x.as_str()).unwrap_or(title).to_string(),
+        repo: display.to_string(),
+        repo_id: repo_id.to_string(),
+        author: p
+            .pointer("/createdBy/displayName")
+            .and_then(|x| x.as_str())
+            .unwrap_or("")
+            .to_string(),
+        branch: strip_ref(p.get("sourceRefName").and_then(|x| x.as_str()).unwrap_or(head)),
+        base: strip_ref(p.get("targetRefName").and_then(|x| x.as_str()).unwrap_or(base)),
+        status: if is_draft { "draft" } else { "open" }.to_string(),
+        reviews: "pending".to_string(),
+        comments: 0,
+        additions: 0,
+        deletions: 0,
+        updated: short_date(p.get("creationDate").and_then(|x| x.as_str()).unwrap_or("")),
+        url: format!("{base_url}/{project}/_git/{}/pullrequest/{id}", r.repo),
+    })
+}
+
 /// Cast (or change) your own review vote. `vote` is 10 (approve), -10
 /// (reject/request changes), or 0 (no vote — used for a plain "comment"
 /// review, which otherwise only posts `body` as a general comment).

@@ -334,3 +334,28 @@ pub async fn publish_pr(
     .map_err(|e| AppError::msg(e.to_string()))?
 }
 
+/// Create a pull request from `head` into `base` (branch names) for the repo.
+/// Returns the created PR so the UI can list/open it.
+#[tauri::command]
+pub async fn create_pull_request(
+    repo_id: String,
+    title: String,
+    body: String,
+    base: String,
+    head: String,
+    draft: bool,
+    state: State<'_, AppState>,
+) -> AppResult<PullRequest> {
+    let st = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || -> AppResult<PullRequest> {
+        let display = git::repo_info(Path::new(&repo_id), false, Vec::new())
+            .map(|r| r.name)
+            .unwrap_or_else(|_| repo_id.clone());
+        with_repo_token(&st, &repo_id, |rref, token| {
+            pr::create_pr(rref, &title, &body, &base, &head, draft, &display, &repo_id, token)
+        })
+    })
+    .await
+    .map_err(|e| AppError::msg(e.to_string()))?
+}
+

@@ -300,6 +300,47 @@ pub fn submit_review(r: &RepoRef, pr_number: u64, event: &str, body: &str, token
     Ok(())
 }
 
+/// Open a pull request from `head` into `base` (both branch names in the same
+/// repository). Returns the created PR modeled for the UI.
+pub fn create_pr(
+    r: &RepoRef,
+    title: &str,
+    body: &str,
+    base: &str,
+    head: &str,
+    draft: bool,
+    display: &str,
+    repo_id: &str,
+    token: &str,
+) -> AppResult<PullRequest> {
+    let url = format!("https://api.github.com/repos/{}/{}/pulls", r.owner, r.repo);
+    let payload = json!({
+        "title": title,
+        "body": body,
+        "base": base,
+        "head": head,
+        "draft": draft,
+    });
+    let p = send("POST", &url, token, &payload)?;
+    let is_draft = p.get("draft").and_then(|x| x.as_bool()).unwrap_or(draft);
+    Ok(PullRequest {
+        id: p.get("number").and_then(|x| x.as_u64()).unwrap_or(0),
+        title: p.get("title").and_then(|x| x.as_str()).unwrap_or(title).to_string(),
+        repo: display.to_string(),
+        repo_id: repo_id.to_string(),
+        author: p.pointer("/user/login").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+        branch: p.pointer("/head/ref").and_then(|x| x.as_str()).unwrap_or(head).to_string(),
+        base: p.pointer("/base/ref").and_then(|x| x.as_str()).unwrap_or(base).to_string(),
+        status: if is_draft { "draft" } else { "open" }.to_string(),
+        reviews: "pending".to_string(),
+        comments: 0,
+        additions: 0,
+        deletions: 0,
+        updated: short_date(p.get("updated_at").and_then(|x| x.as_str()).unwrap_or("")),
+        url: p.get("html_url").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+    })
+}
+
 /// The authenticated user's login (to identify your own review among a PR's
 /// reviews).
 fn current_login(token: &str) -> AppResult<String> {

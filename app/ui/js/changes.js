@@ -1202,6 +1202,96 @@ const ChangesPage = (() => {
     runGitAction("Delete remote branch", () => DC.deleteRemoteBranch(repoId, name));
   }
 
+  // ---- create pull request ----
+  async function createPullRequestFlow() {
+    if (!repoId || !DC || !DC.hasBackend || busy) return;
+    const r = repos.find((x) => x.id === repoId);
+    if (!r) return;
+    if (r.provider !== "github" && r.provider !== "azure") {
+      await Modal.alert({
+        title: "Not supported",
+        message: "Pull requests can be created for GitHub and Azure DevOps repositories only.",
+      });
+      return;
+    }
+    const head = branch;
+    let branches = [];
+    try { branches = (await DC.listBranches(repoId)) || []; } catch (e) { /* non-fatal */ }
+    const bases = branches.filter((b) => b !== head);
+    const defaultBase = defaultBranchFrom(bases) || defaultBranchFrom(branches) || "main";
+
+    const created = await Modal.custom({
+      title: "Create pull request",
+      render: (body, foot, close, mkBtn) => {
+        const baseList = bases.length ? bases : ["main", "master"];
+        const baseOptions = baseList
+          .map((b) => `<option value="${esc(b)}" ${b === defaultBase ? "selected" : ""}>${esc(b)}</option>`)
+          .join("");
+        body.innerHTML = `
+          <div class="form-grid">
+            <div class="form-row">
+              <label class="form-label">From branch</label>
+              <input class="modal-input" value="${esc(head)}" disabled />
+            </div>
+            <div class="form-row">
+              <label class="form-label">Into branch</label>
+              <select class="modal-input" id="prBase">${baseOptions}</select>
+            </div>
+          </div>
+          <div class="form-row">
+            <label class="form-label">Title</label>
+            <input class="modal-input" id="prTitle" placeholder="Add a title" spellcheck="true" autocomplete="off" />
+          </div>
+          <div class="form-row">
+            <label class="form-label">Description</label>
+            <textarea class="modal-input" id="prBody" rows="4" placeholder="Describe your changes (optional)"></textarea>
+          </div>
+          <label class="form-check"><input type="checkbox" id="prDraft" /> Create as draft</label>
+          <div class="form-hint">The compare branch must already be pushed to the remote.</div>
+          <div class="modal-error" id="prErr"></div>`;
+        const titleInput = body.querySelector("#prTitle");
+        titleInput.value = ($("commitSummary").value || "").trim() || head;
+        const err = body.querySelector("#prErr");
+        const cancel = mkBtn("btn-ghost", "Cancel");
+        cancel.addEventListener("click", () => close(null));
+        const create = mkBtn("btn-primary", "Create pull request");
+        create.addEventListener("click", async () => {
+          const title = titleInput.value.trim();
+          const base = body.querySelector("#prBase").value;
+          const description = body.querySelector("#prBody").value;
+          const draft = body.querySelector("#prDraft").checked;
+          if (!title) { err.textContent = "Enter a title."; return; }
+          if (!base) { err.textContent = "Choose a branch to merge into."; return; }
+          if (base === head) { err.textContent = "The compare and base branches must differ."; return; }
+          err.textContent = "";
+          create.disabled = true;
+          create.textContent = "Creating…";
+          try {
+            const pr = await DC.createPullRequest({ repoId, title, body: description, base, head, draft });
+            close(pr);
+          } catch (e) {
+            err.textContent = String(e);
+            create.disabled = false;
+            create.textContent = "Create pull request";
+          }
+        });
+        foot.append(cancel, create);
+        setTimeout(() => titleInput.focus(), 40);
+      },
+    });
+
+    if (!created) return;
+    // Refresh PR views so the new PR is present, then open it straight into the
+    // in-app PR review page.
+    pullsLoaded = false;
+    if (typeof hydratePulls === "function") { try { hydratePulls(); } catch (e) {} }
+    if (window.PrReviewer) {
+      window.PrReviewer.open(repoId, created, { returnTo: "changes" });
+    } else if (created.url) {
+      DC.openUrl(created.url).catch((e) => console.error("openUrl failed", e));
+    }
+  }
+
   // ---- remotes ----
   async function addRemoteFlow() {
     if (!repoId || busy) return;
@@ -1528,6 +1618,7 @@ const ChangesPage = (() => {
       { label: "Sync", icon: ICON.swap, onClick: () => doSync("sync") },
       { label: pushLabel, icon: ICON.up, onClick: () => doSync("push") },
       { label: "Pull", icon: ICON.down, onClick: () => doSync("pull") },
+      { label: "Create Pull Request…", icon: ICON.pr, onClick: createPullRequestFlow },
       { label: "Checkout to…", icon: ICON.branch, onClick: openBranchPicker },
       { label: "Clone", icon: ICON.copy, onClick: cloneRepoFlow },
       { separator: true },
