@@ -1250,7 +1250,6 @@ const ChangesPage = (() => {
           <div class="form-hint">The compare branch must already be pushed to the remote.</div>
           <div class="modal-error" id="prErr"></div>`;
         const titleInput = body.querySelector("#prTitle");
-        titleInput.value = ($("commitSummary").value || "").trim() || head;
         const err = body.querySelector("#prErr");
         const cancel = mkBtn("btn-ghost", "Cancel");
         cancel.addEventListener("click", () => close(null));

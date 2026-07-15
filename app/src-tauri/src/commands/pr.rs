@@ -7,6 +7,16 @@ use crate::models::{Account, PrThread, PullRequest, Repo};
 use crate::state::AppState;
 use crate::{git, pr, store};
 
+fn account_matches_repo(account: &Account, repo_ref: &pr::RepoRef) -> bool {
+    match repo_ref.provider.as_str() {
+        "github" => account.provider == "github",
+        "azure" => account
+            .id
+            .eq_ignore_ascii_case(&repo_ref.azure_account_id()),
+        _ => false,
+    }
+}
+
 /// Fetch pull requests for the watched repositories. When `repo_ids` is given,
 /// only those repos (by path id) are queried. Each repo is mapped to its
 /// provider account; repos with no matching account are skipped. Provider
@@ -118,14 +128,11 @@ fn fetch_repo_prs(
     // Candidate accounts for this repo.
     let candidates: Vec<Account> = match rref.provider.as_str() {
         "github" => github_accounts.to_vec(),
-        "azure" => {
-            let aid = rref.azure_account_id();
-            all_accounts
-                .iter()
-                .filter(|a| a.id == aid)
-                .cloned()
-                .collect()
-        }
+        "azure" => all_accounts
+            .iter()
+            .filter(|account| account_matches_repo(account, &rref))
+            .cloned()
+            .collect(),
         _ => Vec::new(),
     };
     if candidates.is_empty() {
@@ -173,14 +180,11 @@ fn resolve_repo_account(
     let repo = git::repo_info(Path::new(repo_id), false, Vec::new())?;
     let rref = pr::RepoRef::parse(&repo.remote, &repo.provider)
         .ok_or_else(|| AppError::msg("Couldn't determine the provider repository from its remote."))?;
-    let candidates: Vec<Account> = match rref.provider.as_str() {
-        "github" => all_accounts.iter().filter(|a| a.provider == "github").cloned().collect(),
-        "azure" => {
-            let aid = rref.azure_account_id();
-            all_accounts.iter().filter(|a| a.id == aid).cloned().collect()
-        }
-        _ => Vec::new(),
-    };
+    let candidates: Vec<Account> = all_accounts
+        .iter()
+        .filter(|account| account_matches_repo(account, &rref))
+        .cloned()
+        .collect();
     if candidates.is_empty() {
         return Err(AppError::msg(
             "No connected account for this repository's provider. Add one in Accounts.",
@@ -220,6 +224,31 @@ fn with_repo_token<T>(
 fn accounts(state: &AppState) -> AppResult<Vec<Account>> {
     let conn = state.db.lock().unwrap();
     store::list_accounts(&conn)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::account_matches_repo;
+    use crate::models::Account;
+    use crate::pr::RepoRef;
+
+    #[test]
+    fn azure_account_matching_ignores_organization_case() {
+        let account = Account {
+            id: "azure:Contoso".into(),
+            provider: "azure".into(),
+            label: "Contoso".into(),
+            host: "dev.azure.com".into(),
+            organization: Some("Contoso".into()),
+            username: None,
+            auth_kind: "git".into(),
+            status: "connected".into(),
+        };
+        let repo_ref =
+            RepoRef::parse("dev.azure.com/contoso/Project/_git/Repository", "azure").unwrap();
+
+        assert!(account_matches_repo(&account, &repo_ref));
+    }
 }
 
 /// All comment threads (general discussion + inline code review) for a PR.
