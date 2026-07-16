@@ -96,6 +96,8 @@ function showPage(page) {
   pages.forEach((p) => p.classList.toggle("active", p.id === `page-${page}`));
   try { localStorage.setItem("dc.page", page); } catch (e) {}
   if (page === "changes" && window.ChangesPage) window.ChangesPage.onShow();
+  // Let any page refresh its data on show (registered via PageLifecycle.onShow).
+  PageLifecycle.fire(page);
 }
 
 navItems.forEach((item) => {

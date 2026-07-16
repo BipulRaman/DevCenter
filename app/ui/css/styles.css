@@ -1689,8 +1689,10 @@ body.col-resizing * { cursor: col-resize !important; }
   border-bottom: var(--hairline) solid var(--border); font-family: var(--mono); font-size: 13px;
 }
 .diff-path { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); font-weight: 600; }
-/* "Whole file" / "Collapse" toggle in the PR review diff header. */
-.diff-expand-btn { flex-shrink: 0; font-size: 11px; padding: 3px 10px; height: 26px; font-family: var(--font); }
+/* "Whole file" / "Collapse" toggle in the diff header (icon button). */
+.diff-expand-btn { flex-shrink: 0; background: var(--bg-hover); color: var(--text-faint); }
+.diff-expand-btn:hover { color: var(--text); }
+.diff-expand-btn.active { color: var(--accent); }
 .diff-nav { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
 .diff-nav .icon-mini { width: 24px; height: 24px; }
 .diff-pos { font-size: 11px; color: var(--text-faint); font-family: inherit; min-width: 44px; text-align: center; }

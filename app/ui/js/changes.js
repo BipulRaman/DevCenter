@@ -273,6 +273,7 @@ const ChangesPage = (() => {
   let activeFile = null;
   let activeGroup = null;   // "staged" | "unstaged" | null (history/commit)
   let navOrder = [];        // visible {path, group} in render order (prev/next + keys)
+  let wholeFile = false;    // when true, the diff shows the entire file, not just changed hunks
   let busy = false;
   const ACCOUNT_FILTER_KEY = "dc.changes.accountFilter";
   let accountFilter = loadFilterSet(ACCOUNT_FILTER_KEY); // selected remote accounts; empty = all
@@ -297,6 +298,9 @@ const ChangesPage = (() => {
 
   const CHEV_UP = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>';
   const CHEV_DOWN = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
+  // Whole-file toggle: chevrons pointing outward = expand to full file; inward = collapse to changes.
+  const DIFF_EXPAND = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 9 12 4 17 9"/><polyline points="7 15 12 20 17 15"/></svg>';
+  const DIFF_COLLAPSE = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 4 12 9 17 4"/><polyline points="7 20 12 15 17 20"/></svg>';
   // Restore-from-stash: an up-arrow lifting out of a tray.
   const ACT_RESTORE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/><polyline points="8 8 12 4 16 8"/><line x1="12" y1="4" x2="12" y2="15"/></svg>';
   const prStateLabel = (s) => (s === "merged" ? "Merged" : s === "draft" ? "Draft" : "Open");
@@ -329,6 +333,7 @@ const ChangesPage = (() => {
     staged = []; unstaged = []; stashes = []; history = []; commitFiles = [];
     collapsedChanges = new Set(); collapsedStaged = new Set(); collapsedGroups = new Set(); collapsedDetail = new Set();
     repoPulls = []; pullsLoaded = false; prFetch = null;
+    wholeFile = false;
     syncAhead = 0; syncBehind = 0; syncHasUpstream = false;
     renderSync({ ahead: 0, behind: 0, hasUpstream: false });
 
@@ -490,6 +495,7 @@ const ChangesPage = (() => {
     staged = []; unstaged = []; stashes = []; history = []; commitFiles = [];
     collapsedChanges = new Set(); collapsedStaged = new Set(); collapsedGroups = new Set(); collapsedDetail = new Set();
     repoPulls = []; pullsLoaded = false; prFetch = null;
+    wholeFile = false;
     syncAhead = 0; syncBehind = 0; syncHasUpstream = false;
     renderSync({ ahead: 0, behind: 0, hasUpstream: false });
     // Clear all three list panes immediately, regardless of which tab is
@@ -1928,13 +1934,16 @@ const ChangesPage = (() => {
           <span class="diff-pos">${idx + 1} / ${navOrder.length}</span>
           <button class="icon-mini" id="diffNext" title="Next file (↓)" ${idx >= navOrder.length - 1 ? "disabled" : ""}>${CHEV_DOWN}</button>
         </div>` : "";
-    return `<span class="diff-path" title="${esc(path)}">${esc(path)}</span>${nav}<span class="diff-adds">${addsStr}</span><span class="diff-dels">${delsStr}</span>`;
+    return `<span class="diff-path" title="${esc(path)}">${esc(path)}</span>${nav}<span class="diff-adds">${addsStr}</span><span class="diff-dels">${delsStr}</span>`
+      + `<button class="icon-mini diff-expand-btn${wholeFile ? " active" : ""}" id="diffExpandBtn" type="button" title="${wholeFile ? "Show only changed lines" : "Show the whole file"}">${wholeFile ? DIFF_COLLAPSE : DIFF_EXPAND}</button>`;
   }
 
   function wireDiffNav() {
     const prev = $("diffPrev"), next = $("diffNext");
     if (prev) prev.addEventListener("click", () => step(-1));
     if (next) next.addEventListener("click", () => step(1));
+    const expand = $("diffExpandBtn");
+    if (expand) expand.addEventListener("click", () => { wholeFile = !wholeFile; selectFile(activeFile, activeGroup); });
   }
 
   function step(dir) {
@@ -1967,8 +1976,8 @@ const ChangesPage = (() => {
     $("diffBody").innerHTML = `<div class="diff-binary">Loading diff…</div>`;
     try {
       const d = (tab === "pulls" && activePull)
-        ? await DC.prFileDiff(forRepo, activePull.base, activePull.branch, path)
-        : await DC.gitDiff(forRepo, path, activeSha, group === "staged");
+        ? await DC.prFileDiff(forRepo, activePull.base, activePull.branch, path, wholeFile ? 100000 : null)
+        : await DC.gitDiff(forRepo, path, activeSha, group === "staged", wholeFile ? 100000 : null);
       // Bail if a newer navigation (another file, repo, or tab) has since taken
       // over — the diff pane is shared by all three tabs.
       if (gen !== loadGen || repoId !== forRepo || activeFile !== path || activeGroup !== group) return;

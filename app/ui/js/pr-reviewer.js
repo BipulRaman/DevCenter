@@ -10,6 +10,9 @@ const PrReviewer = (() => {
 
   const OPEN_ICON = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>';
   const PUBLISH_ICON = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>';
+  // Whole-file toggle: chevrons pointing outward = expand to full file; inward = collapse to changes.
+  const DIFF_EXPAND = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 9 12 4 17 9"/><polyline points="7 15 12 20 17 15"/></svg>';
+  const DIFF_COLLAPSE = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 4 12 9 17 4"/><polyline points="7 20 12 15 17 20"/></svg>';
   // Vote states, normalized to Azure's scale (GitHub uses only 10/0/-10).
   // `btn` is a compact label shown on the button (full `label` stays in the menu).
   const VOTES = {
@@ -288,7 +291,7 @@ const PrReviewer = (() => {
 
   function diffHeadHtml(d) {
     return `<span class="diff-path" title="${esc(d.path)}">${esc(d.path)}</span><span class="diff-adds">+${d.additions}</span><span class="diff-dels">−${d.deletions}</span>`
-      + `<button class="btn btn-ghost btn-sm diff-expand-btn" id="prrExpandBtn" type="button" title="${wholeFile ? "Show only changed lines" : "Show the whole file"}">${wholeFile ? "Collapse" : "Whole file"}</button>`;
+      + `<button class="icon-mini diff-expand-btn${wholeFile ? " active" : ""}" id="prrExpandBtn" type="button" title="${wholeFile ? "Show only changed lines" : "Show the whole file"}">${wholeFile ? DIFF_COLLAPSE : DIFF_EXPAND}</button>`;
   }
 
   function renderDiff(d) {
@@ -499,6 +502,7 @@ const PrReviewer = (() => {
       await DC.publishPr(forRepo, forPr.id);
       if (gen !== loadGen || repoId !== forRepo || pr !== forPr) return;
       forPr.status = "open"; // reflect the change locally
+      PrStore.patch(forRepo, forPr.id, { status: "open" }); // and in the shared list
       renderHeader();
       await Modal.alert({ title: "Published", message: "The pull request is now open for review." });
     } catch (e) {
@@ -557,7 +561,11 @@ const PrReviewer = (() => {
         const v = await DC.prMyVote(forRepo, forPr.id);
         if (gen === loadGen && repoId === forRepo && pr === forPr) myVote = v || 0;
       } catch (_) {}
-      if (gen === loadGen && repoId === forRepo && pr === forPr) renderHeader();
+      if (gen === loadGen && repoId === forRepo && pr === forPr) {
+        // Keep the shared PR list in sync so returning to it isn't stale.
+        PrStore.applyMyVote(forRepo, forPr.id, myVote);
+        renderHeader();
+      }
       await Modal.alert({ title: "Review submitted", message: meta.title + " — done." });
     } catch (e) {
       if (gen !== loadGen || repoId !== forRepo || pr !== forPr) return;

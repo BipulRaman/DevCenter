@@ -65,7 +65,7 @@ async function hydratePulls() {
     const data = await DC.listPullRequests(null);
     if (gen !== pullsLoadGen) return;
     if (Array.isArray(data)) {
-      pulls = data;
+      PrStore.setAll(data); // updates `pulls` + notifies subscribers
       renderPrStats();
       renderPulls(document.getElementById("prSearch").value || "");
     }
@@ -379,6 +379,9 @@ if (DC && DC.hasBackend) {
       rerenderGit();
     }
   });
+
+  // A PR mutation happened (vote, publish, create) → refetch authoritative list.
+  DC.onPullsUpdated(() => hydratePulls());
 
   // Live app status updates → patch the matching app and re-render.
   DC.onAppStatus((s) => {

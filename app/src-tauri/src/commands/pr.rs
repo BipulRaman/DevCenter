@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use tauri::State;
+use tauri::{AppHandle, Emitter, State};
 
 use crate::error::{AppError, AppResult};
 use crate::models::{Account, PrThread, PullRequest, Repo};
@@ -320,16 +320,19 @@ pub async fn submit_pr_review(
     review_type: String,
     body: String,
     state: State<'_, AppState>,
+    app: AppHandle,
 ) -> AppResult<Vec<PrThread>> {
     let st = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || -> AppResult<Vec<PrThread>> {
+    let threads = tauri::async_runtime::spawn_blocking(move || -> AppResult<Vec<PrThread>> {
         with_repo_token(&st, &repo_id, |rref, token| {
             pr::submit_review(rref, pr_id, &review_type, &body, token)?;
             pr::fetch_threads(rref, pr_id, token)
         })
     })
     .await
-    .map_err(|e| AppError::msg(e.to_string()))?
+    .map_err(|e| AppError::msg(e.to_string()))??;
+    let _ = app.emit("pull_requests_updated", ());
+    Ok(threads)
 }
 
 /// The signed-in user's own vote on a PR, normalized to the Azure scale
@@ -355,13 +358,16 @@ pub async fn publish_pr(
     repo_id: String,
     pr_id: u64,
     state: State<'_, AppState>,
+    app: AppHandle,
 ) -> AppResult<()> {
     let st = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || -> AppResult<()> {
         with_repo_token(&st, &repo_id, |rref, token| pr::publish(rref, pr_id, token))
     })
     .await
-    .map_err(|e| AppError::msg(e.to_string()))?
+    .map_err(|e| AppError::msg(e.to_string()))??;
+    let _ = app.emit("pull_requests_updated", ());
+    Ok(())
 }
 
 /// Create a pull request from `head` into `base` (branch names) for the repo.
@@ -375,9 +381,10 @@ pub async fn create_pull_request(
     head: String,
     draft: bool,
     state: State<'_, AppState>,
+    app: AppHandle,
 ) -> AppResult<PullRequest> {
     let st = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || -> AppResult<PullRequest> {
+    let created = tauri::async_runtime::spawn_blocking(move || -> AppResult<PullRequest> {
         let display = git::repo_info(Path::new(&repo_id), false, Vec::new())
             .map(|r| r.name)
             .unwrap_or_else(|_| repo_id.clone());
@@ -386,6 +393,8 @@ pub async fn create_pull_request(
         })
     })
     .await
-    .map_err(|e| AppError::msg(e.to_string()))?
+    .map_err(|e| AppError::msg(e.to_string()))??;
+    let _ = app.emit("pull_requests_updated", ());
+    Ok(created)
 }
 

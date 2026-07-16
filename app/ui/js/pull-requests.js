@@ -5,6 +5,18 @@ let prRepoSelected = loadFilterSet(PR_REPO_FILTER_KEY); // empty = all watched r
 const PR_ACCOUNT_FILTER_KEY = "dc.pr.accountFilter";
 let prAccountFilter = loadFilterSet(PR_ACCOUNT_FILTER_KEY); // selected account keys; empty = all
 
+// Current search text, guarding against the input not existing yet.
+function prSearchValue() {
+  const el = document.getElementById("prSearch");
+  return el ? el.value : "";
+}
+
+// Re-render whenever the shared PR cache changes (e.g. an optimistic patch from
+// the reviewer), and refetch authoritative data every time the page is shown so
+// a returning user never sees a stale vote/review status.
+DCStore.on("pulls:changed", () => renderPulls(prSearchValue()));
+PageLifecycle.onShow("pull-requests", () => { if (typeof hydratePulls === "function") hydratePulls(); });
+
 function watchedRepoNames() {
   return repos.filter((r) => r.watched).map((r) => r.name);
 }
