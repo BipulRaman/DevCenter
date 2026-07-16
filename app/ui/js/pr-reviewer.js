@@ -24,6 +24,7 @@ const PrReviewer = (() => {
   let provider = "github"; // "github" | "azure" — drives which review options show
   let myVote = 0;          // the signed-in user's current vote (Azure scale)
   let files = [];          // FileChange[] for the PR's base...head diff
+  let loadError = null;    // set when the base...head diff couldn't be computed (e.g. branches not fetched)
   let threads = [];        // PrThread[] — general + inline, refreshed after any mutation
   let activeFile = null;
   let activeTab = "files"; // "files" | "conversation"
@@ -61,7 +62,7 @@ const PrReviewer = (() => {
     // Provider decides the review options (Azure's 5 vote states vs GitHub's 3).
     provider = ((typeof repos !== "undefined" && repos.find((r) => r.id === id)) || {}).provider || "github";
     myVote = 0;
-    files = []; threads = []; activeFile = null; activeTab = "files"; wholeFile = false; collapsed = new Set();
+    files = []; loadError = null; threads = []; activeFile = null; activeTab = "files"; wholeFile = false; collapsed = new Set();
     document.querySelectorAll(".page").forEach((p) => p.classList.toggle("active", p.id === "page-pr-review"));
     syncTabState("files");
     renderHeader();
@@ -74,7 +75,7 @@ const PrReviewer = (() => {
     await Promise.all([loadFiles(gen, id, pullRequest), loadThreads(gen, id, pullRequest)]);
     if (gen !== loadGen || repoId !== id || pr !== pullRequest) return;
     if (files.length) selectFile(files[0].path);
-    else showDiffEmpty("This pull request has no file changes.");
+    else showDiffEmpty(loadError || "This pull request has no file changes.");
   }
 
   function renderHeader() {
@@ -173,14 +174,39 @@ const PrReviewer = (() => {
   }
 
   async function loadFiles(gen = loadGen, forRepo = repoId, forPr = pr) {
+    loadError = null;
     try {
       const cs = await DC.prChanges(forRepo, forPr.base, forPr.branch);
       if (gen !== loadGen || repoId !== forRepo || pr !== forPr) return;
       files = cs.files || [];
     } catch (e) {
       if (gen !== loadGen || repoId !== forRepo || pr !== forPr) return;
-      console.error("prChanges failed", e);
-      files = [];
+      // The PR's base/head branches are often only present locally after a
+      // fetch. If they're missing, fetch once and retry before giving up.
+      const msg = String((e && e.message) || e || "");
+      if (/not found locally|Fetch the repository/i.test(msg)) {
+        try {
+          $("prrFiles").innerHTML = `<div class="changes-empty">Fetching latest…</div>`;
+          showDiffEmpty("Fetching latest…");
+          await DC.fetchRepo(forRepo);
+          if (gen !== loadGen || repoId !== forRepo || pr !== forPr) return;
+          const cs = await DC.prChanges(forRepo, forPr.base, forPr.branch);
+          if (gen !== loadGen || repoId !== forRepo || pr !== forPr) return;
+          files = cs.files || [];
+          renderFileList();
+          return;
+        } catch (e2) {
+          if (gen !== loadGen || repoId !== forRepo || pr !== forPr) return;
+          console.error("prChanges retry after fetch failed", e2);
+          files = [];
+          loadError = String((e2 && e2.message) || e2 || "") ||
+            "Couldn't load this pull request's changes. Fetch the repository and try again.";
+        }
+      } else {
+        console.error("prChanges failed", e);
+        files = [];
+        loadError = msg || "Couldn't load this pull request's changes.";
+      }
     }
     renderFileList();
   }
@@ -204,7 +230,7 @@ const PrReviewer = (() => {
   function renderFileList() {
     const list = $("prrFiles");
     if (!files.length) {
-      list.innerHTML = `<div class="changes-empty">No file changes.</div>`;
+      list.innerHTML = `<div class="changes-empty">${esc(loadError || "No file changes.")}</div>`;
       return;
     }
     renderFileTree(list, {
