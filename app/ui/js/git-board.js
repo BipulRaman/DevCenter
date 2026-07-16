@@ -17,7 +17,8 @@ function repoAccount(r) {
   return host ? { key: "other:" + host.toLowerCase(), label: host, provider: "other" } : null;
 }
 
-let repoAccountFilter = new Set(); // selected account keys; empty = all
+const REPO_ACCOUNT_FILTER_KEY = "dc.repos.accountFilter";
+let repoAccountFilter = loadFilterSet(REPO_ACCOUNT_FILTER_KEY); // selected account keys; empty = all
 let acctFilterSig = ""; // signature of the last-rendered account menu (rebuild guard)
 
 function renderAccountFilter() {
@@ -35,13 +36,17 @@ function renderAccountFilter() {
   });
   if (map.size === 0) {
     select.hidden = true;
-    repoAccountFilter.clear();
+    // Only reset once repos have actually loaded (repos.length > 0). On the
+    // initial pre-hydration render repos is empty; clearing here would wipe the
+    // selection restored from storage before the data arrives.
+    if (repos.length) { repoAccountFilter.clear(); saveFilterSet(REPO_ACCOUNT_FILTER_KEY, repoAccountFilter); }
     acctFilterSig = "";
     return;
   }
   select.hidden = false;
   // Drop any selected accounts that no longer exist.
   repoAccountFilter = new Set([...repoAccountFilter].filter((k) => map.has(k)));
+  saveFilterSet(REPO_ACCOUNT_FILTER_KEY, repoAccountFilter);
   const keys = [...map.keys()].sort((x, y) => map.get(x).label.localeCompare(map.get(y).label));
   const icon = (p) => (p === "github" ? ICON.github : p === "azure" ? ICON.azure : ICON.repo);
 
@@ -93,17 +98,20 @@ function renderAccountFilter() {
   if (allBox) {
     allBox.addEventListener("change", () => {
       repoAccountFilter.clear();
+      saveFilterSet(REPO_ACCOUNT_FILTER_KEY, repoAccountFilter);
       renderRepos(document.getElementById("repoSearch").value || "");
     });
   }
   on(menu, 'input[type="checkbox"][value]', "change", (box) => {
     if (box.checked) repoAccountFilter.add(box.value);
     else repoAccountFilter.delete(box.value);
+    saveFilterSet(REPO_ACCOUNT_FILTER_KEY, repoAccountFilter);
     renderRepos(document.getElementById("repoSearch").value || "");
   });
 }
 
-let repoTagFilter = new Set(); // selected tags; empty = all
+const REPO_TAG_FILTER_KEY = "dc.repos.tagFilter";
+let repoTagFilter = loadFilterSet(REPO_TAG_FILTER_KEY); // selected tags; empty = all
 
 function renderRepos(filter = "") {
   if (typeof Dropdown !== "undefined") Dropdown.close();

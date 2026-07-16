@@ -67,6 +67,26 @@ function repoWebUrl(remote) {
   return "https://" + s.replace(/^\/+/, "");
 }
 
+// ---------- Persisted filter selections ----------
+// The multiselect filter dropdowns (account / tag / watched-repo) persist their
+// chosen values so a reload restores them. Stored as a JSON array of strings per
+// key. Stale values (accounts/tags/repos that no longer exist) are pruned by each
+// filter's own render pass once real data has loaded, so loading a superset here
+// is safe. Defined in core.js (loads first) so later files can init at declaration.
+function loadFilterSet(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? new Set(arr.map(String)) : new Set();
+  } catch (e) {
+    return new Set();
+  }
+}
+function saveFilterSet(key, set) {
+  try { localStorage.setItem(key, JSON.stringify([...set])); } catch (e) {}
+}
+
 // ---------- Navigation ----------
 const navItems = document.querySelectorAll(".nav-item[data-page]");
 const pages = document.querySelectorAll(".page");

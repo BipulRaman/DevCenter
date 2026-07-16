@@ -1,6 +1,7 @@
 // ---------- Pull Requests render ----------
 let prCurrentFilter = "all";
-let prRepoSelected = new Set(); // empty = all watched repos
+const PR_REPO_FILTER_KEY = "dc.pr.repoSelected";
+let prRepoSelected = loadFilterSet(PR_REPO_FILTER_KEY); // empty = all watched repos
 
 function watchedRepoNames() {
   return repos.filter((r) => r.watched).map((r) => r.name);
@@ -19,8 +20,13 @@ function refreshPrRepoFilter() {
   const label = document.getElementById("prRepoLabel");
   if (!menu) return;
   const names = watchedRepoNames();
-  // drop any selected repos that are no longer watched
-  prRepoSelected = new Set([...prRepoSelected].filter((n) => names.includes(n)));
+  // drop any selected repos that are no longer watched. Skip while nothing is
+  // watched (also the pre-hydration state, repos not loaded yet) so the selection
+  // restored from storage survives until real data arrives.
+  if (names.length) {
+    prRepoSelected = new Set([...prRepoSelected].filter((n) => names.includes(n)));
+    saveFilterSet(PR_REPO_FILTER_KEY, prRepoSelected);
+  }
 
   // Map each watched repo name to its provider for icons.
   const providerOf = (name) => {
@@ -67,6 +73,7 @@ function refreshPrRepoFilter() {
   if (allBox) {
     allBox.addEventListener("change", () => {
       prRepoSelected.clear();
+      saveFilterSet(PR_REPO_FILTER_KEY, prRepoSelected);
       refreshPrRepoFilter();
       renderPulls(document.getElementById("prSearch").value);
     });
@@ -74,6 +81,7 @@ function refreshPrRepoFilter() {
   on(menu, 'input[type="checkbox"][value]', "change", (box) => {
     if (box.checked) prRepoSelected.add(box.value);
     else prRepoSelected.delete(box.value);
+    saveFilterSet(PR_REPO_FILTER_KEY, prRepoSelected);
     refreshPrRepoFilter();
     renderPulls(document.getElementById("prSearch").value);
   });

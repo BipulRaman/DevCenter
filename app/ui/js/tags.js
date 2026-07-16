@@ -10,7 +10,9 @@ function renderTagFilter() {
   repos.forEach((r) => (r.tags || []).forEach((t) => counts.set(t, (counts.get(t) || 0) + 1)));
   if (!counts.size) {
     select.hidden = true;
-    repoTagFilter.clear();
+    // Only reset once repos have loaded; the initial pre-hydration render has an
+    // empty repo list and would otherwise wipe the selection restored from storage.
+    if (repos.length) { repoTagFilter.clear(); saveFilterSet(REPO_TAG_FILTER_KEY, repoTagFilter); }
     tagFilterSig = "";
     return;
   }
@@ -18,6 +20,7 @@ function renderTagFilter() {
   const tags = [...counts.keys()].sort((a, b) => a.localeCompare(b));
   // Drop any selected tags that no longer exist.
   repoTagFilter = new Set([...repoTagFilter].filter((t) => counts.has(t)));
+  saveFilterSet(REPO_TAG_FILTER_KEY, repoTagFilter);
 
   // Skip the DOM rebuild when nothing affecting the menu changed (e.g. search
   // keystrokes). Leaves the menu DOM — and its listeners — intact (WebView2-safe).
@@ -50,12 +53,14 @@ function renderTagFilter() {
   if (allBox) {
     allBox.addEventListener("change", () => {
       repoTagFilter.clear();
+      saveFilterSet(REPO_TAG_FILTER_KEY, repoTagFilter);
       renderRepos(document.getElementById("repoSearch").value || "");
     });
   }
   on(menu, 'input[type="checkbox"][value]', "change", (box) => {
     if (box.checked) repoTagFilter.add(box.value);
     else repoTagFilter.delete(box.value);
+    saveFilterSet(REPO_TAG_FILTER_KEY, repoTagFilter);
     renderRepos(document.getElementById("repoSearch").value || "");
   });
 }

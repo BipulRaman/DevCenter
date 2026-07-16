@@ -274,7 +274,8 @@ const ChangesPage = (() => {
   let activeGroup = null;   // "staged" | "unstaged" | null (history/commit)
   let navOrder = [];        // visible {path, group} in render order (prev/next + keys)
   let busy = false;
-  let accountFilter = new Set(); // selected remote accounts; empty = all
+  const ACCOUNT_FILTER_KEY = "dc.changes.accountFilter";
+  let accountFilter = loadFilterSet(ACCOUNT_FILTER_KEY); // selected remote accounts; empty = all
   let accountFilterSig = "";
 
   // Bumped on every navigation away from the current context (repo switch,
@@ -379,13 +380,16 @@ const ChangesPage = (() => {
     });
     if (!map.size) {
       select.hidden = true;
-      accountFilter.clear();
+      // Only reset once repos have loaded; the pre-hydration render has no repos
+      // and would otherwise wipe the selection restored from storage.
+      if (repos.length) { accountFilter.clear(); saveFilterSet(ACCOUNT_FILTER_KEY, accountFilter); }
       accountFilterSig = "";
       return;
     }
 
     select.hidden = false;
     accountFilter = new Set([...accountFilter].filter((key) => map.has(key)));
+    saveFilterSet(ACCOUNT_FILTER_KEY, accountFilter);
     const keys = [...map.keys()].sort((a, b) => map.get(a).label.localeCompare(map.get(b).label));
     const signature = keys.map((key) => {
       const entry = map.get(key);
@@ -424,6 +428,7 @@ const ChangesPage = (() => {
 
     $("chgAccountAll").addEventListener("change", () => {
       accountFilter.clear();
+      saveFilterSet(ACCOUNT_FILTER_KEY, accountFilter);
       reconcileSelectedRepo();
       renderAccountFilter();
       $("chgAccountAll")?.focus();
@@ -432,6 +437,7 @@ const ChangesPage = (() => {
       const value = box.value;
       if (box.checked) accountFilter.add(box.value);
       else accountFilter.delete(box.value);
+      saveFilterSet(ACCOUNT_FILTER_KEY, accountFilter);
       reconcileSelectedRepo();
       renderAccountFilter();
       menu.querySelector(`input[value="${CSS.escape(value)}"]`)?.focus();

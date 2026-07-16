@@ -130,7 +130,7 @@ const PrReviewer = (() => {
       html = `${statusPill}${openBtn}${commentBtn}
         <div class="prr-vote" id="prrVote">
           <button class="btn ${voted ? "btn-primary" : "btn-ghost"} btn-sm prr-vote-btn" id="prrVoteBtn" type="button" aria-haspopup="true" aria-expanded="false">
-            <span class="prr-vote-dot ${cur.cls}"></span><span>${voted ? esc(cur.btn || cur.label) : "Vote"}</span>
+            <span class="prr-vote-dot ${cur.cls}"></span><span>Vote</span>
             <svg class="caret" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
           </button>
           <div class="prr-vote-menu" id="prrVoteMenu" role="menu" hidden>
