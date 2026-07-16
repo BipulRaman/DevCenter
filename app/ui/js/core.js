@@ -170,6 +170,11 @@ if (mainScroll) {
         const result = await DC.checkForUpdates();
         if (result && result.status === "up_to_date") {
           await Modal.alert({ title: "Up to date", message: "You're already on the latest version." });
+        } else if (result && result.status === "not_configured") {
+          await Modal.alert({
+            title: "Updates unavailable",
+            message: "In-app updates aren't available for this build. Download the latest release from GitHub.",
+          });
         } else if (result && result.status === "available") {
           const go = await Modal.confirm({
             title: "Update available",

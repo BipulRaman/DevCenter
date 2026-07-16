@@ -218,7 +218,20 @@ fn open_in_vscode_variant(path: String, insiders: bool) -> Result<(), String> {
 /// app, so the UI asks the user first (see install_update).
 #[tauri::command]
 pub async fn check_for_updates(app: tauri::AppHandle) -> Result<UpdateActionResult, String> {
-    let updater = app.updater().map_err(|e| e.to_string())?;
+    // Dev builds and locally-built (unsigned) builds ship an empty updater pubkey
+    // — CI injects the real minisign key only at release time. With no valid key
+    // the updater can't initialize (it fails to parse the empty key with
+    // "Invalid encoding in minisign data"), so report a clear "not configured"
+    // state instead of surfacing that cryptic error to the user.
+    let updater = match app.updater() {
+        Ok(u) => u,
+        Err(_) => {
+            return Ok(UpdateActionResult {
+                status: "not_configured".to_string(),
+                version: None,
+            });
+        }
+    };
     let update = updater.check().await.map_err(|e| e.to_string())?;
 
     match update {
