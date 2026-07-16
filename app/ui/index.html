@@ -339,6 +339,14 @@
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
               <input type="text" placeholder="Search pull requests…" id="prSearch" />
             </div>
+            <div class="multiselect" id="prAccountSelect" hidden>
+              <button class="multiselect-btn" id="prAccountBtn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="prAccountMenu">
+                <span class="ms-ico" id="prAccountIcon"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M3 10h18"/></svg></span>
+                <span id="prAccountLabel">All accounts</span>
+                <svg class="caret" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+              <div class="multiselect-menu" id="prAccountMenu" role="group" aria-label="Pull request accounts"></div>
+            </div>
             <div class="multiselect" id="prRepoSelect">
               <button class="multiselect-btn" id="prRepoBtn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="prRepoMenu">
                 <span class="ms-ico" id="prRepoIcon"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6a2 2 0 0 1 2-2h14v16H5a2 2 0 0 1-2-2Z"/><path d="M19 16H5a2 2 0 0 0-2 2"/></svg></span>

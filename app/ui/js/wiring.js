@@ -59,6 +59,7 @@ function wireMultiselect(selectId, buttonId) {
 }
 
 wireMultiselect("prRepoSelect", "prRepoBtn");
+wireMultiselect("prAccountSelect", "prAccountBtn");
 wireMultiselect("repoTagSelect", "repoTagBtn");
 wireMultiselect("repoAccountSelect", "repoAccountBtn");
 wireMultiselect("chgAccountSelect", "chgAccountBtn");

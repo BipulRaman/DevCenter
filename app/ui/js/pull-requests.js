@@ -2,9 +2,19 @@
 let prCurrentFilter = "all";
 const PR_REPO_FILTER_KEY = "dc.pr.repoSelected";
 let prRepoSelected = loadFilterSet(PR_REPO_FILTER_KEY); // empty = all watched repos
+const PR_ACCOUNT_FILTER_KEY = "dc.pr.accountFilter";
+let prAccountFilter = loadFilterSet(PR_ACCOUNT_FILTER_KEY); // selected account keys; empty = all
 
 function watchedRepoNames() {
   return repos.filter((r) => r.watched).map((r) => r.name);
+}
+
+// The account (GitHub owner / Azure org) a PR belongs to, via its repo. null when
+// the repo is unknown or has no usable remote.
+function prAccountKey(p) {
+  const r = repos.find((x) => x.name === p.repo);
+  const a = r ? repoAccount(r) : null;
+  return a ? a.key : null;
 }
 
 function watchedPulls() {
@@ -85,6 +95,88 @@ function refreshPrRepoFilter() {
     refreshPrRepoFilter();
     renderPulls(document.getElementById("prSearch").value);
   });
+
+  // Keep the account filter in sync — its options are derived from the same
+  // watched-repo set, so it must rebuild whenever the watch/repo state changes.
+  refreshPrAccountFilter();
+}
+
+function refreshPrAccountFilter() {
+  const menu = document.getElementById("prAccountMenu");
+  const label = document.getElementById("prAccountLabel");
+  const select = document.getElementById("prAccountSelect");
+  if (!menu || !select) return;
+
+  // Aggregate accounts across watched repos (the only repos the PR page shows).
+  const map = new Map(); // key -> { label, provider, count }
+  repos.filter((r) => r.watched).forEach((r) => {
+    const a = repoAccount(r);
+    if (!a) return;
+    const e = map.get(a.key) || { label: a.label, provider: a.provider, count: 0 };
+    e.count++;
+    map.set(a.key, e);
+  });
+
+  if (!map.size) {
+    select.hidden = true;
+    // Only reset once repos have loaded; the pre-hydration render has no repos
+    // and would otherwise wipe the selection restored from storage.
+    if (repos.length) { prAccountFilter.clear(); saveFilterSet(PR_ACCOUNT_FILTER_KEY, prAccountFilter); }
+    return;
+  }
+  select.hidden = false;
+  // Drop any selected accounts that no longer exist.
+  prAccountFilter = new Set([...prAccountFilter].filter((k) => map.has(k)));
+  saveFilterSet(PR_ACCOUNT_FILTER_KEY, prAccountFilter);
+
+  const keys = [...map.keys()].sort((x, y) => map.get(x).label.localeCompare(map.get(y).label));
+  const icon = (p) => (p === "github" ? ICON.github : p === "azure" ? ICON.azure : ICON.repo);
+
+  menu.innerHTML =
+    `<label class="multiselect-opt all">
+       <input type="checkbox" id="prAccountAll" ${prAccountFilter.size === 0 ? "checked" : ""} />
+       <span>All accounts</span>
+     </label>
+     <div class="multiselect-sep"></div>` +
+    keys
+      .map((k) => {
+        const e = map.get(k);
+        return `<label class="multiselect-opt">
+          <input type="checkbox" value="${escapeHtml(k)}" ${prAccountFilter.has(k) ? "checked" : ""} />
+          <span class="multiselect-ico">${icon(e.provider)}</span>
+          <span>${escapeHtml(e.label)}</span>
+          <span class="multiselect-count">${e.count}</span>
+        </label>`;
+      })
+      .join("");
+
+  if (prAccountFilter.size === 0) label.textContent = "All accounts";
+  else if (prAccountFilter.size === 1) label.textContent = map.get([...prAccountFilter][0])?.label || "1 account";
+  else label.textContent = `${prAccountFilter.size} accounts`;
+
+  const iconHost = document.getElementById("prAccountIcon");
+  if (iconHost) {
+    const DEFAULT_ACCT_ICON =
+      '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M3 10h18"/></svg>';
+    iconHost.innerHTML = prAccountFilter.size === 1 ? icon(map.get([...prAccountFilter][0])?.provider) : DEFAULT_ACCT_ICON;
+  }
+
+  const allBox = document.getElementById("prAccountAll");
+  if (allBox) {
+    allBox.addEventListener("change", () => {
+      prAccountFilter.clear();
+      saveFilterSet(PR_ACCOUNT_FILTER_KEY, prAccountFilter);
+      refreshPrAccountFilter();
+      renderPulls(document.getElementById("prSearch").value);
+    });
+  }
+  on(menu, 'input[type="checkbox"][value]', "change", (box) => {
+    if (box.checked) prAccountFilter.add(box.value);
+    else prAccountFilter.delete(box.value);
+    saveFilterSet(PR_ACCOUNT_FILTER_KEY, prAccountFilter);
+    refreshPrAccountFilter();
+    renderPulls(document.getElementById("prSearch").value);
+  });
 }
 
 function renderPulls(filter = "") {
@@ -99,9 +191,11 @@ function renderPulls(filter = "") {
   const list = pulls.filter((p) => {
     const isWatched = watchedNames.includes(p.repo);
     const matchRepo = prRepoSelected.size === 0 || prRepoSelected.has(p.repo);
+    const acctKey = prAccountKey(p);
+    const matchAccount = prAccountFilter.size === 0 || (acctKey && prAccountFilter.has(acctKey));
     const matchText = p.title.toLowerCase().includes(f) || p.repo.toLowerCase().includes(f) || p.author.toLowerCase().includes(f);
     const matchStatus = prCurrentFilter === "all" || p.status === prCurrentFilter;
-    return isWatched && matchRepo && matchText && matchStatus;
+    return isWatched && matchRepo && matchAccount && matchText && matchStatus;
   });
   const reviewMap = {
     approved: { cls: "ok", icon: ICON.check, label: "Approved" },
