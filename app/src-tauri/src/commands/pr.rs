@@ -147,7 +147,8 @@ fn fetch_repo_prs(
             Ok(t) => t,
             Err(_) => continue,
         };
-        match pr::fetch_for_repo(&rref, &token, &repo.name, &repo.id) {
+        let me = account.username.as_deref().unwrap_or("");
+        match pr::fetch_for_repo(&rref, &token, &repo.name, &repo.id, me) {
             Ok(prs) => return (prs, None),
             Err(e) => {
                 // A cached `git`-auth token may have expired — drop it and try
@@ -155,7 +156,7 @@ fn fetch_repo_prs(
                 if account.auth_kind == "git" {
                     st.invalidate_token(&account.id);
                     if let Ok(token) = st.resolve_token(account) {
-                        if let Ok(prs) = pr::fetch_for_repo(&rref, &token, &repo.name, &repo.id) {
+                        if let Ok(prs) = pr::fetch_for_repo(&rref, &token, &repo.name, &repo.id, me) {
                             return (prs, None);
                         }
                     }

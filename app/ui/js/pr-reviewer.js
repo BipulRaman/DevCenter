@@ -19,13 +19,6 @@ const PrReviewer = (() => {
     "-5": { label: "Waiting for author", cls: "warn", btn: "Waiting" },
     "-10": { label: "Rejected", cls: "danger" },
   };
-  // Aggregate PR review status (from pr.reviews) shown in the header.
-  const REVIEW = {
-    approved: { cls: "ok", label: "Approved" },
-    changes: { cls: "danger", label: "Changes requested" },
-    pending: { cls: "muted", label: "Review pending" },
-  };
-
   let repoId = null;
   let pr = null;           // the PullRequest object passed in from the PR tab
   let provider = "github"; // "github" | "azure" — drives which review options show
@@ -113,7 +106,7 @@ const PrReviewer = (() => {
   function renderActions() {
     const host = $("prrActions");
     if (!host) return;
-    const rv = REVIEW[pr.reviews] || REVIEW.pending;
+    const rv = prReviewChip(pr);
     const statusPill = `<span class="prr-status ${rv.cls}" title="Overall review status"><span class="prr-vote-dot ${rv.cls}"></span>${rv.label}</span>`;
     const openBtn = `<button class="btn btn-ghost btn-sm" data-prr="open" type="button">${OPEN_ICON}Open</button>`;
     const commentBtn = `<button class="btn btn-ghost btn-sm" data-prr="comment" type="button">Comment</button>`;

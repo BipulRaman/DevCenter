@@ -99,6 +99,10 @@ pub struct PullRequest {
     pub status: String,
     /// "approved" | "changes" | "pending"
     pub reviews: String,
+    /// Number of reviewers who approved (cast a positive vote).
+    pub approvals: u32,
+    /// Whether the signed-in user is one of the approvers.
+    pub approved_by_me: bool,
     pub comments: u32,
     pub additions: u32,
     pub deletions: u32,

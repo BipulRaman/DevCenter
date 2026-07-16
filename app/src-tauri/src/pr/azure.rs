@@ -116,29 +116,40 @@ fn strip_ref(s: &str) -> String {
     s.strip_prefix("refs/heads/").unwrap_or(s).to_string()
 }
 
-/// Map Azure reviewer votes to a coarse review state.
+/// Map Azure reviewer votes to a coarse review state plus approval details.
 /// Votes: 10 approved, 5 approved-with-suggestions, 0 none, -5 waiting, -10 rejected.
-fn review_state(reviewers: Option<&Vec<Value>>) -> &'static str {
-    let mut any_positive = false;
+/// `me` is the signed-in user's display name, used to flag their own approval.
+/// Returns (state, approval_count, approved_by_me).
+fn review_state(reviewers: Option<&Vec<Value>>, me: &str) -> (&'static str, u32, bool) {
+    let mut any_negative = false;
+    let mut approvals: u32 = 0;
+    let mut approved_by_me = false;
     if let Some(list) = reviewers {
         for rv in list {
             let vote = rv.get("vote").and_then(|x| x.as_i64()).unwrap_or(0);
             if vote < 0 {
-                return "changes";
-            }
-            if vote > 0 {
-                any_positive = true;
+                any_negative = true;
+            } else if vote > 0 {
+                approvals += 1;
+                let name = rv.get("displayName").and_then(|x| x.as_str()).unwrap_or("");
+                let unique = rv.get("uniqueName").and_then(|x| x.as_str()).unwrap_or("");
+                if !me.is_empty() && (name.eq_ignore_ascii_case(me) || unique.eq_ignore_ascii_case(me)) {
+                    approved_by_me = true;
+                }
             }
         }
     }
-    if any_positive {
+    let state = if any_negative {
+        "changes"
+    } else if approvals > 0 {
         "approved"
     } else {
         "pending"
-    }
+    };
+    (state, approvals, approved_by_me)
 }
 
-pub fn fetch_pulls(r: &RepoRef, token: &str, display: &str, repo_id: &str) -> AppResult<Vec<PullRequest>> {
+pub fn fetch_pulls(r: &RepoRef, token: &str, display: &str, repo_id: &str, me: &str) -> AppResult<Vec<PullRequest>> {
     let org = &r.owner;
     let project = r.project.as_deref().unwrap_or("");
     let base = collection_base(&r.host, org);
@@ -165,7 +176,8 @@ pub fn fetch_pulls(r: &RepoRef, token: &str, display: &str, repo_id: &str) -> Ap
         };
 
         let id = p.get("pullRequestId").and_then(|x| x.as_u64()).unwrap_or(0);
-        let reviews = review_state(p.get("reviewers").and_then(|x| x.as_array()));
+        let (reviews, approvals, approved_by_me) =
+            review_state(p.get("reviewers").and_then(|x| x.as_array()), me);
 
         out.push(PullRequest {
             id,
@@ -185,6 +197,8 @@ pub fn fetch_pulls(r: &RepoRef, token: &str, display: &str, repo_id: &str) -> Ap
             base: strip_ref(p.get("targetRefName").and_then(|x| x.as_str()).unwrap_or("")),
             status: status.to_string(),
             reviews: reviews.to_string(),
+            approvals,
+            approved_by_me,
             comments: 0,
             additions: 0,
             deletions: 0,
@@ -370,6 +384,8 @@ pub fn create_pr(
         base: strip_ref(p.get("targetRefName").and_then(|x| x.as_str()).unwrap_or(base)),
         status: if is_draft { "draft" } else { "open" }.to_string(),
         reviews: "pending".to_string(),
+        approvals: 0,
+        approved_by_me: false,
         comments: 0,
         additions: 0,
         deletions: 0,

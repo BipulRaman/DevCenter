@@ -72,7 +72,7 @@ pub fn verify(token: &str) -> AppResult<String> {
 }
 
 
-pub fn fetch_pulls(r: &RepoRef, token: &str, display: &str, repo_id: &str) -> AppResult<Vec<PullRequest>> {
+pub fn fetch_pulls(r: &RepoRef, token: &str, display: &str, repo_id: &str, _me: &str) -> AppResult<Vec<PullRequest>> {
     // Only open (incl. draft) PRs are surfaced.
     let url = format!(
         "https://api.github.com/repos/{}/{}/pulls?state=open&per_page=50&sort=updated&direction=desc",
@@ -121,6 +121,8 @@ pub fn fetch_pulls(r: &RepoRef, token: &str, display: &str, repo_id: &str) -> Ap
                 .to_string(),
             status: status.to_string(),
             reviews: "pending".to_string(),
+            approvals: 0,
+            approved_by_me: false,
             comments: 0,
             additions: 0,
             deletions: 0,
@@ -333,6 +335,8 @@ pub fn create_pr(
         base: p.pointer("/base/ref").and_then(|x| x.as_str()).unwrap_or(base).to_string(),
         status: if is_draft { "draft" } else { "open" }.to_string(),
         reviews: "pending".to_string(),
+        approvals: 0,
+        approved_by_me: false,
         comments: 0,
         additions: 0,
         deletions: 0,

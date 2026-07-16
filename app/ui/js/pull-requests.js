@@ -197,15 +197,10 @@ function renderPulls(filter = "") {
     const matchStatus = prCurrentFilter === "all" || p.status === prCurrentFilter;
     return isWatched && matchRepo && matchAccount && matchText && matchStatus;
   });
-  const reviewMap = {
-    approved: { cls: "ok", icon: ICON.check, label: "Approved" },
-    changes: { cls: "danger", icon: ICON.changes, label: "Changes requested" },
-    pending: { cls: "muted", icon: ICON.clock, label: "Review pending" },
-  };
   document.getElementById("prList").innerHTML = list
     .map((p) => {
       const status = ["open", "draft", "merged"].includes(p.status) ? p.status : "open";
-      const rev = reviewMap[p.reviews] || reviewMap.pending;
+      const rev = prReviewChip(p);
       const id = escapeHtml(p.id);
       const repoId = escapeHtml(p.repoId || "");
       const statusTag =

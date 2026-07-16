@@ -34,6 +34,22 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
+// Review chip (colour + label + icon) for a PR row/header. Distinguishes YOUR
+// own approval ("Approved (n)") from approvals by others only ("Others Approved
+// (n)", shown in a lighter green) so a teammate's approval is never misread as
+// your own. `n` is the total approval count. Used by the Pull Requests list,
+// the Changes-tab PR detail, and the PR Review header so all three agree.
+function prReviewChip(pr) {
+  const state = pr && pr.reviews;
+  if (state === "changes") return { cls: "danger", label: "Changes requested", icon: ICON.changes };
+  if (state === "approved") {
+    const n = (pr && pr.approvals) || 0;
+    if (pr && pr.approvedByMe) return { cls: "ok", label: n ? `Approved (${n})` : "Approved", icon: ICON.check };
+    return { cls: "ok-light", label: n ? `Others Approved (${n})` : "Others Approved", icon: ICON.check };
+  }
+  return { cls: "muted", label: "Review pending", icon: ICON.clock };
+}
+
 // A small, dependency-free "markdown-lite" renderer for PR comment bodies
 // (headers, bold/italic, inline code, fenced code blocks, links, images,
 // lists, blockquotes, rules). Input is HTML-escaped FIRST, so nothing it

@@ -299,12 +299,6 @@ const ChangesPage = (() => {
   const CHEV_DOWN = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
   // Restore-from-stash: an up-arrow lifting out of a tray.
   const ACT_RESTORE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/><polyline points="8 8 12 4 16 8"/><line x1="12" y1="4" x2="12" y2="15"/></svg>';
-  // Pull-request review state → chip styling.
-  const REVIEW_MAP = {
-    approved: { cls: "ok", icon: ICON.check, label: "Approved" },
-    changes: { cls: "danger", icon: ICON.changes, label: "Changes requested" },
-    pending: { cls: "muted", icon: ICON.clock, label: "Review pending" },
-  };
   const prStateLabel = (s) => (s === "merged" ? "Merged" : s === "draft" ? "Draft" : "Open");
   function openPrUrl(url) {
     if (!url) return;
@@ -2205,7 +2199,7 @@ const ChangesPage = (() => {
       r.setAttribute("aria-selected", String(selected));
     });
     const initials = (pr.author || "?").slice(0, 2).toUpperCase();
-    const rev = REVIEW_MAP[pr.reviews] || REVIEW_MAP.pending;
+    const rev = prReviewChip(pr);
     $("detailHead").innerHTML = `<div class="detail-msg">${esc(pr.title)}</div>
       <div class="detail-meta"><span class="avatar">${esc(initials)}</span><span class="detail-author" title="${esc(pr.author)}">${esc(pr.author)}</span><span class="hm-dot">·</span><span class="history-when">${esc(pr.updated)}</span><span class="pr-state ${esc(pr.status)}">${prStateLabel(pr.status)}</span></div>
       <div class="pr-detail-branch"><code title="${esc(pr.branch)}">${esc(pr.branch)}</code><span class="pr-arrow">→</span><code title="${esc(pr.base)}">${esc(pr.base)}</code></div>

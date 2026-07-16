@@ -109,15 +109,18 @@ pub fn resolve_token(account: &Account) -> AppResult<String> {
 
 /// Fetch pull requests for a single repo using its matching account.
 /// `repo_id` is the repo's DevCenter id (its path), stamped onto each result.
+/// `me` is the signed-in account's display name, used to flag the user's own
+/// review approval among the reviewers.
 pub fn fetch_for_repo(
     repo_ref: &RepoRef,
     token: &str,
     display: &str,
     repo_id: &str,
+    me: &str,
 ) -> AppResult<Vec<PullRequest>> {
     match repo_ref.provider.as_str() {
-        "github" => github::fetch_pulls(repo_ref, token, display, repo_id),
-        "azure" => azure::fetch_pulls(repo_ref, token, display, repo_id),
+        "github" => github::fetch_pulls(repo_ref, token, display, repo_id, me),
+        "azure" => azure::fetch_pulls(repo_ref, token, display, repo_id, me),
         _ => Ok(vec![]),
     }
 }

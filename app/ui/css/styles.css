@@ -855,6 +855,7 @@ button.chip { font-family: var(--mono); font-size: 11px; font-weight: 500; }
 
 .pr-meta { display: flex; align-items: center; gap: 10px; }
 .chip.review.ok { color: var(--green); background: var(--green-soft); border-color: transparent; }
+.chip.review.ok-light { color: color-mix(in srgb, var(--green) 60%, var(--text-faint)); background: color-mix(in srgb, var(--green) 8%, transparent); border-color: transparent; }
 .chip.review.danger { color: var(--red); background: var(--red-soft); border-color: transparent; }
 .chip.review.muted { color: var(--text-dim); }
 .pr-diff { font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -1979,6 +1980,7 @@ textarea,
   white-space: nowrap;
 }
 .prr-status.ok { color: var(--green); background: var(--green-soft); border-color: transparent; }
+.prr-status.ok-light { color: color-mix(in srgb, var(--green) 60%, var(--text-faint)); background: color-mix(in srgb, var(--green) 8%, transparent); border-color: transparent; }
 .prr-status.danger { color: var(--red); background: var(--red-soft); border-color: transparent; }
 .prr-status.muted { color: var(--text-dim); }
 /* Fixed, compact width so the label swapping ("Vote" -> "Approved" / "Approved+"
@@ -2009,6 +2011,7 @@ textarea,
 .prr-vote-sep { height: 1px; background: var(--border); margin: 5px 4px; }
 .prr-vote-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--text-faint); }
 .prr-vote-dot.ok { background: var(--green); }
+.prr-vote-dot.ok-light { background: color-mix(in srgb, var(--green) 55%, var(--text-faint)); }
 .prr-vote-dot.warn { background: var(--amber); }
 .prr-vote-dot.danger { background: var(--red); }
 .prr-vote-dot.muted { background: var(--text-faint); }
