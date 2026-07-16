@@ -769,12 +769,66 @@ pub fn checkout(path: &Path, branch: &str, stash: bool) -> AppResult<()> {
         .args(["checkout", branch])
         .output()?;
     if !output.status.success() {
-        return Err(AppError::msg(
-            String::from_utf8_lossy(&output.stderr).trim().to_string(),
-        ));
+        let err = String::from_utf8_lossy(&output.stderr);
+        // "Bring my changes": git's plain checkout refuses when a locally
+        // modified file also differs between branches ("would be overwritten
+        // by checkout"). Carry the changes over by stashing, switching, then
+        // popping so they are merged onto the target (GitHub Desktop behavior).
+        if !stash && err.contains("would be overwritten by checkout") {
+            return checkout_carry_via_stash(path, branch);
+        }
+        return Err(AppError::msg(err.trim().to_string()));
     }
 
     restore_autostash(path, branch);
+    Ok(())
+}
+
+/// Carry the working-tree changes to `branch` when a plain checkout is refused
+/// because locally modified files differ between branches. Stashes (including
+/// untracked files), switches, then pops the stash so the changes are merged
+/// onto the target branch. A pop conflict is left in the working tree for the
+/// user to resolve rather than being treated as an error.
+fn checkout_carry_via_stash(path: &Path, branch: &str) -> AppResult<()> {
+    let stash_out = git_cmd()
+        .arg("-C")
+        .arg(path)
+        .args(["stash", "push", "--include-untracked"])
+        .output()?;
+    if !stash_out.status.success() {
+        return Err(AppError::msg(
+            String::from_utf8_lossy(&stash_out.stderr).trim().to_string(),
+        ));
+    }
+
+    let checkout_out = git_cmd()
+        .arg("-C")
+        .arg(path)
+        .args(["checkout", branch])
+        .output()?;
+    if !checkout_out.status.success() {
+        // Restore the working tree to its prior state before surfacing the error.
+        let _ = git_cmd().arg("-C").arg(path).args(["stash", "pop"]).output();
+        return Err(AppError::msg(
+            String::from_utf8_lossy(&checkout_out.stderr).trim().to_string(),
+        ));
+    }
+
+    let pop_out = git_cmd()
+        .arg("-C")
+        .arg(path)
+        .args(["stash", "pop"])
+        .output()?;
+    if !pop_out.status.success() {
+        let err = String::from_utf8_lossy(&pop_out.stderr);
+        // A merge conflict on pop means the changes were carried over but need
+        // manual resolution — that is expected, not a failure. Any other error
+        // is surfaced.
+        if !err.contains("conflict") && !err.contains("CONFLICT") {
+            return Err(AppError::msg(err.trim().to_string()));
+        }
+    }
+
     Ok(())
 }
 
