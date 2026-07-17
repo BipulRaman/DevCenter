@@ -768,7 +768,12 @@ document.addEventListener("contextmenu", (e) => {
   const t = e.target;
   if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
   e.preventDefault();
-  Dropdown.context(e.clientX, e.clientY, [
-    { label: "Reload", icon: ICON.sync, onClick: () => location.reload() },
-  ]);
+  const items = [{ label: "Reload", icon: ICON.sync, onClick: () => location.reload() }];
+  // On the Git Board (repo) page, offer “Fetch All” below Reload.
+  const active = document.querySelector(".page.active");
+  const onRepoPage = active && active.id === "page-git-board";
+  if (onRepoPage && DC && DC.hasBackend && typeof fetchAllRepos === "function") {
+    items.push({ label: "Fetch All", icon: ICON.sync, onClick: () => fetchAllRepos() });
+  }
+  Dropdown.context(e.clientX, e.clientY, items);
 });

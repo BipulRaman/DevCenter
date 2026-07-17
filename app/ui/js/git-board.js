@@ -139,12 +139,22 @@ function renderRepos(filter = "") {
           : "";
       const aheadN = r.ahead || 0;
       const behindN = r.behind || 0;
-      const syncChip =
-        aheadN || behindN
-          ? `<span class="chip sync-chip" title="${aheadN} ahead, ${behindN} behind">${
-              aheadN ? `<span>${ICON.up}${aheadN}</span>` : ""
-            }${behindN ? `<span>${ICON.down}${behindN}</span>` : ""}</span>`
-          : "";
+      const canSync = DC && DC.hasBackend;
+      // Ahead ↑ = local commits to PUSH; behind ↓ = remote commits to PULL.
+      // On the desktop app each is a button; in the browser they're plain badges.
+      // The inner <span> keeps the icon+count on one normalized line box so the
+      // button height matches the sibling chips (branch/dirty).
+      const pushChip = !aheadN
+        ? ""
+        : canSync
+          ? `<button class="chip sync-chip sync-push" data-push="${i}" title="Push ${aheadN} commit${aheadN === 1 ? "" : "s"} to the remote"><span>${ICON.up}${aheadN}</span></button>`
+          : `<span class="chip sync-chip sync-push"><span>${ICON.up}${aheadN}</span></span>`;
+      const pullChip = !behindN
+        ? ""
+        : canSync
+          ? `<button class="chip sync-chip sync-pull" data-pull="${i}" title="Pull ${behindN} commit${behindN === 1 ? "" : "s"} from the remote"><span>${ICON.down}${behindN}</span></button>`
+          : `<span class="chip sync-chip sync-pull"><span>${ICON.down}${behindN}</span></span>`;
+      const syncChip = pushChip + pullChip;
       const dotClass = r.status === "dirty" ? "error" : "running";
       const tagChips = (r.tags || [])
         .map((t) => `<span class="chip tag-chip">${ICON.tag}${escapeHtml(t)}</span>`)
@@ -169,7 +179,7 @@ function renderRepos(filter = "") {
           <div class="repo-sub">
             <span class="repo-path">${escapeHtml(r.path || "")}</span>
             <span class="repo-dot">·</span>
-            <span>${ICON.sync}${fetchLabel}</span>
+            <span class="repo-fetch" data-fetch-status="${i}"${canSync ? ` data-fetch-now="${i}" title="Fetch now"` : ""}>${ICON.sync}${fetchLabel}</span>
           </div>
         </div>
         <div class="repo-actions">
@@ -236,9 +246,12 @@ function renderRepos(filter = "") {
     }
   };
 
-  // Fetch from the remote, then refresh the affected row.
+  // Fetch from the remote, then refresh the affected row. Spins the sync icon
+  // next to “Fetched … ago” while in flight (menu / right-click entry point).
   const fetchRepoAction = async (r) => {
     if (!DC || !DC.hasBackend) return;
+    const statusEl = document.querySelector(`.repo-fetch[data-fetch-status="${repos.indexOf(r)}"]`);
+    if (statusEl) statusEl.classList.add("fetching");
     try {
       const updated = await DC.fetchRepo(r.id);
       const at = repos.findIndex((x) => x.id === updated.id);
@@ -246,6 +259,7 @@ function renderRepos(filter = "") {
       renderRepos(document.getElementById("repoSearch").value);
     } catch (e) {
       console.error("fetchRepo failed", e);
+      if (statusEl) statusEl.classList.remove("fetching");
       await Modal.alert({ title: "Fetch failed", message: String(e) });
     }
   };
@@ -328,6 +342,72 @@ function renderRepos(filter = "") {
       await Modal.alert({ title: "Fetch failed", message: String(e) });
       btn.disabled = false;
       btn.innerHTML = ICON.sync;
+    }
+  });
+
+  // Clicking the “Fetched … ago” status (icon + label) fetches now, spinning
+  // the icon via fetchRepoAction. Ignore repeat clicks while already fetching.
+  on(grid, "[data-fetch-now]", "click", (el, e) => {
+    e.stopPropagation();
+    if (el.classList.contains("fetching")) return;
+    const r = repos[Number(el.dataset.fetchNow)];
+    if (r) fetchRepoAction(r);
+  });
+
+  // Push local commits (ahead ↑) to the remote, then refresh the row.
+  on(grid, "[data-push]", "click", async (btn, e) => {
+    e.stopPropagation();
+    if (!DC || !DC.hasBackend) return;
+    const r = repos[Number(btn.dataset.push)];
+    if (!r || btn.disabled) return;
+    const prev = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = `<span class="spin">${ICON.sync}</span>`;
+    try {
+      const cs = await DC.gitPush(r.id);
+      const at = repos.findIndex((x) => x.id === r.id);
+      if (at >= 0 && cs) {
+        repos[at].ahead = cs.ahead || 0;
+        repos[at].behind = cs.behind || 0;
+        if (cs.branch) repos[at].branch = cs.branch;
+      }
+      renderRepos(document.getElementById("repoSearch").value);
+    } catch (err) {
+      console.error("push failed", err);
+      btn.disabled = false;
+      btn.innerHTML = prev;
+      await Modal.alert({ title: "Push failed", message: String(err) });
+    }
+  });
+
+  // Pull remote commits (behind ↓). A merge conflict is left in-progress by the
+  // backend (not an error) — jump into the Changes page for that repo so its
+  // conflict banner / resolver can handle it.
+  on(grid, "[data-pull]", "click", async (btn, e) => {
+    e.stopPropagation();
+    if (!DC || !DC.hasBackend) return;
+    const r = repos[Number(btn.dataset.pull)];
+    if (!r || btn.disabled) return;
+    const prev = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = `<span class="spin">${ICON.sync}</span>`;
+    try {
+      const cs = await DC.gitPull(r.id, false);
+      const conflicted = cs && Array.isArray(cs.files) && cs.files.some((f) => f.status === "conflicted");
+      const at = repos.findIndex((x) => x.id === r.id);
+      if (at >= 0 && cs) {
+        repos[at].ahead = cs.ahead || 0;
+        repos[at].behind = cs.behind || 0;
+        if (cs.branch) repos[at].branch = cs.branch;
+        if (conflicted) repos[at].status = "dirty";
+      }
+      if (conflicted) { openInChanges(r, "changes"); return; }
+      renderRepos(document.getElementById("repoSearch").value);
+    } catch (err) {
+      console.error("pull failed", err);
+      btn.disabled = false;
+      btn.innerHTML = prev;
+      await Modal.alert({ title: "Pull failed", message: String(err) });
     }
   });
 
@@ -421,6 +501,14 @@ function renderRepos(filter = "") {
             if (!updated) return; // cancelled
             const at = repos.findIndex((x) => x.id === updated.id);
             if (at >= 0) repos[at] = updated;
+            // If the new branch has uncommitted changes carried over or merge
+            // conflicts (both surface as status "dirty"), take the user to the
+            // Changes page so they can resolve/commit before continuing.
+            if (updated.status === "dirty") {
+              Dropdown.close();
+              openInChanges(updated, "changes");
+              return;
+            }
             renderRepos(document.getElementById("repoSearch").value);
           } catch (e) {
             console.error("checkout failed", e);
@@ -430,4 +518,26 @@ function renderRepos(filter = "") {
       });
     });
   });
+}
+
+// Fetch every repository in the list (from the global “Fetch All” context-menu
+// action on the Git Board). Runs in parallel, spinning each row's fetch icon,
+// then re-renders once all fetches settle.
+async function fetchAllRepos() {
+  if (!DC || !DC.hasBackend || !repos.length) return;
+  document.querySelectorAll(".repo-fetch[data-fetch-now]").forEach((el) => el.classList.add("fetching"));
+  const targets = repos.slice();
+  await Promise.allSettled(
+    targets.map(async (r) => {
+      try {
+        const updated = await DC.fetchRepo(r.id);
+        const at = repos.findIndex((x) => x.id === updated.id);
+        if (at >= 0) repos[at] = updated;
+      } catch (e) {
+        console.error("fetchRepo failed", r.id, e);
+      }
+    })
+  );
+  const search = document.getElementById("repoSearch");
+  renderRepos(search ? search.value : "");
 }
