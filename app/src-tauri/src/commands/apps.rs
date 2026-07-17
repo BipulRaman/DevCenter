@@ -70,6 +70,25 @@ pub async fn update_app(app: AppDef, state: State<'_, AppState>) -> AppResult<Ap
     .map_err(|e| AppError::msg(e.to_string()))?
 }
 
+/// Update just an app's tags (from the tag editor) and return the refreshed view.
+#[tauri::command]
+pub async fn set_app_tags(id: i64, tags: Vec<String>, state: State<'_, AppState>) -> AppResult<AppView> {
+    let st = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || -> AppResult<AppView> {
+        {
+            let conn = st.db.lock().unwrap();
+            store::set_app_tags(&conn, id, &tags)?;
+        }
+        let def = {
+            let conn = st.db.lock().unwrap();
+            store::get_app(&conn, id)?.ok_or_else(|| AppError::msg("App not found"))?
+        };
+        Ok(view_of(&st, def))
+    })
+    .await
+    .map_err(|e| AppError::msg(e.to_string()))?
+}
+
 /// Stop (if running) and delete an app.
 #[tauri::command]
 pub async fn delete_app(id: i64, state: State<'_, AppState>, app: AppHandle) -> AppResult<()> {

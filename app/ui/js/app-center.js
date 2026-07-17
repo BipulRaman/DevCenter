@@ -14,22 +14,30 @@ function appRunLine(a) {
 // App summary panels were removed; kept as a no-op so callers stay harmless.
 function renderAppStats() {}
 
+const APP_TAG_FILTER_KEY = "dc.apps.tagFilter";
+let appTagFilter = loadFilterSet(APP_TAG_FILTER_KEY); // selected tags; empty = all
 let appStatusFilter = "all"; // "all" | "running" | "stopped"
 
 function renderApps(filter = "") {
   // Re-rendering replaces the rows; close any open kebab menu first so it can't
   // be orphaned (its anchor button is about to be removed from the DOM).
   if (typeof Dropdown !== "undefined") Dropdown.close();
+  renderAppTagFilter();
   const f = filter.toLowerCase();
   const list = apps.filter((a) => {
     const status = a.status || "stopped";
+    const tags = a.tags || [];
     const matchText =
-      a.name.toLowerCase().includes(f) || (a.appType || "").toLowerCase().includes(f) || (a.serveMode || "").includes(f);
+      a.name.toLowerCase().includes(f) ||
+      (a.appType || "").toLowerCase().includes(f) ||
+      (a.serveMode || "").includes(f) ||
+      tags.some((t) => t.toLowerCase().includes(f));
     const matchStatus =
       appStatusFilter === "all" ||
       (appStatusFilter === "running" && (status === "running" || status === "building")) ||
       (appStatusFilter === "stopped" && status !== "running" && status !== "building");
-    return matchText && matchStatus;
+    const matchTag = appTagFilter.size === 0 || tags.some((t) => appTagFilter.has(t));
+    return matchText && matchStatus && matchTag;
   });
   document.getElementById("appList").innerHTML = list
     .map((a) => {
@@ -45,6 +53,9 @@ function renderApps(filter = "") {
         : "";
       const meta = [];
       if (running && a.uptime) meta.push(escapeHtml(a.uptime));
+      const tagChips = (a.tags || [])
+        .map((t) => `<span class="chip tag-chip">${ICON.tag}${escapeHtml(t)}</span>`)
+        .join("");
       const control = building
         ? `<button class="btn btn-ghost btn-sm" data-stop="${a.id}"><span class="spin">${ICON.sync}</span>Building…</button>`
         : running
@@ -59,6 +70,7 @@ function renderApps(filter = "") {
           <div class="app-title-row">
             <span class="app-name">${escapeHtml(a.name)}</span>
             <span class="app-state ${status}">${statusLabel}</span>
+            ${tagChips}
           </div>
           <div class="app-sub">
             ${a.appType ? `<span class="app-type-label">${escapeHtml(a.appType)}</span>` : ""}
@@ -77,12 +89,161 @@ function renderApps(filter = "") {
     .join("");
   if (!list.length)
     document.getElementById("appList").innerHTML = empty(
-      f || appStatusFilter !== "all"
+      f || appStatusFilter !== "all" || appTagFilter.size
         ? "No applications match your filters."
         : "No applications yet. Click “New application” to add one."
     );
 
   setupAppListEvents();
+}
+
+// ---------- App tags: filter bar + editor (mirrors repo tags in tags.js) ----------
+let appTagFilterSig = ""; // signature of the last-rendered tag menu (rebuild guard)
+function renderAppTagFilter() {
+  const select = document.getElementById("appTagSelect");
+  const menu = document.getElementById("appTagMenu");
+  const label = document.getElementById("appTagLabel");
+  if (!select || !menu) return;
+  // Aggregate tags across all apps with counts.
+  const counts = new Map();
+  apps.forEach((a) => (a.tags || []).forEach((t) => counts.set(t, (counts.get(t) || 0) + 1)));
+  if (!counts.size) {
+    select.hidden = true;
+    // Only reset once apps have loaded; the initial pre-hydration render has an
+    // empty list and would otherwise wipe the selection restored from storage.
+    if (apps.length) { appTagFilter.clear(); saveFilterSet(APP_TAG_FILTER_KEY, appTagFilter); }
+    appTagFilterSig = "";
+    return;
+  }
+  select.hidden = false;
+  const tags = [...counts.keys()].sort((a, b) => a.localeCompare(b));
+  // Drop any selected tags that no longer exist.
+  appTagFilter = new Set([...appTagFilter].filter((t) => counts.has(t)));
+  saveFilterSet(APP_TAG_FILTER_KEY, appTagFilter);
+
+  // Skip the DOM rebuild when nothing affecting the menu changed (WebView2-safe).
+  const sig = tags.map((t) => `${t}:${counts.get(t)}`).join("|") + "#" + [...appTagFilter].sort().join(",");
+  if (sig === appTagFilterSig) return;
+  appTagFilterSig = sig;
+
+  menu.innerHTML =
+    `<label class="multiselect-opt all">
+       <input type="checkbox" id="appTagAll" ${appTagFilter.size === 0 ? "checked" : ""} />
+       <span>All tags</span>
+     </label>
+     <div class="multiselect-sep"></div>` +
+    tags
+      .map(
+        (t) => `<label class="multiselect-opt">
+          <input type="checkbox" value="${escapeHtml(t)}" ${appTagFilter.has(t) ? "checked" : ""} />
+          <span>${escapeHtml(t)}</span>
+          <span class="multiselect-count">${counts.get(t)}</span>
+        </label>`
+      )
+      .join("");
+
+  if (appTagFilter.size === 0) label.textContent = "All tags";
+  else if (appTagFilter.size === 1) label.textContent = [...appTagFilter][0];
+  else label.textContent = `${appTagFilter.size} tags`;
+
+  const allBox = document.getElementById("appTagAll");
+  if (allBox) {
+    allBox.addEventListener("change", () => {
+      appTagFilter.clear();
+      saveFilterSet(APP_TAG_FILTER_KEY, appTagFilter);
+      renderApps(document.getElementById("appSearch").value || "");
+    });
+  }
+  on(menu, 'input[type="checkbox"][value]', "change", (box) => {
+    if (box.checked) appTagFilter.add(box.value);
+    else appTagFilter.delete(box.value);
+    saveFilterSet(APP_TAG_FILTER_KEY, appTagFilter);
+    renderApps(document.getElementById("appSearch").value || "");
+  });
+}
+
+function openAppTagEditor(app) {
+  let tags = [...(app.tags || [])];
+  const suggestions = [...new Set(apps.flatMap((a) => a.tags || []))].sort();
+  Modal.custom({
+    title: `Tags · ${app.name}`,
+    render: (body, foot, close, mkBtn) => {
+      body.innerHTML = `
+        <div class="tag-edit-list" id="appTagList"></div>
+        <input class="modal-input" id="appTagInput" placeholder="Add a tag and press Enter" spellcheck="false" autocomplete="off" maxlength="24" />
+        <div class="tag-suggest" id="appTagSuggest"></div>
+        <div class="modal-error" id="appTagErr"></div>`;
+      const listEl = body.querySelector("#appTagList");
+      const input = body.querySelector("#appTagInput");
+      const suggestEl = body.querySelector("#appTagSuggest");
+
+      const drawList = () => {
+        listEl.innerHTML = tags.length
+          ? tags.map((t, i) => `<span class="tag-edit">${escapeHtml(t)}<button data-rm="${i}" title="Remove">${ICON.x}</button></span>`).join("")
+          : `<span style="color:var(--text-faint);font-size:12.5px">No tags yet.</span>`;
+        on(listEl, "[data-rm]", "click", (b) => {
+          tags.splice(Number(b.dataset.rm), 1);
+          drawList();
+          drawSuggest();
+        });
+      };
+      const addTag = (raw) => {
+        const t = raw.trim();
+        if (!t) return;
+        if (!tags.some((x) => x.toLowerCase() === t.toLowerCase())) tags.push(t);
+        input.value = "";
+        drawList();
+        drawSuggest();
+      };
+      const drawSuggest = () => {
+        const avail = suggestions.filter((s) => !tags.some((t) => t.toLowerCase() === s.toLowerCase()));
+        suggestEl.innerHTML = avail.length
+          ? `<span class="tag-suggest-label">Existing tags</span>` + avail.map((s) => `<button data-add="${escapeHtml(s)}">${escapeHtml(s)}</button>`).join("")
+          : "";
+        on(suggestEl, "[data-add]", "click", (b) => addTag(b.dataset.add));
+      };
+
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          addTag(input.value);
+        } else if (e.key === "Backspace" && !input.value && tags.length) {
+          tags.pop();
+          drawList();
+          drawSuggest();
+        }
+      });
+      drawList();
+      drawSuggest();
+      setTimeout(() => input.focus(), 40);
+
+      const cancel = mkBtn("btn-ghost", "Cancel");
+      cancel.addEventListener("click", () => close(null));
+      const save = mkBtn("btn-primary", "Save");
+      save.addEventListener("click", async () => {
+        if (input.value.trim()) addTag(input.value);
+        save.disabled = true;
+        save.textContent = "Saving…";
+        try {
+          if (DC && DC.hasBackend) {
+            const updated = await DC.setAppTags(Number(app.id), tags);
+            const at = apps.findIndex((x) => String(x.id) === String(updated.id));
+            if (at >= 0) apps[at] = updated;
+          } else {
+            app.tags = tags;
+          }
+          close(true);
+          renderApps(document.getElementById("appSearch").value || "");
+        } catch (e) {
+          console.error("setAppTags failed", e);
+          body.querySelector("#appTagErr").textContent = String(e);
+          save.disabled = false;
+          save.textContent = "Save";
+        }
+      });
+      foot.append(cancel, save);
+    },
+  });
 }
 
 function appById(id) {
@@ -123,8 +284,7 @@ function setupAppListEvents() {
   // Shared actions menu used by BOTH the kebab (click) and a right-click context
   // menu on the card — mirroring the Git Board repo cards.
   const appMenuItems = (a) => {
-    const items = [{ label: "Edit", icon: ICON.pencil, onClick: () => openAppForm(a) }];
-    if (DC && DC.hasBackend) {
+    const items = [{ label: "Edit", icon: ICON.pencil, onClick: () => openAppForm(a) }];      items.push({ label: "Edit tags", icon: ICON.tag, onClick: () => openAppTagEditor(a) });    if (DC && DC.hasBackend) {
       items.push(
         { label: "Open folder", icon: ICON.folder, onClick: () => DC.openPath(a.projectDir).catch((err) => console.error(err)) },
         { label: "Open terminal", icon: ICON.terminal, onClick: () => DC.openTerminal(a.projectDir).catch((err) => console.error(err)) }

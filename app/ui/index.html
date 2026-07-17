@@ -383,6 +383,14 @@
               <button class="seg-btn" data-appfilter="running" aria-pressed="false">Running</button>
               <button class="seg-btn" data-appfilter="stopped" aria-pressed="false">Stopped</button>
             </div>
+            <div class="multiselect" id="appTagSelect" hidden>
+              <button class="multiselect-btn" id="appTagBtn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="appTagMenu">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4l8.2 8.2a2 2 0 0 0 2.8 0l6.8-6.8a2 2 0 0 0 0-2.8Z"/><circle cx="7" cy="7" r="1.2" fill="currentColor"/></svg>
+                <span id="appTagLabel">All tags</span>
+                <svg class="caret" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+              <div class="multiselect-menu" id="appTagMenu" role="group" aria-label="Application tags"></div>
+            </div>
             <button class="btn btn-ghost" id="newAppBtn">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
               New application

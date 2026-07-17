@@ -51,9 +51,16 @@ pub fn open(path: &std::path::Path) -> AppResult<Connection> {
              env         TEXT NOT NULL DEFAULT '[]',
              port        INTEGER,
              autostart   INTEGER NOT NULL DEFAULT 0,
-             ord         INTEGER NOT NULL DEFAULT 0
+             ord         INTEGER NOT NULL DEFAULT 0,
+             tags        TEXT NOT NULL DEFAULT '[]'
          );",
     )?;
+    // Migration: add the apps.tags column to databases created before tags
+    // existed. The error raised when the column already exists is ignored.
+    let _ = conn.execute(
+        "ALTER TABLE apps ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'",
+        [],
+    );
     Ok(conn)
 }
 
@@ -241,6 +248,7 @@ pub fn delete_account(conn: &Connection, id: &str) -> AppResult<()> {
 fn row_to_app(row: &rusqlite::Row) -> rusqlite::Result<AppDef> {
     let commands: String = row.get(5)?;
     let env: String = row.get(9)?;
+    let tags: String = row.get(13)?;
     Ok(AppDef {
         id: row.get(0)?,
         name: row.get(1)?,
@@ -255,11 +263,12 @@ fn row_to_app(row: &rusqlite::Row) -> rusqlite::Result<AppDef> {
         port: row.get::<_, Option<i64>>(10)?.map(|p| p as u16),
         autostart: row.get::<_, i64>(11)? != 0,
         order: row.get(12)?,
+        tags: serde_json::from_str(&tags).unwrap_or_default(),
     })
 }
 
 const APP_COLS: &str =
-    "id, name, app_type, serve_mode, project_dir, commands, static_dir, script_file, spec_file, env, port, autostart, ord";
+    "id, name, app_type, serve_mode, project_dir, commands, static_dir, script_file, spec_file, env, port, autostart, ord, tags";
 
 /// List all apps ordered by display order then id.
 pub fn list_apps(conn: &Connection) -> AppResult<Vec<AppDef>> {
@@ -289,8 +298,8 @@ pub fn insert_app(conn: &Connection, a: &AppDef) -> AppResult<i64> {
     let next_order: i64 =
         conn.query_row("SELECT COALESCE(MAX(ord), 0) + 1 FROM apps", [], |r| r.get(0))?;
     conn.execute(
-        "INSERT INTO apps (name, app_type, serve_mode, project_dir, commands, static_dir, script_file, spec_file, env, port, autostart, ord)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+        "INSERT INTO apps (name, app_type, serve_mode, project_dir, commands, static_dir, script_file, spec_file, env, port, autostart, ord, tags)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
         rusqlite::params![
             a.name,
             a.app_type,
@@ -304,6 +313,7 @@ pub fn insert_app(conn: &Connection, a: &AppDef) -> AppResult<i64> {
             a.port.map(|p| p as i64),
             a.autostart as i64,
             next_order,
+            serde_json::to_string(&a.tags).unwrap_or_else(|_| "[]".into()),
         ],
     )?;
     Ok(conn.last_insert_rowid())
@@ -313,7 +323,7 @@ pub fn insert_app(conn: &Connection, a: &AppDef) -> AppResult<i64> {
 pub fn update_app(conn: &Connection, a: &AppDef) -> AppResult<()> {
     conn.execute(
         "UPDATE apps SET name=?2, app_type=?3, serve_mode=?4, project_dir=?5, commands=?6,
-            static_dir=?7, script_file=?8, spec_file=?9, env=?10, port=?11, autostart=?12 WHERE id=?1",
+            static_dir=?7, script_file=?8, spec_file=?9, env=?10, port=?11, autostart=?12, tags=?13 WHERE id=?1",
         rusqlite::params![
             a.id,
             a.name,
@@ -327,7 +337,22 @@ pub fn update_app(conn: &Connection, a: &AppDef) -> AppResult<()> {
             serde_json::to_string(&a.env).unwrap_or_else(|_| "[]".into()),
             a.port.map(|p| p as i64),
             a.autostart as i64,
+            serde_json::to_string(&a.tags).unwrap_or_else(|_| "[]".into()),
         ],
+    )?;
+    Ok(())
+}
+
+/// Replace just the tags for an app (lightweight update from the tag editor).
+pub fn set_app_tags(conn: &Connection, id: i64, tags: &[String]) -> AppResult<()> {
+    let cleaned: Vec<String> = tags
+        .iter()
+        .map(|t| t.trim().to_string())
+        .filter(|t| !t.is_empty())
+        .collect();
+    conn.execute(
+        "UPDATE apps SET tags=?2 WHERE id=?1",
+        rusqlite::params![id, serde_json::to_string(&cleaned).unwrap_or_else(|_| "[]".into())],
     )?;
     Ok(())
 }

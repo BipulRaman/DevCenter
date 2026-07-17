@@ -44,6 +44,9 @@ pub struct AppDef {
     pub autostart: bool,
     #[serde(default)]
     pub order: i64,
+    /// User-assigned tags for grouping/filtering (mirrors Repo tags).
+    #[serde(default)]
+    pub tags: Vec<String>,
 }
 
 /// An application with its live runtime state, returned to the UI.

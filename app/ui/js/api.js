@@ -146,6 +146,7 @@
     listPresets: () => (hasBackend ? invoke("list_presets") : Promise.resolve(null)),
     createApp: (app) => invoke("create_app", { app }),
     updateApp: (app) => invoke("update_app", { app }),
+    setAppTags: (id, tags) => invoke("set_app_tags", { id, tags }),
     deleteApp: (id) => invoke("delete_app", { id }),
     reorderApps: (ids) => invoke("reorder_apps", { ids }),
     startApp: (id) => invoke("start_app", { id }),

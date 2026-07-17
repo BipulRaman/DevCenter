@@ -262,6 +262,7 @@ pub fn run() {
             commands::apps::list_apps,
             commands::apps::create_app,
             commands::apps::update_app,
+            commands::apps::set_app_tags,
             commands::apps::delete_app,
             commands::apps::reorder_apps,
             commands::apps::start_app,

@@ -63,6 +63,7 @@ wireMultiselect("prAccountSelect", "prAccountBtn");
 wireMultiselect("repoTagSelect", "repoTagBtn");
 wireMultiselect("repoAccountSelect", "repoAccountBtn");
 wireMultiselect("chgAccountSelect", "chgAccountBtn");
+wireMultiselect("appTagSelect", "appTagBtn");
 
 document.querySelectorAll(".seg").forEach((group) => {
   group.addEventListener("keydown", (e) => {
