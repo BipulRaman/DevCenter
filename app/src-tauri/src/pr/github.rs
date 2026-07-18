@@ -14,7 +14,7 @@ fn get(url: &str, token: &str) -> AppResult<Value> {
         .timeout(Duration::from_secs(20))
         .set("Authorization", &format!("Bearer {token}"))
         .set("Accept", "application/vnd.github+json")
-        .set("User-Agent", "DevCenter")
+        .set("User-Agent", crate::app_name())
         .set("X-GitHub-Api-Version", "2022-11-28")
         .call()
     {
@@ -39,7 +39,7 @@ fn send(method: &str, url: &str, token: &str, body: &Value) -> AppResult<Value> 
         .timeout(Duration::from_secs(20))
         .set("Authorization", &format!("Bearer {token}"))
         .set("Accept", "application/vnd.github+json")
-        .set("User-Agent", "DevCenter")
+        .set("User-Agent", crate::app_name())
         .set("X-GitHub-Api-Version", "2022-11-28");
     match req.send_json(body.clone()) {
         Ok(resp) => Ok(resp.into_json::<Value>().unwrap_or(Value::Null)),

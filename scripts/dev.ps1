@@ -1,4 +1,4 @@
-# DevCenter — run in hot-reload development mode.
+# App — run in hot-reload development mode.
 #   • Rust changes        -> auto recompile + relaunch the app
 #   • HTML/CSS/JS changes  -> auto reload the WebView
 # Usage:  ./scripts/dev.ps1

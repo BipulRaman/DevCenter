@@ -15,6 +15,25 @@ use tauri_plugin_updater::UpdaterExt;
 
 use state::AppState;
 
+use std::sync::OnceLock;
+
+/// The application's display name (`productName` from tauri.conf.json), captured
+/// once at startup. Non-UI code (e.g. the HTTP `User-Agent`) reads it via
+/// `app_name()` so the brand always comes from the single config source instead
+/// of a hardcoded literal.
+static APP_NAME: OnceLock<String> = OnceLock::new();
+
+/// Record the app's display name for later non-UI use. Called once from setup.
+fn set_app_name(name: &str) {
+    let _ = APP_NAME.set(name.to_string());
+}
+
+/// The app's display name, or a compile-time fallback before it's captured
+/// (e.g. in unit tests that don't boot Tauri).
+pub(crate) fn app_name() -> &'static str {
+    APP_NAME.get().map(String::as_str).unwrap_or("DevGitCenter")
+}
+
 #[derive(Clone, Serialize)]
 struct UpdateState {
     status: String,
@@ -109,11 +128,35 @@ fn close_splashscreen(app: tauri::AppHandle) {
 /// frontend's first command call could beat `.manage()`.
 ///
 /// The identifier must match `tauri.conf.json` so the same database file is used.
-const APP_IDENTIFIER: &str = "in.bipul.devcenter";
+/// The bundle identifier (`identifier` in tauri.conf.json), captured once at
+/// startup from the parsed Tauri config so it is never duplicated as a literal.
+/// The per-user data-folder name and the keychain service both derive from this.
+static APP_IDENTIFIER: OnceLock<String> = OnceLock::new();
+
+/// Record the bundle identifier for later use (data dir, secrets). Called once
+/// from `run` before the event loop starts.
+fn set_app_identifier(id: &str) {
+    let _ = APP_IDENTIFIER.set(id.to_string());
+}
+
+/// The bundle identifier, or a fallback matching tauri.conf.json before it is
+/// captured (e.g. in unit tests that don't boot Tauri). Must equal the config
+/// value so the same data folder / credential entries are used.
+pub(crate) fn app_identifier() -> &'static str {
+    APP_IDENTIFIER
+        .get()
+        .map(String::as_str)
+        .unwrap_or("in.bipul.devcenter")
+}
 
 /// Previous bundle identifier, kept so we can migrate a user's data one time
-/// after the identifier changed (see `migrate_legacy_data_dir`).
+/// after the identifier changed (see `migrate_legacy_data_dir`). This is a fixed
+/// historical value — it is NOT in the current config, so it stays a literal.
 const LEGACY_APP_IDENTIFIER: &str = "com.devcenter.desktop";
+
+/// Internal database filename. Deliberately stable and independent of the brand
+/// so renaming the app never orphans a user's existing data.
+const DB_FILENAME: &str = "devcenter.db";
 
 /// The platform-specific base directory that holds per-app data folders
 /// (`<base>/<identifier>`), mirroring Tauri's `app_data_dir()` resolution but
@@ -141,7 +184,7 @@ fn platform_data_base() -> std::path::PathBuf {
 }
 
 fn resolve_app_data_dir() -> std::path::PathBuf {
-    platform_data_base().join(APP_IDENTIFIER)
+    platform_data_base().join(app_identifier())
 }
 
 /// Recursively copy the contents of `src` into `dst`, creating `dst` as needed.
@@ -169,7 +212,7 @@ fn migrate_legacy_data_dir(new_dir: &std::path::Path) {
 
     // Nothing to do if there is no legacy folder, or if we already migrated
     // (the new folder already holds a database).
-    if !legacy_dir.is_dir() || new_dir.join("devcenter.db").exists() {
+    if !legacy_dir.is_dir() || new_dir.join(DB_FILENAME).exists() {
         return;
     }
 
@@ -180,6 +223,12 @@ fn migrate_legacy_data_dir(new_dir: &std::path::Path) {
 }
 
 pub fn run() {
+    // Parse the bundled Tauri config once up front so the bundle identifier (and
+    // thus the data-folder name and keychain service) comes from the single
+    // source of truth in tauri.conf.json rather than a duplicated literal.
+    let context = tauri::generate_context!();
+    set_app_identifier(&context.config().identifier);
+
     // Open the database and register application state BEFORE the Tauri event
     // loop starts. The main window is created (hidden) at startup and its
     // frontend invokes `list_repos` immediately — if the state were only
@@ -189,7 +238,7 @@ pub fn run() {
     let dir = resolve_app_data_dir();
     let _ = std::fs::create_dir_all(&dir);
     migrate_legacy_data_dir(&dir);
-    let conn = store::open(&dir.join("devcenter.db")).expect("failed to open DevCenter database");
+    let conn = store::open(&dir.join(DB_FILENAME)).expect("failed to open the app database");
     let app_state = AppState::new(conn);
 
     tauri::Builder::default()
@@ -198,6 +247,10 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
+            // Capture the display name (productName) so non-UI code can derive
+            // the brand from the single config source of truth.
+            set_app_name(&app.package_info().name);
+
             // Safety net: if the frontend never signals it's ready (JS error,
             // etc.), reveal the main window and dismiss the splash after a delay
             // so the app can never get stuck on the loading screen.
@@ -220,6 +273,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             close_splashscreen,
             commands::os::app_version,
+            commands::os::app_name,
             commands::os::check_for_updates,
             commands::os::install_update,
             commands::os::open_path,
@@ -320,7 +374,7 @@ pub fn run() {
             commands::apps::stop_all_apps,
             commands::apps::app_logs,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running DevCenter");
+        .run(context)
+        .expect("error while running the app");
 }
 

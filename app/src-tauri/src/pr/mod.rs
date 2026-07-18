@@ -108,7 +108,7 @@ pub fn resolve_token(account: &Account) -> AppResult<String> {
 }
 
 /// Fetch pull requests for a single repo using its matching account.
-/// `repo_id` is the repo's DevCenter id (its path), stamped onto each result.
+/// `repo_id` is the repo's id (its path), stamped onto each result.
 /// `me` is the signed-in account's display name, used to flag the user's own
 /// review approval among the reviewers.
 pub fn fetch_for_repo(

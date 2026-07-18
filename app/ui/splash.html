@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>DevCenter</title>
+  <title>DevGitCenter</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body {
@@ -65,9 +65,23 @@
         <path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/>
       </svg>
     </div>
-    <div class="title">DevCenter</div>
+    <div class="title">DevGitCenter</div>
     <div class="sub">Desktop</div>
     <div class="bar"></div>
   </div>
+  <script>
+    // Derive the brand from the single source of truth (productName, via the
+    // app_name command) so the splash matches the rest of the app after a rebrand.
+    (function () {
+      var T = window.__TAURI__;
+      if (!T || !T.core) return;
+      T.core.invoke("app_name").then(function (name) {
+        if (!name) return;
+        document.title = name;
+        var el = document.querySelector(".title");
+        if (el) el.textContent = name;
+      }).catch(function () {});
+    })();
+  </script>
 </body>
 </html>

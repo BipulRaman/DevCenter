@@ -1,6 +1,6 @@
-# DevCenter
+# DevGitCenter
 
-DevCenter is a cross-platform Tauri desktop app for tracking Git repositories,
+DevGitCenter is a cross-platform Tauri desktop app for tracking Git repositories,
 pull requests and local apps.
 
 ## Platforms

@@ -1,4 +1,4 @@
-# One-off: download the (variable) Google Fonts woff2 files DevCenter uses and
+# One-off: download the (variable) Google Fonts woff2 files App uses and
 # generate a local fonts.css, so the app no longer depends on the Google Fonts
 # CDN at runtime. Inter/JetBrains Mono are variable fonts — one file per subset
 # covers the whole weight range, so we emit a single ranged @font-face each.

@@ -89,7 +89,7 @@ pub struct PullRequest {
     pub title: String,
     /// Display name of the repository this PR belongs to.
     pub repo: String,
-    /// The repository's DevCenter id (its path) — lets the UI open the PR
+    /// The repository's id (its path) — lets the UI open the PR
     /// Review page (or the per-repo diff) without re-resolving the repo.
     pub repo_id: String,
     pub author: String,

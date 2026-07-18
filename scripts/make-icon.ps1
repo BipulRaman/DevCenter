@@ -1,4 +1,4 @@
-# Generates a 1024x1024 DevCenter app icon (layers glyph on indigo->purple gradient).
+# Generates a 1024x1024 app icon (layers glyph on indigo->purple gradient).
 Add-Type -AssemblyName System.Drawing
 
 $size = 1024

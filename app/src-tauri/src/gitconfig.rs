@@ -17,7 +17,7 @@
 //! `~/.gitconfig-contoso`) that overrides `[user]` when one of its conditions
 //! matches the repository.
 //!
-//! DevCenter *manages* three kinds of sections in the global config — the
+//! The app *manages* three kinds of sections in the global config — the
 //! default `[user]`, every recognized `[includeIf]` (whose condition is
 //! `hasconfig:remote.*.url:` or `gitdir:`), and every `[credential
 //! "azrepos:org/*"]` — regenerating them from the model on save. Every other
@@ -97,7 +97,7 @@ fn home_dir() -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
-/// Path to the global `.gitconfig` DevCenter manages (`~/.gitconfig`).
+/// Path to the global `.gitconfig` the app manages (`~/.gitconfig`).
 pub fn global_config_path() -> AppResult<PathBuf> {
     let home = home_dir().ok_or_else(|| AppError::msg("Could not determine your home directory."))?;
     Ok(home.join(".gitconfig"))
@@ -143,7 +143,7 @@ impl Block {
         self.section.as_deref() == Some("user") && self.subsection.is_none()
     }
 
-    /// A `[includeIf ...]` whose condition DevCenter understands and manages.
+    /// A `[includeIf ...]` whose condition the app understands and manages.
     fn is_managed_include(&self) -> bool {
         if self.section.as_deref() != Some("includeif") {
             return false;
@@ -157,7 +157,7 @@ impl Block {
         }
     }
 
-    /// A `[credential "azrepos:org/*"]` section DevCenter manages.
+    /// A `[credential "azrepos:org/*"]` section the app manages.
     fn is_managed_credential(&self) -> bool {
         self.section.as_deref() == Some("credential")
             && self
@@ -465,7 +465,10 @@ fn write_profile_file(path: &Path, name: &str, email: &str) -> AppResult<()> {
     let existing = std::fs::read_to_string(path).unwrap_or_default();
     let mut kept = String::new();
     if existing.trim().is_empty() {
-        kept.push_str("# Managed by DevCenter — conditional Git identity.\n");
+        kept.push_str(&format!(
+            "# Managed by {} — conditional Git identity.\n",
+            crate::app_name()
+        ));
     }
     for b in parse_blocks(&existing) {
         if b.is_default_user() {
@@ -515,7 +518,10 @@ pub fn write(cfg: &GitIdentityConfig) -> AppResult<GitIdentityConfig> {
     // Build the managed block: default identity, conditional includes, then the
     // Azure credential mappings gathered from every profile.
     let mut managed = String::new();
-    managed.push_str("# ==== Managed by DevCenter — Git identities ====\n");
+    managed.push_str(&format!(
+        "# ==== Managed by {} — Git identities ====\n",
+        crate::app_name()
+    ));
     managed.push_str("# Default identity. Edit these on the Git Identities page.\n");
     managed.push_str(&user_block_text(&cfg.default_name, &cfg.default_email));
 
@@ -563,7 +569,7 @@ pub fn write(cfg: &GitIdentityConfig) -> AppResult<GitIdentityConfig> {
     }
 
     // Assemble: preserved content first (keeps the base `[user]` order sensible),
-    // then DevCenter's managed block. `includeIf` must follow the default
+    // then the app's managed block. `includeIf` must follow the default
     // `[user]` for the override to take effect — which it does here.
     let mut out = String::new();
     let preserved = preserved.trim_end();

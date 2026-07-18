@@ -2212,7 +2212,7 @@ pub fn remove_worktree(path: &Path, target_path: &str, force: bool) -> AppResult
 }
 
 // ===================== "Show Git Output" activity log =====================
-// A lightweight, best-effort, in-memory record of the git actions DevCenter has
+// A lightweight, best-effort, in-memory record of the git actions the app has
 // run (newest first, capped) — purely for the "Show Git Output" panel. Not
 // persisted; cleared on restart.
 

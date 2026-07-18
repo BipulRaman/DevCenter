@@ -4,10 +4,8 @@
 
 use crate::error::{AppError, AppResult};
 
-const SERVICE: &str = "in.bipul.devcenter";
-
 fn entry(account_id: &str) -> AppResult<keyring::Entry> {
-    keyring::Entry::new(SERVICE, account_id).map_err(|e| AppError::msg(e.to_string()))
+    keyring::Entry::new(crate::app_identifier(), account_id).map_err(|e| AppError::msg(e.to_string()))
 }
 
 /// Store (or overwrite) the token for an account.

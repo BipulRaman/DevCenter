@@ -1,4 +1,4 @@
-// ============ DevCenter — lightweight syntax highlighter ============
+// ============ App — lightweight syntax highlighter ============
 // Dependency-free and fully offline. Approximates VS Code's Dark+ / Light+
 // token colors for the diff/code viewer so code reads exactly like the editor.
 // Tokenizes one line at a time (diff-friendly). All output is HTML-escaped;

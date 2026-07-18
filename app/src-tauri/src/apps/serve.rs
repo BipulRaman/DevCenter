@@ -143,7 +143,7 @@ async fn mock_handler(
         StatusCode::from_u16(status).unwrap_or(StatusCode::OK),
         [
             (header::CONTENT_TYPE, "application/json"),
-            (header::HeaderName::from_static("x-devcenter-mock"), "1"),
+            (header::HeaderName::from_static("x-app-mock"), "1"),
         ],
         body.to_string(),
     )

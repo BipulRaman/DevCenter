@@ -1,4 +1,4 @@
-// ============ DevCenter — Git Identities (multi-account gitconfig) ============
+// ============ App — Git Identities (multi-account gitconfig) ============
 // Design and save a multi-account Git setup: one default identity plus
 // per-repository "identities" that Git activates automatically via conditional
 // includes (`includeIf`). Shares the global lexical scope with the other UI
@@ -114,7 +114,7 @@ function renderGitIdentity() {
     </div>
     <div class="identity-list">${profilesHtml}</div>
 
-    <div class="identity-foot">${ICON.gear}<span>Saved to <code>${escapeHtml(g.globalPath)}</code> and per-identity <code>~/.gitconfig-*</code> files. DevCenter only rewrites the sections it manages — your other settings are left untouched.</span></div>
+    <div class="identity-foot">${ICON.gear}<span>Saved to <code>${escapeHtml(g.globalPath)}</code> and per-identity <code>~/.gitconfig-*</code> files. ${window.BRAND} only rewrites the sections it manages — your other settings are left untouched.</span></div>
   `;
 
   const editDefault = document.getElementById("editDefaultBtn");

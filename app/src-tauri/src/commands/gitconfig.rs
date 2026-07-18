@@ -10,7 +10,7 @@ pub async fn read_git_identity() -> AppResult<GitIdentityConfig> {
         .map_err(|e| AppError::msg(e.to_string()))?
 }
 
-/// Persist the identity configuration, regenerating DevCenter's managed
+/// Persist the identity configuration, regenerating the app's managed
 /// sections of `~/.gitconfig` and each profile's include file. Returns the
 /// freshly re-read configuration.
 #[tauri::command]

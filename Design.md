@@ -1,4 +1,4 @@
-# DevCenter — Technical Design
+# DevGitCenter — Technical Design
 
 > A cross‑platform desktop app to track local **Git repositories**, their **Pull Requests**, and manage **local applications** (run / stop / monitor) — built in **Rust**, packaged as an **installer**, with **auto‑update**, reusing the existing **vanilla HTML / CSS / JS** UI.
 
@@ -43,7 +43,7 @@ Tauri is the natural fit because it satisfies every hard constraint:
 
 **Alternatives considered & rejected:** Electron (not Rust), `egui`/`Slint` (don't reuse HTML/CSS/JS), raw `wry`/`webview` (no installer/updater story out of the box).
 
-**Prior art / reuse:** **[AppNest](https://github.com/BipulRaman/AppNest)** (MIT, by the same author) already implements the *entire* App Center feature set in **Rust + Axum + Tokio + vanilla JS** as a portable binary. Its process‑lifecycle/logging (`manager.rs`) and static‑serving + Swagger‑mock (`server.rs`) port almost directly into §5.5; the only adaptation is that AppNest streams logs over **SSE** to a browser dashboard, whereas DevCenter streams them as **Tauri events** to the WebView. This de‑risks Phase 2 substantially.
+**Prior art / reuse:** **[AppNest](https://github.com/BipulRaman/AppNest)** (MIT, by the same author) already implements the *entire* App Center feature set in **Rust + Axum + Tokio + vanilla JS** as a portable binary. Its process‑lifecycle/logging (`manager.rs`) and static‑serving + Swagger‑mock (`server.rs`) port almost directly into §5.5; the only adaptation is that AppNest streams logs over **SSE** to a browser dashboard, whereas DevGitCenter streams them as **Tauri events** to the WebView. This de‑risks Phase 2 substantially.
 
 ### Key crates
 
@@ -117,17 +117,17 @@ The current `js/app.js` holds **mock arrays** (`repos`, `apps`, `pulls`) and ren
 
 ### 4.1 Add a thin IPC layer: `js/api.js`
 
-A small **classic script** (no bundler, no ES modules) wraps Tauri's global API and exposes a single `window.DevCenter` object. Inside the desktop app, calls route to the Rust core; in a plain browser (no backend) the data methods resolve to `null` so `app.js` falls back to its in‑page seed data — keeping the UI runnable for pure design work.
+A small **classic script** (no bundler, no ES modules) wraps Tauri's global API and exposes a single `window.app` object. Inside the desktop app, calls route to the Rust core; in a plain browser (no backend) the data methods resolve to `null` so `app.js` falls back to its in‑page seed data — keeping the UI runnable for pure design work.
 
 ```js
-// js/api.js  (loaded before app.js; sets window.DevCenter)
+// js/api.js  (loaded before app.js; sets window.app)
 (function () {
   const T = window.__TAURI__;                 // present only inside the desktop app
   const hasBackend = !!(T && T.core);
   const invoke = (cmd, args) => T.core.invoke(cmd, args);
   const listen = (evt, cb) => T.event.listen(evt, (e) => cb(e.payload));
 
-  window.DevCenter = {
+  window.app = {
     hasBackend,
 
     // OS helpers (Phase 0 — implemented)
@@ -154,7 +154,7 @@ A small **classic script** (no bundler, no ES modules) wraps Tauri's global API 
 > The full surface lives in [`app/js/api.js`](app/js/api.js).
 
 ### 4.2 Minimal changes to `app.js`
-- Replace the three top `const repos/apps/pulls = [...]` literals with `let` variables hydrated from `DevCenter.list*()` on startup.
+- Replace the three top `const repos/apps/pulls = [...]` literals with `let` variables hydrated from `app.list*()` on startup.
 - After each successful command, either optimistically update or wait for the corresponding `*_updated` event, then call the existing `render*()` functions.
 - Wire live log streaming (`onAppLog`) into a logs panel/drawer (new lightweight view; reuses existing chip/row styles).
 
@@ -532,7 +532,7 @@ sequenceDiagram
    │  ├─ css/styles.css          # existing
    │  └─ js/
    │     ├─ app.js               # existing render logic (data source swapped in Phase 1+)
-   │     └─ api.js               # IPC shim → window.DevCenter
+   │     └─ api.js               # IPC shim → window.app
    └─ src-tauri/                 # Rust core
       ├─ Cargo.toml
       ├─ tauri.conf.json         # withGlobalTauri, frontendDist "../ui", CSP
@@ -540,7 +540,7 @@ sequenceDiagram
       ├─ capabilities/default.json
       ├─ icons/                  # generated via `cargo tauri icon`
       └─ src/
-         ├─ main.rs              # entry → devcenter_lib::run()
+         ├─ main.rs              # entry → app_lib::run()
          └─ lib.rs               # builder + commands; §5.1 modules added per phase
 ```
 
@@ -568,7 +568,7 @@ cargo tauri signer generate -w devcenter.key
 ```
 
 - **Front‑end** needs no build step (vanilla assets). `cargo tauri dev` serves them directly.
-- With no backend (`DevCenter.hasBackend === false`), data APIs resolve to `null`, so the UI still opens in a normal browser (using `app.js`'s in‑page seed) for pure CSS/markup work.
+- With no backend (`app.hasBackend === false`), data APIs resolve to `null`, so the UI still opens in a normal browser (using `app.js`'s in‑page seed) for pure CSS/markup work.
 
 ### CI (GitHub Actions, matrix per OS)
 1. Build with `tauri-action`.
@@ -584,7 +584,7 @@ cargo tauri signer generate -w devcenter.key
 |---|---|---|
 | **0 — Shell** | Tauri scaffold under `app/`; loads the existing UI; `withGlobalTauri`; `api.js` shim + Phase 0 OS commands (`app_version`, `open_path`, `open_url`, `open_terminal`). | **✅ Done** — window shows today's UI; first IPC commands live. |
 | **1 — Git Board** | `git2` status/scan/fetch/clone; SQLite store; scheduler; `repos_updated`. | Real repos, live status, watch toggle persisted. |
-| **2 — App Center** | Port AppNest's runner: serve modes (Command/Static/Script/API‑Mock), framework presets, build pipeline + port injection, embedded Swagger‑UI mock, log streaming (ANSI/search/follow/inline preview), tray + command palette, drag‑reorder, persistence. | Build/run/monitor local apps — AppNest parity inside DevCenter. |
+| **2 — App Center** | Port AppNest's runner: serve modes (Command/Static/Script/API‑Mock), framework presets, build pipeline + port injection, embedded Swagger‑UI mock, log streaming (ANSI/search/follow/inline preview), tray + command palette, drag‑reorder, persistence. | Build/run/monitor local apps — AppNest parity inside DevGitCenter. |
 | **3 — Pull Requests** | Provider detection, keychain tokens, GitHub + Azure DevOps clients, PR cache. | Real PRs for watched repos with filters. |
 | **4 — Package** | Icons, bundler config, Windows/macOS/Linux installers, code signing. | Installable signed builds. |
 | **5 — Auto‑update** | Updater plugin, minisign keys, `latest.json`, CI release pipeline, in‑app banner. | One‑click / silent updates. |
@@ -600,5 +600,5 @@ cargo tauri signer generate -w devcenter.key
 4. **Fonts/offline:** self‑host **Inter** to tighten CSP and work offline (recommended) vs. keep Google Fonts CDN?
 5. **App persistence depth:** keep run history/log archives in SQLite, or live logs only?
 6. **Code‑signing certs:** availability of Windows Authenticode (EV?) and Apple Developer ID for CI?
-7. **AppNest reuse:** port AppNest's `manager.rs`/`server.rs` into DevCenter's `apps/` module directly, or keep AppNest as a separate binary that DevCenter launches/embeds? (Recommended: port the modules so App Center is native to DevCenter.)
+7. **AppNest reuse:** port AppNest's `manager.rs`/`server.rs` into DevGitCenter's `apps/` module directly, or keep AppNest as a separate binary that DevGitCenter launches/embeds? (Recommended: port the modules so App Center is native to DevGitCenter.)
 ```

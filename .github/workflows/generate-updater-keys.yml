@@ -13,7 +13,7 @@ name: Generate Updater Signing Keys
 #   empty string to match.
 #
 # Run this ONCE per project, or whenever you want to ROTATE the signing key.
-# (DevCenter's current key was generated locally; use this for rotation or if
+# (App's current key was generated locally; use this for rotation or if
 # you ever lose the local key file.)
 
 on:

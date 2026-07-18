@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "DevCenter: Dev (hot reload)",
+      "label": "App: Dev (hot reload)",
       "type": "shell",
       "command": "cargo tauri dev",
       "options": { "cwd": "${workspaceFolder}/app" },
@@ -26,7 +26,7 @@
       "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
     },
     {
-      "label": "DevCenter: Build installer (NSIS)",
+      "label": "App: Build installer (NSIS)",
       "type": "shell",
       "command": "cargo tauri build --bundles nsis",
       "options": { "cwd": "${workspaceFolder}/app" },

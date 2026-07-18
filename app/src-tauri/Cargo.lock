@@ -60,6 +60,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 
 [[package]]
+name = "app"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "base64 0.22.1",
+ "git2",
+ "keyring",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tauri-plugin-opener",
+ "tauri-plugin-updater",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower-http",
+ "ureq",
+]
+
+[[package]]
 name = "arbitrary"
 version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -788,28 +810,6 @@ dependencies = [
  "quote",
  "rustc_version",
  "syn 2.0.117",
-]
-
-[[package]]
-name = "devcenter"
-version = "0.1.0"
-dependencies = [
- "axum",
- "base64 0.22.1",
- "git2",
- "keyring",
- "rusqlite",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tauri-plugin-opener",
- "tauri-plugin-updater",
- "thiserror 2.0.18",
- "tokio",
- "tower-http",
- "ureq",
 ]
 
 [[package]]

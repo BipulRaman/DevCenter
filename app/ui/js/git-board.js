@@ -230,7 +230,7 @@ function renderRepos(filter = "") {
   const removeRepo = async (r) => {
     const ok = await Modal.confirm({
       title: "Remove repository",
-      message: `Remove “${r.name}” from DevCenter? This only removes it from the list — the files on disk are left untouched.`,
+      message: `Remove “${r.name}” from ${window.BRAND}? This only removes it from the list — the files on disk are left untouched.`,
       confirmText: "Remove",
       danger: true,
     });

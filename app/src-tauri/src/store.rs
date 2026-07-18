@@ -97,7 +97,7 @@ pub fn set_watched(conn: &Connection, path: &str, watched: bool) -> AppResult<()
     Ok(())
 }
 
-/// Unregister a repo from DevCenter (does not touch the files on disk). Also
+/// Unregister a repo from the app (does not touch the files on disk). Also
 /// removes its tags.
 pub fn remove_repo(conn: &Connection, path: &str) -> AppResult<()> {
     conn.execute("DELETE FROM repo_tags WHERE path = ?1", [path])?;

@@ -1,5 +1,5 @@
-// ============ DevCenter — IPC layer (UI <-> Rust core) ============
-// Exposes a single global `window.DevCenter`.
+// ============ App — IPC layer (UI <-> Rust core) ============
+// Exposes a single global `window.app`.
 // Inside the Tauri desktop app, calls are routed to the Rust core via `invoke`.
 // In a plain browser (no backend), data methods resolve to `null` so the UI
 // can fall back to its in-page seed data — keeping the UI runnable for design work.
@@ -11,7 +11,16 @@
   const invoke = (cmd, args) => T.core.invoke(cmd, args);
   const listen = (evt, cb) => T.event.listen(evt, (e) => cb(e.payload));
 
-  window.DevCenter = {
+  // ---- Brand (single source of truth) -------------------------------------
+  // The user-visible brand name lives in ONE place: `productName` in
+  // tauri.conf.json, surfaced to the UI via the `app_name` command. Every UI
+  // string reads `window.BRAND`, so a rebrand only means changing productName.
+  // `BRAND_FALLBACK` is used only in a plain browser (no backend) for design
+  // work, and as the pre-hydration value to avoid a flash.
+  const BRAND_FALLBACK = "DevGitCenter";
+  window.BRAND = BRAND_FALLBACK;
+
+  window.app = {
     hasBackend,
 
     // Dismiss the native splash window and reveal the main window. Called once
@@ -20,6 +29,7 @@
 
     // --- App / OS helpers (implemented in Phase 0) ---
     appVersion: () => (hasBackend ? invoke("app_version") : Promise.resolve("browser")),
+    appName: () => (hasBackend ? invoke("app_name") : Promise.resolve(BRAND_FALLBACK)),
     checkForUpdates: () => (hasBackend ? invoke("check_for_updates") : Promise.resolve({ status: "browser" })),
     installUpdate: () => (hasBackend ? invoke("install_update") : Promise.resolve()),
     openPath: (path) => (hasBackend ? invoke("open_path", { path }) : Promise.resolve()),
@@ -169,10 +179,25 @@
   // the first real paint is on screen, then dismiss the native splash window and
   // reveal the fully-rendered main window (Office/Adobe-style launch).
   window.addEventListener("load", () => {
+    applyBrand();
     requestAnimationFrame(() =>
       requestAnimationFrame(() => {
-        window.DevCenter.closeSplash().catch(() => {});
+        window.app.closeSplash().catch(() => {});
       })
     );
   });
+
+  // Resolve the brand from the backend (productName) and propagate it to every
+  // static brand surface. All dynamic strings read `window.BRAND` at call time.
+  async function applyBrand() {
+    let name = BRAND_FALLBACK;
+    try {
+      name = (await window.app.appName()) || BRAND_FALLBACK;
+    } catch (_) {}
+    window.BRAND = name;
+    document.title = name;
+    document.querySelectorAll(".brand-name").forEach((el) => {
+      el.textContent = name;
+    });
+  }
 })();

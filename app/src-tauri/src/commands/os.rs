@@ -14,6 +14,14 @@ pub fn app_version(app: tauri::AppHandle) -> String {
     app.package_info().version.to_string()
 }
 
+/// Returns the application's display name (`productName` in tauri.conf.json).
+/// This is the single source of truth for the user-visible brand; the UI derives
+/// all brand text from it so a rebrand only requires changing `productName`.
+#[tauri::command]
+pub fn app_name(app: tauri::AppHandle) -> String {
+    app.package_info().name.clone()
+}
+
 /// Opens a file or folder with the OS default handler (e.g. File Explorer).
 #[tauri::command]
 pub fn open_path(app: tauri::AppHandle, path: String) -> Result<(), String> {

@@ -269,7 +269,7 @@ pub async fn set_repo_watched(
     .map_err(|e| AppError::msg(e.to_string()))?
 }
 
-/// Remove a repository from DevCenter's list (files on disk are untouched).
+/// Remove a repository from the app's list (files on disk are untouched).
 #[tauri::command]
 pub async fn remove_repo(id: String, state: State<'_, AppState>) -> AppResult<()> {
     let st = state.inner().clone();

@@ -464,7 +464,7 @@ function openAppForm(existing) {
             <button class="btn btn-ghost btn-sm" id="afSpecBrowse">${ICON.folder}Browse</button></div></div>
         <div class="form-row"><label class="form-label">Environment variables (KEY=VALUE per line)</label>
           <textarea class="modal-input" id="afEnv" rows="2" spellcheck="false" placeholder="NODE_ENV=development">${escapeHtml((a.env || []).map(([k, v]) => `${k}=${v}`).join("\n"))}</textarea></div>
-        <label class="form-check"><input type="checkbox" id="afAuto" ${a.autostart ? "checked" : ""} /> <span>Start automatically when DevCenter launches</span></label>
+        <label class="form-check"><input type="checkbox" id="afAuto" ${a.autostart ? "checked" : ""} /> <span>Start automatically when ${window.BRAND} launches</span></label>
         <div class="modal-error" id="afErr"></div>`;
 
       const $ = (id) => body.querySelector(id);

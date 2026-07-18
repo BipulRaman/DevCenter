@@ -1,6 +1,6 @@
 # Auto-update setup
 
-DevCenter ships with Tauri's built-in updater. Release installers are signed in
+App ships with Tauri's built-in updater. Release installers are signed in
 CI with a **minisign (Ed25519) keypair** so the in-app updater can verify that
 every update came from this repository and wasn't tampered with on the way to
 the user.
@@ -84,7 +84,7 @@ that env var to an empty string. If an old one exists, delete it.
 ## Generating a keypair
 
 You only need this when setting up a fresh fork or [rotating the key](#rotating-the-key).
-DevCenter's key already exists, so you can skip this section for normal use.
+DevGitCenter's key already exists, so you can skip this section for normal use.
 
 ### Option A — locally (Tauri CLI installed)
 
@@ -138,9 +138,9 @@ Either way the workflow produces and attaches:
 
 Either way the workflow builds every OS in a matrix and attaches:
 
-- `DevCenter_<version>_x64-setup.exe` — Windows NSIS installer
-- `DevCenter_<version>_aarch64.dmg` / `…_x64.dmg` — macOS (Apple Silicon / Intel)
-- `DevCenter_<version>_amd64.AppImage` and `…_amd64.deb` — Linux
+- `DevGitCenter_<version>_x64-setup.exe` — Windows NSIS installer
+- `DevGitCenter_<version>_aarch64.dmg` / `…_x64.dmg` — macOS (Apple Silicon / Intel)
+- `DevGitCenter_<version>_amd64.AppImage` and `…_amd64.deb` — Linux
 - a `.sig` file next to each updater bundle — the update signature
 - `latest.json` — one manifest with a per-platform entry that the in-app updater fetches
 
@@ -148,7 +148,7 @@ Either way the workflow builds every OS in a matrix and attaches:
 
 ## Verifying the update flow
 
-1. Install the **previous** version of DevCenter.
+1. Install the **previous** version of DevGitCenter.
 2. Launch it (the boot check runs after a moment in release builds), or open
    **Settings → Check for updates**.
 3. The app finds the new version, verifies the signature, downloads, installs,

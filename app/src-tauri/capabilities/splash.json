@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "splash",
+  "description": "Minimal core permissions so the splash window can read the app name",
+  "windows": ["splashscreen"],
+  "permissions": ["core:default"]
+}

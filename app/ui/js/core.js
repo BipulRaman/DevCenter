@@ -1,8 +1,8 @@
-// ============ DevCenter — desktop UI ============
+// ============ App — desktop UI ============
 
-// Bridge to the Rust backend (window.DevCenter, from js/api.js).
+// Bridge to the Rust backend (window.app, from js/api.js).
 // In a plain browser hasBackend === false; data simply stays empty.
-const DC = window.DevCenter;
+const DC = window.app;
 
 // ---------- Live data (populated by the backend in the desktop app) ----------
 let repos = [];
@@ -180,7 +180,7 @@ if (mainScroll) {
         } else if (result && result.status === "available") {
           const go = await Modal.confirm({
             title: "Update available",
-            message: `DevCenter ${result.version || ""} is available. Install it now? DevCenter will restart to finish updating.`,
+            message: `${window.BRAND} ${result.version || ""} is available. Install it now? ${window.BRAND} will restart to finish updating.`,
             confirmText: "Update & restart",
           });
           if (go) await DC.installUpdate();
@@ -207,7 +207,7 @@ if (mainScroll) {
         const titleEl = document.getElementById("modalTitle");
         titleEl.innerHTML =
           '<span class="about-head"><span class="about-logo">' + LOGO + '</span>' +
-          '<span class="about-id"><span class="about-name">DevCenter</span>' +
+          '<span class="about-id"><span class="about-name">' + window.BRAND + '</span>' +
           '<span class="about-ver"></span>' +
           '</span></span>';
         const verEl = titleEl.querySelector(".about-ver");

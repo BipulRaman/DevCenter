@@ -420,7 +420,7 @@ const ChangesPage = (() => {
   }
 
   // Re-fetch the working tree WITHOUT the "Loading…" flash or dropping the open
-  // diff. Used by the focus auto-refresh so commits made outside DevCenter (e.g.
+  // diff. Used by the focus auto-refresh so commits made outside the app (e.g.
   // from VS Code) update the Push/Pull counts and file list in place.
   async function refreshChangesSilently() {
     if (!repoId) return;
@@ -2197,7 +2197,7 @@ const ChangesPage = (() => {
     initResizers();
 
     // Auto-refresh when the app window regains focus so commits/changes made
-    // outside DevCenter (VS Code, terminal, …) update the Push/Pull counts and
+    // outside the app (VS Code, terminal, …) update the Push/Pull counts and
     // file lists without a manual Refresh. Debounced because focus +
     // visibilitychange can both fire when restoring the window.
     let lastFocusRefresh = 0;

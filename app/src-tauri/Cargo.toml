@@ -1,8 +1,8 @@
 [package]
-name = "devcenter"
+name = "app"
 version = "0.1.0"
-description = "DevCenter — track repos, pull requests and local apps"
-authors = ["DevCenter"]
+description = "DevGitCenter — track repos, pull requests and local apps"
+authors = ["Bipul Raman"]
 edition = "2021"
 rust-version = "1.77"
 
@@ -10,7 +10,7 @@ rust-version = "1.77"
 # mobile targets; they're omitted because the Windows GNU linker overflows its
 # export-ordinal table when building the cdylib DLL. Re-add them for mobile.)
 [lib]
-name = "devcenter_lib"
+name = "app_lib"
 crate-type = ["lib"]
 
 [build-dependencies]

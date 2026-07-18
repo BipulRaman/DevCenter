@@ -29,7 +29,7 @@ fn try_get(url: &str, auth: &str) -> AppResult<Value> {
         .timeout(Duration::from_secs(20))
         .set("Authorization", auth)
         .set("Accept", "application/json")
-        .set("User-Agent", "DevCenter")
+        .set("User-Agent", crate::app_name())
         .call()
     {
         Ok(resp) => {
@@ -68,7 +68,7 @@ fn try_send(method: &str, url: &str, auth: &str, body: &Value) -> AppResult<Valu
         .set("Authorization", auth)
         .set("Accept", "application/json")
         .set("Content-Type", "application/json")
-        .set("User-Agent", "DevCenter")
+        .set("User-Agent", crate::app_name())
         .send_json(body.clone())
     {
         Ok(resp) => {

@@ -322,7 +322,7 @@ function openAddAccount() {
           }
           url = `https://dev.azure.com/${encodeURIComponent(org)}/_usersSettings/tokens`;
         } else {
-          url = "https://github.com/settings/tokens/new?description=DevCenter&scopes=repo";
+          url = "https://github.com/settings/tokens/new?description=" + encodeURIComponent(window.BRAND) + "&scopes=repo";
         }
         err.textContent = "";
         if (DC && DC.hasBackend) DC.openUrl(url).catch((e) => console.error("openUrl failed", e));
@@ -402,7 +402,7 @@ if (DC && DC.hasBackend) {
     updatePrompted = true;
     const go = await Modal.confirm({
       title: "Update available",
-      message: `DevCenter ${s.version || ""} is available. Install it now? DevCenter will restart to finish updating.`,
+      message: `${window.BRAND} ${s.version || ""} is available. Install it now? ${window.BRAND} will restart to finish updating.`,
       confirmText: "Update & restart",
     });
     if (go) {
