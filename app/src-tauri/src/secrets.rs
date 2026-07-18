@@ -4,7 +4,7 @@
 
 use crate::error::{AppError, AppResult};
 
-const SERVICE: &str = "com.devcenter.desktop";
+const SERVICE: &str = "in.bipul.devcenter";
 
 fn entry(account_id: &str) -> AppResult<keyring::Entry> {
     keyring::Entry::new(SERVICE, account_id).map_err(|e| AppError::msg(e.to_string()))

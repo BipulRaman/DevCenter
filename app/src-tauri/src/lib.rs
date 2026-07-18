@@ -109,9 +109,17 @@ fn close_splashscreen(app: tauri::AppHandle) {
 /// frontend's first command call could beat `.manage()`.
 ///
 /// The identifier must match `tauri.conf.json` so the same database file is used.
-fn resolve_app_data_dir() -> std::path::PathBuf {
+const APP_IDENTIFIER: &str = "in.bipul.devcenter";
+
+/// Previous bundle identifier, kept so we can migrate a user's data one time
+/// after the identifier changed (see `migrate_legacy_data_dir`).
+const LEGACY_APP_IDENTIFIER: &str = "com.devcenter.desktop";
+
+/// The platform-specific base directory that holds per-app data folders
+/// (`<base>/<identifier>`), mirroring Tauri's `app_data_dir()` resolution but
+/// WITHOUT needing an `AppHandle`.
+fn platform_data_base() -> std::path::PathBuf {
     use std::path::PathBuf;
-    const IDENTIFIER: &str = "com.devcenter.desktop";
 
     #[cfg(target_os = "windows")]
     let base = std::env::var_os("APPDATA")
@@ -129,7 +137,46 @@ fn resolve_app_data_dir() -> std::path::PathBuf {
         .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share")))
         .unwrap_or_else(std::env::temp_dir);
 
-    base.join(IDENTIFIER)
+    base
+}
+
+fn resolve_app_data_dir() -> std::path::PathBuf {
+    platform_data_base().join(APP_IDENTIFIER)
+}
+
+/// Recursively copy the contents of `src` into `dst`, creating `dst` as needed.
+fn copy_dir_all(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(dst)?;
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let from = entry.path();
+        let to = dst.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            copy_dir_all(&from, &to)?;
+        } else {
+            std::fs::copy(&from, &to)?;
+        }
+    }
+    Ok(())
+}
+
+/// One-time migration: after the bundle identifier changed, the per-user data
+/// folder name changed too. If the old folder (`<base>/com.devcenter.desktop`)
+/// still exists and the new one has no database yet, copy the old data across
+/// and then delete the old folder so the app keeps the user's repos/settings.
+fn migrate_legacy_data_dir(new_dir: &std::path::Path) {
+    let legacy_dir = platform_data_base().join(LEGACY_APP_IDENTIFIER);
+
+    // Nothing to do if there is no legacy folder, or if we already migrated
+    // (the new folder already holds a database).
+    if !legacy_dir.is_dir() || new_dir.join("devcenter.db").exists() {
+        return;
+    }
+
+    if copy_dir_all(&legacy_dir, new_dir).is_ok() {
+        // Only remove the old folder once the copy succeeded.
+        let _ = std::fs::remove_dir_all(&legacy_dir);
+    }
 }
 
 pub fn run() {
@@ -141,6 +188,7 @@ pub fn run() {
     // a cold first launch). Managing on the builder eliminates the race.
     let dir = resolve_app_data_dir();
     let _ = std::fs::create_dir_all(&dir);
+    migrate_legacy_data_dir(&dir);
     let conn = store::open(&dir.join("devcenter.db")).expect("failed to open DevCenter database");
     let app_state = AppState::new(conn);
 
