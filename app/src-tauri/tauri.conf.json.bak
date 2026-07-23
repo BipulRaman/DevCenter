@@ -4,16 +4,7 @@
   "version": "0.1.0",
   "identifier": "in.bipul.devcenter",
   "build": {
-    "beforeDevCommand": {
-      "script": "bun run dev",
-      "cwd": "../ui2",
-      "wait": false
-    },
-    "beforeBuildCommand": {
-      "script": "bun run build",
-      "cwd": "../ui2"
-    },
-    "frontendDist": "../ui2/dist-dev"
+    "frontendDist": "../ui2"
   },
   "app": {
     "withGlobalTauri": true,

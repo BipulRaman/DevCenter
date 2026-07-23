@@ -1,0 +1,21 @@
+{
+  "name": "devcenter-ui2",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Preact frontend for DevGitCenter (parallel to app/ui).",
+  "scripts": {
+    "dev": "vite build --watch --mode development",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@preact/signals": "^2.0.1",
+    "preact": "^10.24.3"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.9.1",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10"
+  }
+}

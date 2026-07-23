@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DevGitCenter</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%; height: 100%;
+      background: transparent;
+      overflow: hidden;
+      -webkit-user-select: none; user-select: none;
+      cursor: default;
+    }
+    .card {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 18px;
+      border-radius: 16px;
+      background:
+        radial-gradient(120% 120% at 50% -20%, rgba(99,102,241,0.28), transparent 60%),
+        linear-gradient(180deg, #1a1d27, #0c0e14 92%);
+      border: 1px solid rgba(255,255,255,0.08);
+      box-shadow: 0 24px 70px -12px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.06);
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      color: #f0f2f8;
+      overflow: hidden;
+    }
+    .logo {
+      width: 64px; height: 64px;
+      border-radius: 16px;
+      display: grid; place-items: center;
+      color: #fff;
+      background: linear-gradient(135deg, #6366f1, #a855f7);
+      box-shadow: 0 10px 28px rgba(99,102,241,0.45), inset 0 1px 0 rgba(255,255,255,0.28);
+      animation: pop .5s cubic-bezier(.34,1.56,.64,1) both;
+    }
+    .logo svg { width: 34px; height: 34px; }
+    .title { font-size: 22px; font-weight: 600; letter-spacing: .2px; animation: rise .5s .06s cubic-bezier(.16,1,.3,1) both; }
+    .sub { font-size: 11px; text-transform: uppercase; letter-spacing: 2.5px; color: #7f8798; margin-top: -10px; animation: rise .5s .12s cubic-bezier(.16,1,.3,1) both; }
+
+    .bar {
+      position: absolute; left: 0; right: 0; bottom: 0;
+      height: 3px; overflow: hidden;
+      background: rgba(255,255,255,0.06);
+    }
+    .bar::before {
+      content: ""; position: absolute; top: 0; bottom: 0; left: 0;
+      width: 38%; border-radius: 3px;
+      background: linear-gradient(90deg, transparent, #6366f1, #a855f7, transparent);
+      animation: slide 1.15s ease-in-out infinite;
+    }
+
+    @keyframes pop { from { opacity: 0; transform: scale(.7); } to { opacity: 1; transform: scale(1); } }
+    @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    @keyframes slide { 0% { left: -40%; } 100% { left: 100%; } }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/>
+      </svg>
+    </div>
+    <div class="title">DevGitCenter</div>
+    <div class="sub">Desktop</div>
+    <div class="bar"></div>
+  </div>
+  <script>
+    // Derive the brand from the single source of truth (productName, via the
+    // app_name command) so the splash matches the rest of the app after a rebrand.
+    (function () {
+      var T = window.__TAURI__;
+      if (!T || !T.core) return;
+      T.core.invoke("app_name").then(function (name) {
+        if (!name) return;
+        document.title = name;
+        var el = document.querySelector(".title");
+        if (el) el.textContent = name;
+      }).catch(function () {});
+    })();
+  </script>
+</body>
+</html>

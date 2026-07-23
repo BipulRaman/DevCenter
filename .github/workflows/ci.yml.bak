@@ -51,24 +51,6 @@ jobs:
       - name: Install Rust (stable)
         uses: dtolnay/rust-toolchain@stable
 
-      # The frontend is now a Preact + TypeScript app (app/ui2) built with Bun +
-      # Vite, so it must be compiled to static assets (../ui2/dist-dev) BEFORE the
-      # Rust build embeds them. Install Bun and the UI deps for the build step.
-      - name: Install Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Install UI dependencies
-        working-directory: app/ui2
-        run: bun install --frozen-lockfile
-
-      # Type-check + production build of the Preact frontend into ../ui2/dist-dev
-      # (the folder Tauri's frontendDist points at). Runs before cargo build.
-      - name: Build frontend (ui2)
-        working-directory: app/ui2
-        run: bun run build
-
       # Caches the cargo registry, git deps and the target/ dir so subsequent
       # runs only recompile what changed. rust-cache keys per-OS automatically;
       # only main writes the cache so PR/branch runs don't thrash it.
@@ -80,9 +62,9 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
       # A plain `cargo build` runs the tauri-build script and the
-      # `generate_context!` macro, which embed the frontend from ../ui2/dist-dev
-      # (built in the step above) — so this verifies the whole desktop app
-      # compiles (frontend + backend) on each OS.
+      # `generate_context!` macro, which embed the frontend from ../ui — so this
+      # verifies the whole desktop app compiles (frontend + backend) on each OS.
+      # No Tauri CLI or npm step is needed because the UI is static (vanilla JS).
       - name: Build (verify it compiles)
         working-directory: app/src-tauri
         run: cargo build --locked

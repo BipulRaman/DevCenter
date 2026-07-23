@@ -95,19 +95,6 @@ jobs:
           # Apple Silicon or the Intel matrix leg can (cross-)compile.
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
-      # The frontend is a Preact + TypeScript app (app/ui2) built with Bun + Vite.
-      # tauri-action runs `cargo tauri build`, which runs the beforeBuildCommand
-      # (`bun run build`, cwd app/ui2) to emit the static assets Tauri embeds — so
-      # Bun and the UI deps must be installed on the runner first.
-      - name: Install Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Install UI dependencies
-        working-directory: app/ui2
-        run: bun install --frozen-lockfile
-
       - name: Cache Rust build
         uses: Swatinem/rust-cache@v2
         with:
