@@ -13,7 +13,7 @@
       "script": "bun run build",
       "cwd": "../ui2"
     },
-    "frontendDist": "../ui2/dist-dev"
+    "frontendDist": "../ui2/dist"
   },
   "app": {
     "withGlobalTauri": true,
