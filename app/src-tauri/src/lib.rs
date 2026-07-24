@@ -9,9 +9,7 @@ mod secrets;
 mod state;
 mod store;
 
-use serde::Serialize;
-use tauri::{Emitter, Manager};
-use tauri_plugin_updater::UpdaterExt;
+use tauri::Manager;
 
 use state::AppState;
 
@@ -32,56 +30,6 @@ fn set_app_name(name: &str) {
 /// (e.g. in unit tests that don't boot Tauri).
 pub(crate) fn app_name() -> &'static str {
     APP_NAME.get().map(String::as_str).unwrap_or("DevGitCenter")
-}
-
-#[derive(Clone, Serialize)]
-struct UpdateState {
-    status: String,
-    version: Option<String>,
-    error: Option<String>,
-}
-
-fn emit_update(app: &tauri::AppHandle, status: &str, version: Option<String>, error: Option<String>) {
-    let _ = app.emit(
-        "update_state",
-        UpdateState {
-            status: status.to_string(),
-            version,
-            error,
-        },
-    );
-}
-
-async fn auto_update_on_start(app: tauri::AppHandle) {
-    emit_update(&app, "checking", None, None);
-
-    let updater = match app.updater() {
-        Ok(u) => u,
-        Err(e) => {
-            emit_update(&app, "error", None, Some(format!("updater init failed: {e}")));
-            return;
-        }
-    };
-
-    let update = match updater.check().await {
-        Ok(v) => v,
-        Err(e) => {
-            emit_update(&app, "error", None, Some(format!("update check failed: {e}")));
-            return;
-        }
-    };
-
-    let Some(update) = update else {
-        emit_update(&app, "up_to_date", None, None);
-        return;
-    };
-
-    // An update is available. Do NOT download/install automatically — on Windows
-    // download_and_install runs the NSIS installer, which closes and relaunches
-    // the app (the auto-restart the user reported). Only notify the UI here; the
-    // user confirms, and the install (which restarts the app) runs via the
-    // install_update command.
-    emit_update(&app, "available", Some(update.version.to_string()), None);
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -259,14 +207,6 @@ pub fn run() {
                 std::thread::sleep(std::time::Duration::from_secs(12));
                 reveal_main(&handle);
             });
-
-            // Auto-update runs only in release builds.
-            if !cfg!(debug_assertions) {
-                let app_handle = app.handle().clone();
-                tauri::async_runtime::spawn(async move {
-                    auto_update_on_start(app_handle).await;
-                });
-            }
 
             Ok(())
         })

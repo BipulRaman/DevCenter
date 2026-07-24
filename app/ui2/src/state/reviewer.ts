@@ -65,6 +65,7 @@ export async function openReviewer(repoId: string, pr: PullRequest, opts?: { ret
 }
 
 export function closeReviewer(): string {
+  gen++;
   reviewerOpen.value = false;
   return returnPage;
 }

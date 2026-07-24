@@ -20,6 +20,7 @@ import { conflictOpen } from "@/state/conflict";
 import { openContextMenu } from "@/components/menu";
 import { ICONS } from "@/lib/ico";
 import { initTooltip } from "@/lib/tooltip";
+import { checkForUpdates } from "@/lib/updater";
 import { Layout } from "@/components/Layout";
 import type { ComponentChildren } from "preact";
 
@@ -41,6 +42,7 @@ export function App() {
     void initIdentity();
     startChangesAutoSelect();
     initTooltip();
+    void checkForUpdates();
 
     // Replace the WebView's default right-click menu with a single useful action
     // (Reload), plus Fetch All on the Git Board. App-specific menus call

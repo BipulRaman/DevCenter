@@ -9,6 +9,9 @@ import { ipc } from "@/platform/ipc";
 import { modal } from "@/components/modal";
 import { Raw, ICONS } from "@/lib/ico";
 import { useOutsideClick } from "@/lib/floating";
+import { checkForUpdates } from "@/lib/updater";
+import { closeReviewer, reviewerOpen } from "@/state/reviewer";
+import { closeConflict, conflictOpen } from "@/state/conflict";
 import styles from "./Navigation.module.css";
 
 interface NavDef {
@@ -31,10 +34,16 @@ const FOOTER_NAV: NavDef[] = [
 
 function NavItem({ def }: { def: NavDef }) {
   const active = activePage.value === def.page;
+  const navigate = () => {
+    if (reviewerOpen.value) closeReviewer();
+    if (conflictOpen.value) closeConflict();
+    showPage(def.page);
+  };
+
   return (
     <button
       class={`${styles.navItem}${active ? ` ${styles.active}` : ""}`}
-      onClick={() => showPage(def.page)}
+      onClick={navigate}
       type="button"
     >
       <Raw html={def.icon} />
@@ -70,7 +79,7 @@ function SettingsMenu() {
           type="button"
           onClick={() => {
             setOpen(false);
-            void checkForUpdates();
+            void checkForUpdates({ reportCurrent: true, reportErrors: true });
           }}
         >
           <span class={styles.settingsOptIco}>
@@ -100,32 +109,6 @@ function SettingsMenu() {
       </div>
     </div>
   );
-}
-
-async function checkForUpdates() {
-  if (!ipc.hasBackend) return;
-  try {
-    const result = await ipc.checkForUpdates();
-    const status = (result as { status?: string; version?: string })?.status;
-    if (status === "up_to_date") {
-      await modal.alert({ title: "Up to date", message: "You're already on the latest version." });
-    } else if (status === "not_configured") {
-      await modal.alert({
-        title: "Updates unavailable",
-        message: "In-app updates aren't available for this build. Download the latest release from GitHub.",
-      });
-    } else if (status === "available") {
-      const version = (result as { version?: string })?.version || "";
-      const go = await modal.confirm({
-        title: "Update available",
-        message: `${window.BRAND} ${version} is available. Install it now? ${window.BRAND} will restart to finish updating.`,
-        confirmText: "Update & restart",
-      });
-      if (go) await ipc.installUpdate();
-    }
-  } catch (e) {
-    await modal.alert({ title: "Update check failed", message: String(e) });
-  }
 }
 
 async function showAbout() {

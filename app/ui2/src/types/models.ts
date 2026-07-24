@@ -243,11 +243,6 @@ export interface AppLogEvent {
   __html?: string;
 }
 
-export interface UpdateStateEvent {
-  status: string;
-  [key: string]: unknown;
-}
-
 // --- Git Identities ---------------------------------------------------------
 
 export type IdentityCondKind = "remoteUrl" | "gitdir";

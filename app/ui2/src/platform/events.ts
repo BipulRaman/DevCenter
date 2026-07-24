@@ -1,14 +1,13 @@
 // Typed backend event subscriptions (Rust core -> UI). These mirror the
 // `onReposUpdated` / `onPullsUpdated` / `onAppStatus` / `onAppLog` /
-// `onUpdateState` listeners in app/ui/js/api.js. Each returns a promise of an
-// unsubscribe function (no-op in a plain browser).
+// listeners in app/ui/js/api.js. Each returns a promise of an unsubscribe
+// function (no-op in a plain browser).
 
 import { listen } from "@/platform/tauri";
 import type {
   AppLogEvent,
   AppStatusEvent,
   Repo,
-  UpdateStateEvent,
 } from "@/types/models";
 
 export const events = {
@@ -20,8 +19,6 @@ export const events = {
     listen<AppStatusEvent>("app_status_changed", cb),
   onAppLog: (cb: (e: AppLogEvent) => void) =>
     listen<AppLogEvent>("app_log", cb),
-  onUpdateState: (cb: (e: UpdateStateEvent) => void) =>
-    listen<UpdateStateEvent>("update_state", cb),
 };
 
 export type Events = typeof events;
