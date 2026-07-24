@@ -4,7 +4,7 @@ import { applyBrand } from "@/platform/brand";
 import { ipc } from "@/platform/ipc";
 
 const splashStartedAt = performance.now();
-const minimumSplashMs = 700;
+const minimumSplashMs = 1200;
 
 // Mount the Preact app.
 const root = document.getElementById("app");
