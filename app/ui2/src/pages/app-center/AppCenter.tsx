@@ -690,7 +690,7 @@ function LogsViewer({ app: a, close }: { app: ManagedApp; close: (v: boolean) =>
             <span>{following ? "Pause" : "Resume"}</span>
           </button>
           <button class={`${styles.logIcon}${wrap ? ` ${styles.active}` : ""}`} type="button" title="Toggle line wrapping" onClick={() => setWrap((v) => !v)}>
-            <Raw html={ICONS.swap} />
+            <Raw html={ICONS.wrap} />
           </button>
           <button class={styles.logIcon} type="button" title="Copy logs" onClick={() => navigator.clipboard?.writeText(asText()).catch(() => {})}>
             <Raw html={ICONS.copy} />
