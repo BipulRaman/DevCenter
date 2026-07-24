@@ -1,0 +1,21 @@
+/* Shared floating-panel chrome for portaled dropdowns (the context menu +
+   the branch picker). Only the never-overridden visual chrome lives here;
+   per-consumer sizing (min-width / max-height / padding / z-index) stays with
+   each consumer so cascade order can't cause regressions. The entrance
+   animation is owned here too (scoped `@keyframes` so the reference resolves
+   without depending on the global stylesheet). */
+.panel {
+  position: fixed;
+  max-width: 380px;
+  display: flex; flex-direction: column;
+  overflow-y: auto; overflow-x: hidden;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 18px 40px -22px rgba(0, 0, 0, .45), 0 10px 20px -14px rgba(0, 0, 0, .28);
+  animation: subtle-scale .16s var(--ease-out);
+  backdrop-filter: blur(6px) saturate(1.12);
+  -webkit-backdrop-filter: blur(6px) saturate(1.12);
+}
+
+@keyframes subtle-scale { from { opacity: 0; transform: scale(.98); } to { opacity: 1; transform: scale(1); } }

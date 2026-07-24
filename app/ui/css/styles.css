@@ -1318,7 +1318,7 @@ select.modal-input { cursor: pointer; appearance: none; background-image: url("d
 }
 .about-link:hover { text-decoration: underline; }
 .about-link svg { width: 15px; height: 15px; flex-shrink: 0; }
-.modal-foot.about-foot { justify-content: space-between; align-items: center; margin-top: 16px; border-top: 1px solid var(--border); }
+.modal-foot.about-foot { justify-content: space-between; align-items: center; margin-top: 16px;}
 .about-copy { font-size: 12px; color: var(--text-faint); }
 
 /* spinning icon (e.g. fetch in progress) */
@@ -1738,7 +1738,7 @@ body.col-resizing * { cursor: col-resize !important; }
 .diff-hunk-head {
   padding: 3px 16px; background: var(--code-bg); color: var(--code-hunk);
   position: sticky; left: 0; z-index: 2; font-size: 12.5px; line-height: 20px;
-  border-top: 1px solid var(--code-border); border-bottom: 1px solid var(--code-border);
+  border-bottom: 1px solid var(--code-border);
 }
 .diff-line { display: flex; white-space: pre; min-width: 100%; }
 /* Rows live in a max-content wrapper so add/del backgrounds span the full line
@@ -1785,7 +1785,7 @@ body.col-resizing * { cursor: col-resize !important; }
 @media (max-width: 900px) {
   .commit-layout, .commit-layout.mode-history { grid-template-columns: 1fr; height: auto; gap: 0; }
   .commit-layout .pane-resizer { display: none; }
-  .commit-layout .commit-detail, .commit-layout .diff-view { border-top: 1px solid var(--border); }
+  .commit-layout .commit-detail,
   #page-changes.active { height: auto; min-height: 100%; padding-bottom: 24px; }
   .commit-layout { flex: 0 0 auto; }
   .diff-view { min-height: 360px; }
@@ -1934,7 +1934,6 @@ textarea,
 .conflict-head-main { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .conflict-layout {
   flex: 1; min-height: 0; display: grid; grid-template-columns: 290px 1fr;
-  border-top: 1px solid var(--border);
 }
 .conflict-files { border-right: var(--hairline) solid var(--border); overflow-y: auto; padding: 8px; background: var(--bg-elev); }
 .conflict-main { min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
@@ -2083,7 +2082,7 @@ textarea,
 .prr-comment-body > *:last-child { margin-bottom: 0; }
 .prr-comment-body p { margin: 0 0 10px; }
 .prr-comment-body h4 { margin: 14px 0 6px; font-size: 13.5px; }
-.prr-comment-body hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
+.prr-comment-body hr { border: none; margin: 12px 0; }
 .prr-comment-body code { background: var(--bg-elev-2); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; font-family: var(--mono); font-size: 12px; }
 .prr-comment-body pre.prr-md-pre { background: var(--bg-elev-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; overflow-x: auto; margin: 0 0 10px; }
 .prr-comment-body pre.prr-md-pre code { background: none; border: none; padding: 0; }

@@ -1,0 +1,78 @@
+.prList {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.prRow {
+  position: relative;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 9px 14px 9px 16px;
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+  box-shadow: none;
+  transition: border-color .18s var(--ease), box-shadow .2s var(--ease), transform .18s var(--ease);
+  overflow: hidden;
+}
+
+.prRow::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  background: var(--surface-hi);
+  pointer-events: none;
+}
+
+.prRow:hover {
+  background: var(--card);
+  border-color: var(--border);
+  box-shadow: none;
+}
+
+.prRow::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--green);
+  opacity: 1;
+}
+
+.prRow.draft::before { background: var(--text-faint); }
+.prRow.merged::before { background: #a855f7; }
+
+.prIcon {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  background: color-mix(in srgb, var(--green) 14%, transparent);
+  color: var(--green);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--green) 30%, transparent);
+}
+
+.prIcon svg { width: 15px; height: 15px; }
+.prIcon.draft { background: var(--bg-elev-2); color: var(--text-faint); box-shadow: inset 0 0 0 1px var(--border); }
+.prIcon.merged { background: color-mix(in srgb, var(--purple) 14%, transparent); color: var(--purple); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--purple) 30%, transparent); }
+
+.prMain { min-width: 0; }
+.prTitleRow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.prName { font-weight: 600; font-size: 13.5px; letter-spacing: -.2px; }
+.prSub { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-faint); margin-top: 3px; flex-wrap: wrap; }
+.prSub code { background: var(--bg-elev-2); padding: 1px 6px; border-radius: 5px; font-size: 11px; font-family: var(--mono); color: var(--text-dim); }
+.prMeta { display: flex; align-items: center; gap: 10px; }
+.prActions { display: flex; gap: 8px; }
+
+@media (max-width: 900px) {
+  .prRow { grid-template-columns: auto 1fr; }
+  .prMeta, .prActions { grid-column: 1 / -1; justify-content: flex-start; }
+}

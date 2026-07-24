@@ -1,0 +1,170 @@
+/* App shell: sidebar rail, brand, nav items, settings popover and the About
+   dialog. Scoped to the App component (app.tsx) so these generic names
+   (`nav-item`, `brand`, `settings-opt`, `about-*`) can never collide with page
+   or component styles. Shared primitives (`.app`, `.main`, `.page`, `.btn`,
+   `.search`, `.modal-foot`) stay global. */
+
+/* ---- sidebar rail ---- */
+.sidebar {
+  width: var(--sidebar-w);
+  flex-shrink: 0;
+  position: relative;
+  z-index: 50;
+  background: transparent;
+  border-right: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 5px 0 15px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  padding: 5px 0 14px;
+}
+
+.brandLogo {
+  width: 36px; height: 36px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--accent), #a855f7);
+  color: #fff;
+  display: grid; place-items: center;
+  box-shadow: 0 6px 18px var(--accent-glow), inset 0 1px 0 rgba(255,255,255,.25);
+}
+.brandLogo svg { width: 22px; height: 22px; }
+
+.brandText { display: none; }
+.brandName { font-weight: 600; font-size: 15.5px; letter-spacing: .2px; }
+.brandSub { font-size: 10.5px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 1.5px; margin-top: 1px; }
+
+.nav { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1; }
+
+.navSection { display: none; }
+
+.navItem {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 13.5px;
+  font-weight: 550;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  transition: background .18s var(--ease), color .18s var(--ease), transform .12s var(--ease);
+}
+
+.navItem svg {
+  width: 25px; height: 25px;
+  flex-shrink: 0;
+  opacity: .9;
+  transition: transform .18s var(--ease);
+  shape-rendering: geometricPrecision;
+  text-rendering: geometricPrecision;
+  transform: translateZ(0);
+}
+.navItem:hover:not(.active):not(.disabled) { background: var(--bg-hover); color: var(--text); }
+.navItem.active { background: var(--accent-soft); color: var(--accent-hover); font-weight: 600; }
+.navItem.active::before {
+  content: ""; position: absolute; left: -6px; top: 50%; transform: translateY(-50%);
+  width: 3px; height: 26px; border-radius: 0 3px 3px 0; background: var(--accent);
+  box-shadow: 0 0 10px var(--accent-glow);
+}
+.navItem.active svg { color: var(--accent-hover); opacity: 1; }
+.navItem.disabled { opacity: .4; cursor: default; }
+.navItem:focus-visible { box-shadow: var(--ring); }
+
+/* ---- VS Code-style icon rail: centered icons + hover flyout labels ---- */
+.sidebar .navItem {
+  justify-content: center;
+  gap: 0;
+  padding: 0;
+  width: 44px; height: 44px;
+  border-radius: 11px;
+}
+/* icon (first child) is a Raw span wrapping the svg — keep it centered */
+.sidebar .navItem > span:first-child { display: inline-flex; }
+.sidebar .navItem > span:last-child {
+  position: absolute; left: calc(100% + 8px); top: 50%;
+  transform: translateY(-50%) translateX(-6px);
+  padding: 7px 11px; border-radius: 9px;
+  background: var(--bg-elev-2); border: 1px solid var(--accent); color: var(--text);
+  font-size: 12.5px; font-weight: 600; white-space: nowrap; letter-spacing: .1px;
+  box-shadow: var(--shadow);
+  opacity: 0; pointer-events: none;
+  transition: opacity .16s var(--ease), transform .18s var(--ease-out);
+  z-index: 200;
+}
+/* caret whose tip reaches the rail icon */
+.sidebar .navItem > span:last-child::before {
+  content: ""; position: absolute; left: -6px; top: 50%;
+  width: 10px; height: 10px; border-radius: 1px;
+  background: var(--bg-elev-2);
+  border-left: 1px solid var(--accent); border-bottom: 1px solid var(--accent);
+  transform: translateY(-50%) rotate(45deg);
+}
+/* short delay on show so a quick pass-through doesn't flash the label; hides instantly */
+.sidebar .navItem:hover > span:last-child {
+  opacity: 1;
+  transform: translateY(-50%) translateX(0);
+  transition-delay: .22s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sidebar .navItem > span:last-child { transform: translateY(-50%) !important; transition: opacity .12s ease; }
+}
+
+.sidebarFooter { display: flex; flex-direction: column; align-items: center; gap: 6px; padding-top: 12px; border-top: 1px solid var(--border-soft); }
+
+/* ---- settings popover anchored to the gear in the rail ---- */
+.railPopWrap { position: relative; display: flex; }
+.settingsPop {
+  position: absolute; left: calc(100% + 12px); bottom: 0;
+  min-width: 210px; padding: 6px;
+  background: var(--bg-elev-2); border: 1px solid var(--border); border-radius: 12px;
+  box-shadow: var(--shadow); z-index: 200;
+  animation: fade .14s var(--ease-out);
+}
+.settingsPop[hidden] { display: none; }
+.settingsPopTitle { font-size: 10.5px; text-transform: uppercase; letter-spacing: .8px; color: var(--text-faint); font-weight: 600; padding: 6px 10px 8px; }
+.settingsOpt {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 9px 11px; border-radius: 8px; border: none; background: transparent;
+  color: var(--text); font-family: inherit; font-size: 13px; font-weight: 500;
+  text-align: left; cursor: pointer; transition: background .14s;
+}
+.settingsOpt:hover { background: var(--bg-hover); }
+.settingsOptIco { display: inline-grid; place-items: center; width: 16px; height: 16px; color: var(--text-dim); flex-shrink: 0; }
+.settingsOptIco svg { width: 16px; height: 16px; }
+
+/* ---- About dialog (Settings -> About) ---- */
+.aboutHead { display: flex; align-items: center; gap: 13px; }
+.aboutLogo {
+  width: 46px; height: 46px; border-radius: 12px; flex-shrink: 0;
+  display: grid; place-items: center;
+  background: var(--accent-soft); color: var(--accent-hover);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent);
+}
+.aboutLogo svg { width: 24px; height: 24px; }
+.aboutId { display: flex; flex-direction: column; gap: 3px; line-height: 1.2; }
+.aboutName { font-size: 17px; font-weight: 600; letter-spacing: -.2px; color: var(--text); }
+.aboutVer { font-size: 12px; font-weight: 500; color: var(--text-faint); }
+.aboutDesc { font-size: 13.5px; color: var(--text-dim); line-height: 1.6; margin: 2px 0 18px; }
+.aboutMeta { display: flex; flex-direction: column; gap: 13px; }
+.aboutRow { display: flex; align-items: center; gap: 16px; font-size: 13.5px; }
+.aboutKey { width: 84px; flex-shrink: 0; color: var(--text-faint); }
+.aboutLink {
+  display: inline-flex; align-items: center; gap: 7px;
+  color: var(--accent-hover); text-decoration: none; cursor: pointer; font-weight: 500;
+}
+.aboutLink:hover { text-decoration: underline; }
+.aboutLink svg { width: 15px; height: 15px; flex-shrink: 0; }
+.aboutFoot { justify-content: space-between; align-items: center; margin-top: 16px; }
+.aboutCopy { font-size: 12px; color: var(--text-faint); }

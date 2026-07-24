@@ -1,0 +1,323 @@
+@keyframes spin { to { transform: rotate(360deg); } }
+
+:global(#page-changes) { padding-bottom: 0; }
+:global(#page-changes.active) { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+
+.chgRepoBtn {
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 36px; padding: 0 12px;
+  min-width: 320px; max-width: 440px;
+  background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  color: var(--text); font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer;
+  transition: border-color .14s, background .14s;
+}
+.chgRepoBtn:hover { border-color: var(--text-faint); }
+.chgRepoBtn .caret { color: var(--text-faint); flex-shrink: 0; }
+.chgRepoLabel { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+.chgRepoIco { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex-shrink: 0; }
+.chgRepoIco svg { width: 16px; height: 16px; }
+.chgRepoBtn[aria-expanded="true"] { border-color: var(--accent); }
+
+.viewToggle { padding: 3px; }
+.viewToggle :global(.seg-btn) { width: 34px; height: 30px; padding: 0; display: grid; place-items: center; }
+.viewToggle :global(.seg-btn) svg { width: 15px; height: 15px; }
+
+.commitLayout {
+  --w-side: 300px;
+  --w-detail: 240px;
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--w-side) minmax(0, 1fr);
+  gap: 0;
+  flex: 1 1 auto;
+  min-height: 0;
+  background: var(--card);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-row);
+  overflow: hidden;
+}
+.commitLayout.modeHistory,
+.commitLayout.modePulls { grid-template-columns: var(--w-side) var(--w-detail) minmax(0, 1fr); }
+.commitLayout:not(.modeHistory):not(.modePulls) .rzDetail { display: none; }
+.commitDetail[hidden] { display: none; }
+.commitLayout > [data-resize] { position: absolute; top: 0; bottom: 0; width: 11px; margin-left: -5.5px; z-index: 6; }
+.commitLayout > [data-resize="side"] { left: var(--w-side); }
+.commitLayout > [data-resize="detail"] { left: calc(var(--w-side) + var(--w-detail)); }
+.commitLayout > [data-resize]::before { left: 50%; transform: translateX(-50%); }
+
+.commitSide,
+.commitDetail {
+  display: flex; flex-direction: column; min-height: 0;
+  background: transparent; overflow: hidden;
+  border-right: var(--hairline) solid var(--border);
+}
+.commitTabs { display: flex; padding: 6px; gap: 4px; border-bottom: var(--hairline) solid var(--border); flex-shrink: 0; container-type: inline-size; }
+/* Pin the diff header to the exact height of the left pane's tab strip
+   (34px tab + 6px×2 padding + hairline border) so both pane headers and their
+   bottom borders land on the same device pixel — identical position AND
+   thickness (a hardcoded px would drift half a pixel on HiDPI). */
+.commitDiffView { --prr-head-h: calc(46px + var(--hairline)); }
+.commitTab {
+  flex: 1; height: 34px; border: none; border-radius: 0; background: transparent;
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  color: var(--text-dim); font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer;
+  transition: background .14s, color .14s;
+}
+.commitTab .ctIco { display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px; flex-shrink: 0; }
+.commitTab .ctIco svg { width: 15px; height: 15px; }
+.commitTab:hover { background: var(--bg-hover); color: var(--text); }
+.commitTab.active { background: var(--accent-soft); color: var(--accent-hover); }
+.commitTab .ctShort { display: none; }
+@container (max-width: 340px) {
+  .commitTab .ctFull { display: none; }
+  .commitTab .ctShort { display: inline; }
+}
+
+.commitFilter {
+  display: flex; align-items: center; gap: 8px; margin: 10px 12px;
+  height: 34px; padding: 0 11px; flex-shrink: 0;
+  background: var(--bg-elev-2); border: 1px solid var(--border); border-radius: 0;
+  color: var(--text-faint);
+}
+.commitFilter:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.commitFilter input { flex: 1; min-width: 0; background: transparent; border: none; outline: none; color: var(--text); font-family: inherit; font-size: 13px; }
+.commitFilter input::placeholder { color: var(--text-faint); }
+.iconMini {
+  flex-shrink: 0; width: 26px; height: 26px; display: grid; place-items: center;
+  background: transparent; border: none; border-radius: var(--radius-sm); color: var(--text-faint); cursor: pointer;
+  transition: background .12s, color .12s;
+}
+.iconMini[hidden] { display: none; }
+.iconMini:hover { background: var(--bg-hover); color: var(--text); }
+.commitFilter .iconMini.busy svg { animation: spin .8s linear infinite; }
+
+.commitPane { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.commitPane[hidden] { display: none; }
+
+.changesHead,
+.detailFilebar {
+  display: flex; align-items: center; gap: 9px; padding: 4px 12px 8px; flex-shrink: 0;
+  font-size: 11.5px; font-weight: 600; color: var(--text-dim);
+}
+.detailFilebar { padding: 10px 12px 8px; text-transform: uppercase; letter-spacing: .4px; color: var(--text-faint); }
+.changesHeadTitle { flex: 1; min-width: 0; min-height: 26px; display: flex; align-items: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.changesHeadActions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.changesHeadActions :global(.seg) { padding: 2px; }
+.changesHeadActions :global(.seg-btn) { width: 26px; height: 22px; padding: 0; display: grid; place-items: center; }
+.changesHeadActions :global(.seg-btn) svg { width: 14px; height: 14px; }
+.changesHeadActions :global(.seg):not(.viewToggle) :global(.seg-btn):hover:not(:disabled) { background: var(--bg-elev); color: var(--accent-hover); }
+.changesHeadActions :global(.seg-btn):disabled { opacity: .4; cursor: default; }
+
+.scmGroup { display: flex; flex-direction: column; }
+.scmGroupHead {
+  display: flex; align-items: center; gap: 4px; height: 26px;
+  padding: 0 12px 0 8px; position: relative; cursor: pointer; user-select: none;
+  font-size: 11px; font-weight: 600; letter-spacing: .4px; text-transform: uppercase; color: var(--text-faint);
+}
+.scmGroupHead:hover { color: var(--text-dim); }
+.scmGroupTitle { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scmGroupCount {
+  flex-shrink: 0; min-width: 18px; height: 17px; padding: 0 6px; display: inline-grid; place-items: center;
+  background: var(--bg-elev-2); border: 1px solid var(--border); border-radius: 999px;
+  font-size: 10.5px; font-weight: 600; color: var(--text-faint); font-variant-numeric: tabular-nums;
+}
+.scmGroupActions {
+  position: absolute; right: 10px; top: 0; bottom: 0;
+  display: flex; align-items: center; gap: 2px;
+  opacity: 0; pointer-events: none;
+}
+.scmGroup:hover .scmGroupActions { opacity: 1; pointer-events: auto; }
+.scmGroup:hover .scmGroupCount { visibility: hidden; }
+
+.scmAct {
+  width: 22px; height: 22px; flex-shrink: 0; display: grid; place-items: center;
+  background: transparent; border: none; border-radius: 5px; color: var(--text-dim); cursor: pointer;
+  transition: background .12s, color .12s;
+}
+.scmAct svg { width: 15px; height: 15px; }
+.scmAct:hover { background: var(--bg-hover); color: var(--text); }
+.scmAct[data-act="discard"]:hover, .scmAct[data-act="drop"]:hover { color: var(--red); }
+.scmAct[data-act="restore"]:hover { color: var(--accent-hover); }
+.scmActions {
+  position: absolute; right: 34px; top: 0; bottom: 0;
+  display: flex; align-items: center; gap: 1px;
+  opacity: 0; pointer-events: none;
+}
+.stashRow:hover .scmActions {
+  opacity: 1; pointer-events: auto; padding-left: 24px;
+  background: linear-gradient(to right, transparent, var(--bg-hover) 18px);
+}
+
+.scmStashes { margin-top: 2px; }
+.stashRow {
+  display: flex; align-items: center; gap: 9px; position: relative;
+  padding: 5px 12px 5px 26px; min-height: 42px; cursor: default;
+}
+.stashRow:hover { background-color: var(--bg-hover); }
+.stashIco { width: 16px; height: 16px; flex-shrink: 0; color: var(--text-faint); display: grid; place-items: center; }
+.stashIco svg { width: 15px; height: 15px; }
+.stashMain { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.stashMsg { font-size: 13px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stashMeta { font-size: 11px; color: var(--text-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+
+.commitBox { padding: 12px; display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
+.commitBranchBtn {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 10px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  border-radius: 0;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .14s, border-color .14s, color .14s, box-shadow .14s;
+}
+.commitBranchBtn:hover:not(:disabled) { background: var(--bg-hover); border-color: color-mix(in srgb, var(--text-faint) 45%, var(--border)); }
+.commitBranchBtn:disabled { opacity: .5; cursor: not-allowed; }
+.commitBranchBtn .caret { margin-left: auto; color: var(--text-faint); transition: transform .18s; }
+.commitBranchBtn[aria-expanded="true"] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.commitBranchBtn[aria-expanded="true"] .caret { transform: rotate(180deg); }
+
+.branchRow { display: flex; align-items: stretch; gap: 6px; }
+.branchRow .commitBranchBtn { flex: 1; min-width: 0; width: auto; }
+.gitMenuBtn {
+  position: relative; flex-shrink: 0;
+  width: 34px; height: 34px; padding: 0; display: grid; place-items: center;
+  background: var(--bg-elev-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  color: var(--text-dim); cursor: pointer;
+  transition: background .14s, border-color .14s, color .14s, box-shadow .14s;
+}
+.gitMenuBtn:hover:not(:disabled) { background: var(--bg-hover); color: var(--text); border-color: color-mix(in srgb, var(--text-faint) 45%, var(--border)); }
+.gitMenuBtn svg { width: 17px; height: 17px; }
+.gitMenuBtn.busy svg { animation: spin .8s linear infinite; }
+.gitMenuBtn:global(.dropdown-open) { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); color: var(--text); }
+.gitMenuBtn .syncCount { position: absolute; top: -5px; right: -5px; }
+.syncCount {
+  display: inline-grid; place-items: center; min-width: 15px; height: 16px; padding: 0 3px;
+  border-radius: 8px; background: var(--accent); color: #fff;
+  font-size: 10.5px; font-weight: 600; font-variant-numeric: tabular-nums;
+}
+
+.commitInput,
+.commitTextarea {
+  width: 100%; background: var(--bg-elev-2); border: 1px solid var(--border); border-radius: 0;
+  color: var(--text); font-family: inherit; outline: none; transition: border-color .16s var(--ease), box-shadow .16s var(--ease), background .16s var(--ease);
+}
+.commitInput { height: 38px; padding: 0 12px; font-size: 13.5px; font-weight: 400; letter-spacing: -.15px; }
+.commitTextarea { padding: 9px 12px; font-size: 13px; resize: vertical; line-height: 1.5; min-height: 58px; font-weight: 400; }
+.commitInput::placeholder, .commitTextarea::placeholder { font-weight: 400; }
+.commitInput:hover, .commitTextarea:hover { border-color: color-mix(in srgb, var(--text-faint) 30%, var(--border)); background: color-mix(in srgb, var(--bg-elev-2) 95%, var(--text) 5%); }
+.commitInput:focus, .commitTextarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); background: var(--bg-elev); }
+.commitInput::placeholder, .commitTextarea::placeholder { color: var(--text-faint); }
+.commitBtn { width: auto; min-width: 132px; align-self: flex-end; justify-content: center; margin-top: 2px; }
+.commitBtn:disabled { opacity: .5; cursor: not-allowed; }
+.commitBtn b { font-weight: 500; }
+
+.historyList {
+  flex: 1; overflow-y: auto; padding: 6px; min-height: 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.historyList::-webkit-scrollbar { width: 10px; height: 10px; }
+.historyList::-webkit-scrollbar-thumb { background: var(--border); border-radius: 0; border: 2px solid transparent; background-clip: padding-box; }
+.historyList::-webkit-scrollbar-thumb:hover { background: var(--text-faint); background-clip: padding-box; }
+.historyList::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+.historyRow { display: flex; align-items: center; gap: 10px; padding: 9px 11px; border-radius: 0; cursor: pointer; transition: background .12s; border: 1px solid transparent; }
+.historyRow:hover { background: var(--bg-hover); }
+.historyRow.selected { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+.historyRow :global(.pr-state) { font-size: 10px; padding: 2px 7px; }
+.historyRow :global(.pr-state) svg { display: none; }
+.historyMain { flex: 1; min-width: 0; }
+.historySummary { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.historyMeta { display: flex; gap: 7px; align-items: center; margin-top: 5px; font-size: 11.5px; color: var(--text-faint); flex-wrap: nowrap; min-width: 0; }
+.historyHash { flex-shrink: 0; font-family: var(--mono); background: var(--bg-elev-2); padding: 1px 6px; border-radius: 4px; }
+.historyAuthor { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.historyWhen { flex-shrink: 0; white-space: nowrap; }
+.historyMeta .hmDot { flex-shrink: 0; opacity: .7; }
+.historyBadges { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.historyTag { display: inline-flex; align-items: center; gap: 4px; max-width: 130px; padding: 2px 8px 2px 6px; border-radius: 999px; background: var(--bg-elev-2); border: 1px solid var(--border); color: var(--text-dim); font-size: 11px; font-family: var(--mono); line-height: 1.5; }
+.historyTag svg { width: 12px; height: 12px; flex-shrink: 0; opacity: .75; }
+.historyTag > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.historyUnpushed { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 999px; background: var(--bg-elev-2); border: 1px solid var(--border); color: var(--text-dim); flex-shrink: 0; }
+.historyUnpushed svg { width: 13px; height: 13px; }
+
+.detailHead { padding: 16px 16px 14px; border-bottom: var(--hairline) solid var(--border); flex-shrink: 0; }
+.detailMsg { font-size: 14px; font-weight: 600; color: var(--text); line-height: 1.4; word-break: break-word; }
+.detailBody { margin-top: 8px; font-size: 12.5px; color: var(--text-dim); line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+.detailMeta { display: flex; flex-wrap: nowrap; gap: 8px; align-items: center; margin-top: 12px; font-size: 12px; color: var(--text-faint); min-width: 0; }
+.detailAvatar { width: 22px; height: 22px; font-size: 9px; }
+.detailMeta .detailAuthor { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.detailMeta .historyWhen { flex-shrink: 0; }
+.detailMeta .historyHash { color: var(--text-dim); flex-shrink: 0; }
+.detailEmpty { flex: 1; display: grid; place-items: center; text-align: center; color: var(--text-faint); font-size: 13px; padding: 24px; }
+.detailMeta :global(.pr-state) { flex-shrink: 0; margin-left: auto; }
+.prDetailBranch { display: flex; align-items: center; gap: 8px; margin-top: 12px; min-width: 0; }
+.prDetailBranch code { background: var(--bg-elev-2); padding: 2px 8px; border-radius: 5px; font-family: var(--mono); font-size: 11px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 45%; }
+.prDetailBranch .prArrow { color: var(--text-faint); flex-shrink: 0; }
+.prDetailStats { display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+/* Push only the first button to the right so the Review + View buttons stay
+   grouped together (gap: 10px) instead of each grabbing free space. */
+.prDetailStats :global(.btn-sm:first-of-type) { margin-left: auto; }
+
+.commitTab:focus-visible,
+.historyRow:focus-visible { box-shadow: var(--ring); }
+
+.commitFilter,
+.commitInput,
+.commitTextarea { border-radius: var(--radius-sm) !important; }
+.commitFilter input:not([type="radio"]) { border-radius: 0 !important; }
+.commitBranchBtn,
+.chgRepoBtn,
+.commitTab { border-radius: var(--radius-sm) !important; }
+
+@media (max-width: 1100px) {
+  .commitLayout { --w-side: 264px; --w-detail: 224px; }
+}
+@media (max-width: 900px) {
+  .commitLayout,
+  .commitLayout.modeHistory { grid-template-columns: 1fr; height: auto; gap: 0; }
+  .commitLayout [data-resize] { display: none; }
+  .commitLayout .commitDetail,
+  .commitLayout .commitDiffView { }
+  :global(#page-changes.active) { height: auto; min-height: 100%; padding-bottom: 24px; }
+  .commitLayout { flex: 0 0 auto; }
+}
+
+/* Conflict banner shown on the commit pane while the selected repo has merge
+   conflicts (links to the resolver). Changes-only; conditionally rendered. */
+.conflictBanner {
+  display: flex; align-items: center; gap: 10px;
+  margin: 10px 12px 0; padding: 9px 12px;
+  border: 1px solid color-mix(in srgb, var(--amber) 40%, var(--border));
+  border-radius: var(--radius-sm);
+  background: var(--amber-soft);
+  color: var(--text); font-family: inherit; font-size: 12.5px; font-weight: 500;
+  text-align: left; cursor: pointer; transition: background .14s, border-color .14s;
+}
+.conflictBanner:hover {
+  background: color-mix(in srgb, var(--amber) 18%, var(--bg-elev));
+  border-color: color-mix(in srgb, var(--amber) 58%, var(--border));
+}
+.conflictBannerIco { color: var(--amber); flex-shrink: 0; display: grid; place-items: center; }
+.conflictBannerText { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conflictBannerGo {
+  flex-shrink: 0; display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; font-weight: 600; color: var(--amber); white-space: nowrap;
+}
+
+/* Raw text output (Show Git Output / View Stash) — always a fixed dark
+   terminal-style box, independent of the light/dark app theme (--code-bg
+   flips to white in light theme, which would wash out the light-gray text).
+   Changes-only; used by the git-output and stash modals. */
+.gitOutputPre {
+  max-height: 55vh; overflow: auto; margin: 0;
+  padding: 12px 14px; background: #1e1e1e; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  color: #d4d4d4; font-family: var(--mono); font-size: 12px; line-height: 1.6; white-space: pre-wrap; word-break: break-word;
+}

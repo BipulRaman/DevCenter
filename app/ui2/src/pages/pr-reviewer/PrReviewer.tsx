@@ -4,6 +4,7 @@
 
 import { useState } from "preact/hooks";
 import { ipc } from "@/platform/ipc";
+import { Avatar } from "@/components/Avatar";
 import {
   reviewerOpen,
   reviewerPr,
@@ -31,16 +32,14 @@ import { ICONS, Raw } from "@/lib/ico";
 import { prReviewChip, mdLite, escapeHtml } from "@/lib/helpers";
 import { openMenu, type MenuItem } from "@/components/menu";
 import { modal } from "@/components/modal";
-import { FileTree } from "@/lib/file-tree";
+import { FileTree, treeStyles } from "@/lib/file-tree";
 import { PaneResizer } from "@/components/PaneResizer";
+import { DiffView, diffStyles } from "@/components/DiffView";
 import type { FileDiff, PrThread } from "@/types/models";
+import styles from "./PrReviewer.module.css";
 
-const VOTE_CLS: Record<string, string> = { "10": "ok", "5": "ok", "0": "muted", "-5": "warn", "-10": "danger" };
-
-const DIFF_EXPAND =
-  '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 9 12 4 17 9"/><polyline points="7 15 12 20 17 15"/></svg>';
-const DIFF_COLLAPSE =
-  '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 4 12 9 17 4"/><polyline points="7 20 12 15 17 20"/></svg>';
+const VOTE_CLS: Record<string, string> = { "10": styles.ok, "5": styles.ok, "0": styles.muted, "-5": styles.warn, "-10": styles.danger };
+const REVIEW_CLS: Record<string, string> = { ok: styles.ok, "ok-light": styles.okLight, warn: styles.warn, danger: styles.danger, muted: styles.muted };
 
 function hlLine(content: string, path: string): string {
   const H = window.Highlighter;
@@ -59,33 +58,30 @@ export function PrReviewer() {
   };
 
   return (
-    <section class="page active" id="page-pr-review">
+    <section class={`page active ${styles.root}`} id="page-pr-review">
       <header class="page-head">
-        <div class="conflict-head-main">
+        <div class={styles.conflictHeadMain}>
           <button class="btn btn-icon btn-sm" type="button" title="Back" onClick={back}>
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M19 12H5" />
-              <path d="m12 19-7-7 7-7" />
-            </svg>
+            <Raw html={ICONS.arrowLeft} />
           </button>
           <div>
             <h1>{pr.title || `Pull request #${pr.id}`}</h1>
             <p class="page-desc">
-              <span class="prr-meta-row">
-                <span class="prr-repo">{pr.repo || ""}</span>
-                <span class="prr-num">#{pr.id}</span>
-                <span class="prr-dot">·</span>
-                <span class="prr-by">{pr.author || ""}</span>
+              <span class={styles.metaRow}>
+                <span class={styles.repo}>{pr.repo || ""}</span>
+                <span class={styles.number}>#{pr.id}</span>
+                <span class={styles.dot}>·</span>
+                <span class={styles.by}>{pr.author || ""}</span>
               </span>{" "}
-              <span class="prr-branches">
-                <span class="prr-branch-name" title={pr.branch}>
+              <span class={styles.branches}>
+                <span class={styles.branchName} title={pr.branch}>
                   {pr.branch}
                 </span>
-                <svg class="prr-arrow" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <svg class={styles.arrow} viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M5 12h14" />
                   <path d="m13 6 6 6-6 6" />
                 </svg>
-                <span class="prr-branch-name base" title={pr.base}>
+                <span class={`${styles.branchName} ${styles.base}`} title={pr.base}>
                   {pr.base}
                 </span>
               </span>
@@ -97,11 +93,11 @@ export function PrReviewer() {
         </div>
       </header>
 
-      <div class="prr-layout">
-        <aside class="prr-side">
-          <div class="prr-tabs" role="tablist" aria-label="Pull request review views">
+      <div class={styles.layout}>
+        <aside class={styles.side}>
+          <div class={styles.tabs} role="tablist" aria-label="Pull request review views">
             <button
-              class={`prr-tab${reviewerTab.value === "files" ? " active" : ""}`}
+              class={`${styles.tab}${reviewerTab.value === "files" ? ` ${styles.active}` : ""}`}
               type="button"
               role="tab"
               aria-selected={reviewerTab.value === "files"}
@@ -110,7 +106,7 @@ export function PrReviewer() {
               Files
             </button>
             <button
-              class={`prr-tab${reviewerTab.value === "conversation" ? " active" : ""}`}
+              class={`${styles.tab}${reviewerTab.value === "conversation" ? ` ${styles.active}` : ""}`}
               type="button"
               role="tab"
               aria-selected={reviewerTab.value === "conversation"}
@@ -119,13 +115,13 @@ export function PrReviewer() {
               Conversation
             </button>
           </div>
-          <div class="conflict-files">
+          <div class={styles.conflictFiles}>
             <FileList />
           </div>
         </aside>
         <PaneResizer resize="prr-side" varName="--prr-side" storageKey="dc.prr.side" min={200} max={620} def={290} ariaLabel="Resize file list" />
-        <section class="prr-main">
-          {reviewerTab.value === "conversation" ? <Conversation /> : <DiffView />}
+        <section class={styles.main}>
+          {reviewerTab.value === "conversation" ? <Conversation /> : <ReviewerDiff />}
         </section>
       </div>
     </section>
@@ -149,9 +145,10 @@ function ReviewActions() {
       Comment
     </button>
   );
+  const reviewClass = REVIEW_CLS[rv.cls] || styles.muted;
   const statusPill = (
-    <span class={`prr-status ${rv.cls}`} title="Overall review status">
-      <span class={`prr-vote-dot ${rv.cls}`} />
+    <span class={`${styles.status} ${reviewClass}`} title="Overall review status">
+      <span class={`${styles.voteDot} ${reviewClass}`} />
       {rv.label}
     </span>
   );
@@ -162,7 +159,7 @@ function ReviewActions() {
         {statusPill}
         {openBtn}
         {commentBtn}
-        <button class="btn btn-primary btn-sm prr-publish-btn" type="button" title="Mark this draft ready for review" onClick={onPublish}>
+        <button class={`btn btn-primary btn-sm ${styles.publishBtn}`} type="button" title="Mark this draft ready for review" onClick={onPublish}>
           <Raw html={ICONS.up} />
           Publish
         </button>
@@ -189,16 +186,16 @@ function ReviewActions() {
         {statusPill}
         {openBtn}
         {commentBtn}
-        <div class="prr-vote">
+        <div class={styles.vote}>
           <button
-            class={`btn ${voted ? "btn-primary" : "btn-ghost"} btn-sm prr-vote-btn`}
+            class={`btn ${voted ? "btn-primary" : "btn-ghost"} btn-sm ${styles.voteBtn}`}
             type="button"
             aria-haspopup="true"
-            onClick={(e) => voteMenu(e.currentTarget.closest(".prr-vote") as HTMLElement)}
+            onClick={(e) => voteMenu(e.currentTarget.closest(`.${styles.vote}`) as HTMLElement)}
           >
-            <span class={`prr-vote-dot ${cur}`} />
+            <span class={`${styles.voteDot} ${cur}`} />
             <span>Vote</span>
-            <svg class="caret" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <svg class={styles.caret} viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="6 9 12 15 18 9" />
             </svg>
           </button>
@@ -215,10 +212,10 @@ function ReviewActions() {
       {statusPill}
       {openBtn}
       {commentBtn}
-      <button class={`btn btn-danger btn-sm${rejected ? " is-current" : ""}`} type="button" onClick={() => runReview("changes")}>
+      <button class={`btn btn-danger btn-sm${rejected ? ` ${styles.isCurrent}` : ""}`} type="button" onClick={() => runReview("changes")}>
         {rejected ? "Changes requested ✓" : "Request changes"}
       </button>
-      <button class={`btn btn-primary btn-sm${approved ? " is-current" : ""}`} type="button" onClick={() => runReview("approve")}>
+      <button class={`btn btn-primary btn-sm${approved ? ` ${styles.isCurrent}` : ""}`} type="button" onClick={() => runReview("approve")}>
         {approved ? "Approved ✓" : "Approve"}
       </button>
     </>
@@ -226,7 +223,7 @@ function ReviewActions() {
 }
 
 function dot(cls: string): string {
-  return `<span class="prr-vote-dot ${cls}" style="display:inline-block;width:9px;height:9px;border-radius:50%"></span>`;
+  return `<span class="${styles.voteDot} ${styles.menuVoteDot} ${REVIEW_CLS[cls] || styles.muted}"></span>`;
 }
 
 async function onPublish() {
@@ -322,7 +319,7 @@ function ReviewDialogBody({
 function FileList() {
   const files = reviewerFiles.value;
   if (!files.length) {
-    return <div class="changes-empty">{reviewerLoadError.value || "No file changes."}</div>;
+    return <div class={treeStyles.changesEmpty}>{reviewerLoadError.value || "No file changes."}</div>;
   }
   return (
     <FileTree
@@ -333,122 +330,97 @@ function FileList() {
       onSelect={(path) => selectFile(path)}
       fileBadge={(path) => {
         const n = threadsFor(path).length;
-        return n ? <span class="prr-thread-badge">{n}</span> : null;
+        return n ? <span class={styles.threadBadge}>{n}</span> : null;
       }}
     />
   );
 }
 
-function DiffView() {
+function ReviewerDiff() {
   const diff = reviewerDiff.value;
-  if (reviewerDiffLoading.value) {
-    return (
-      <div class="diff-view">
-        <div class="diff-empty">Loading diff…</div>
-      </div>
-    );
-  }
-  if (!reviewerActiveFile.value || !diff) {
-    return (
-      <div class="diff-view">
-        <div class="diff-empty">{reviewerLoadError.value || "Select a file to view its diff."}</div>
-      </div>
-    );
-  }
   return (
-    <div class="diff-view">
-      <DiffContent diff={diff} />
-    </div>
+    <DiffView
+      diff={reviewerActiveFile.value ? diff : null}
+      loading={reviewerDiffLoading.value}
+      empty={reviewerLoadError.value || "Select a file to view its diff."}
+      wholeFile={reviewerWholeFile.value}
+      onToggleWholeFile={toggleWholeFile}
+      viewClass={styles.reviewerDiffView}
+    >
+      {reviewerActiveFile.value && diff ? <ReviewerDiffBody diff={diff} /> : null}
+    </DiffView>
   );
 }
 
-function DiffContent({ diff }: { diff: FileDiff }) {
+function ReviewerDiffBody({ diff }: { diff: FileDiff }) {
   const [composerLine, setComposerLine] = useState<number | null>(null);
 
   return (
-    <div class="diff-content">
-      <div class="diff-head">
-        <span class="diff-path" title={diff.path}>
-          {diff.path}
-        </span>
-        <span class="diff-adds">+{diff.additions}</span>
-        <span class="diff-dels">−{diff.deletions}</span>
-        <button
-          class={`icon-mini diff-expand-btn${reviewerWholeFile.value ? " active" : ""}`}
-          type="button"
-          title={reviewerWholeFile.value ? "Show only changed lines" : "Show the whole file"}
-          onClick={toggleWholeFile}
-        >
-          <Raw html={reviewerWholeFile.value ? DIFF_COLLAPSE : DIFF_EXPAND} />
-        </button>
-      </div>
-      <div class="diff-body">
-        {diff.oldImage || diff.newImage ? (
-          <div class="diff-binary">Image file — open the Changes page or the PR in the browser to preview it.</div>
-        ) : diff.binary ? (
-          <div class="diff-binary">Binary file — no text diff to display.</div>
-        ) : !diff.hunks.length ? (
-          <div class="diff-binary">No textual changes to display.</div>
-        ) : (
-          <div class="diff-code">
-            {diff.hunks.map((h, hi) => (
-              <div key={hi}>
-                <div class="diff-hunk-head">{h.header}</div>
-                {h.lines.map((l, li) => {
-                  const cls = l.kind === "add" ? "add" : l.kind === "del" ? "del" : "";
-                  const canComment = l.newLineno != null;
-                  const lineThreads = canComment ? threadsFor(diff.path).filter((t) => t.line === l.newLineno) : [];
-                  return (
-                    <div key={`${hi}-${li}`}>
-                      <div class={`diff-line ${cls}`}>
-                        <span class="diff-gutter">
-                          <span>{l.oldLineno ?? ""}</span>
-                          <span>{l.newLineno ?? ""}</span>
-                          {canComment ? (
-                            <button
-                              class="prr-line-add"
-                              type="button"
-                              title="Add a comment on this line"
-                              onClick={() => setComposerLine(l.newLineno!)}
-                            >
-                              +
-                            </button>
-                          ) : null}
-                        </span>
-                        <span class="diff-text" dangerouslySetInnerHTML={{ __html: hlLine(l.content, diff.path) }} />
-                      </div>
-                      {lineThreads.map((t) => (
-                        <Thread key={t.id} thread={t} />
-                      ))}
-                      {composerLine === l.newLineno && canComment ? (
-                        <NewComposer
-                          path={diff.path}
-                          line={l.newLineno!}
-                          onClose={() => setComposerLine(null)}
-                        />
-                      ) : null}
+    <div class={diffStyles.diffBody}>
+      {diff.oldImage || diff.newImage ? (
+        <div class={diffStyles.diffBinary}>Image file — open the Changes page or the PR in the browser to preview it.</div>
+      ) : diff.binary ? (
+        <div class={diffStyles.diffBinary}>Binary file — no text diff to display.</div>
+      ) : !diff.hunks.length ? (
+        <div class={diffStyles.diffBinary}>No textual changes to display.</div>
+      ) : (
+        <div class={diffStyles.diffCode}>
+          {diff.hunks.map((h, hi) => (
+            <div key={hi}>
+              <div class={diffStyles.diffHunkHead}>{h.header}</div>
+              {h.lines.map((l, li) => {
+                const cls = l.kind === "add" ? diffStyles.add : l.kind === "del" ? diffStyles.del : "";
+                const canComment = l.newLineno != null;
+                const lineThreads = canComment ? threadsFor(diff.path).filter((t) => t.line === l.newLineno) : [];
+                return (
+                  <div key={`${hi}-${li}`}>
+                    <div class={`${diffStyles.diffLine} ${cls}`}>
+                      <span class={diffStyles.diffGutter}>
+                        <span>{l.oldLineno ?? ""}</span>
+                        <span>{l.newLineno ?? ""}</span>
+                        {canComment ? (
+                          <button
+                            class={diffStyles.lineAdd}
+                            type="button"
+                            title="Add a comment on this line"
+                            onClick={() => setComposerLine(l.newLineno!)}
+                          >
+                            +
+                          </button>
+                        ) : null}
+                      </span>
+                      <span class={diffStyles.diffText} dangerouslySetInnerHTML={{ __html: hlLine(l.content, diff.path) }} />
                     </div>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+                    {lineThreads.map((t) => (
+                      <Thread key={t.id} thread={t} />
+                    ))}
+                    {composerLine === l.newLineno && canComment ? (
+                      <NewComposer
+                        path={diff.path}
+                        line={l.newLineno!}
+                        onClose={() => setComposerLine(null)}
+                      />
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
 function Comment({ author, body, created }: { author: string; body: string; created: string }) {
-  const initials = (author || "?").slice(0, 2).toUpperCase();
   return (
-    <div class="prr-comment">
-      <div class="prr-comment-meta">
-        <span class="avatar">{initials}</span>
-        <span class="prr-comment-author">{author}</span>
+    <div class={styles.comment}>
+      <div class={styles.commentMeta}>
+        <Avatar name={author} class={styles.commentAvatar} />
+        <span class={styles.commentAuthor}>{author}</span>
         <span>{created}</span>
       </div>
-      <div class="prr-comment-body" dangerouslySetInnerHTML={{ __html: mdLite(body) }} />
+      <div class={styles.commentBody} dangerouslySetInnerHTML={{ __html: mdLite(body, styles.mdPre) }} />
     </div>
   );
 }
@@ -466,9 +438,9 @@ function Thread({ thread: t }: { thread: PrThread }) {
     }
   };
   return (
-    <div class={`prr-thread${t.resolved ? " resolved" : ""}`}>
-      <div class="prr-thread-head">
-        <span class="prr-thread-path">
+    <div class={`${styles.thread}${t.resolved ? ` ${styles.resolved}` : ""}`}>
+      <div class={styles.threadHead}>
+        <span class={styles.threadPath}>
           {t.path ? `${t.path}${t.line != null ? ":" + t.line : ""}` : "General discussion"}
         </span>
         {t.canResolve ? (
@@ -490,9 +462,9 @@ function Thread({ thread: t }: { thread: PrThread }) {
       {t.comments.map((c) => (
         <Comment key={c.id} author={c.author} body={c.body} created={c.created} />
       ))}
-      <div class="prr-composer">
+      <div class={styles.composer}>
         <textarea placeholder="Reply…" value={reply} onInput={(e) => setReply((e.target as HTMLTextAreaElement).value)} />
-        <div class="prr-composer-actions">
+        <div class={styles.composerActions}>
           <button class="btn btn-primary btn-sm" type="button" onClick={submit}>
             Reply
           </button>
@@ -515,10 +487,10 @@ function NewComposer({ path, line, onClose }: { path: string; line: number; onCl
     }
   };
   return (
-    <div class="prr-thread prr-new-composer">
-      <div class="prr-composer">
+    <div class={styles.thread}>
+      <div class={styles.composer}>
         <textarea placeholder="Add a comment…" autofocus value={body} onInput={(e) => setBody((e.target as HTMLTextAreaElement).value)} />
-        <div class="prr-composer-actions">
+        <div class={styles.composerActions}>
           <button class="btn btn-ghost btn-sm" type="button" onClick={onClose}>
             Cancel
           </button>
@@ -545,23 +517,23 @@ function Conversation() {
     }
   };
   return (
-    <div id="prrConversationView" role="tabpanel">
-      <div class="prr-conversation">
+    <div class={styles.conversationView} role="tabpanel">
+      <div class={styles.conversation}>
         {general.length ? (
           general.map((t) => (
-            <div class="prr-thread-general" key={t.id}>
+            <div class={styles.threadGeneral} key={t.id}>
               {t.comments.map((c) => (
                 <Comment key={c.id} author={c.author} body={c.body} created={c.created} />
               ))}
             </div>
           ))
         ) : (
-          <div class="changes-empty">No comments yet — start the discussion below.</div>
+          <div class={treeStyles.changesEmpty}>No comments yet — start the discussion below.</div>
         )}
-        <div class="prr-thread-general">
-          <div class="prr-composer">
+        <div class={styles.threadGeneral}>
+          <div class={styles.composer}>
             <textarea placeholder="Write a comment…" value={val} onInput={(e) => setVal((e.target as HTMLTextAreaElement).value)} />
-            <div class="prr-composer-actions">
+            <div class={styles.composerActions}>
               <button class="btn btn-primary btn-sm" type="button" onClick={submit}>
                 Comment
               </button>

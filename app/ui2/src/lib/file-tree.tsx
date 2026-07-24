@@ -5,13 +5,13 @@
 
 import { useState } from "preact/hooks";
 import type { JSX } from "preact";
-import { Raw } from "@/lib/ico";
+import { Raw, ICONS } from "@/lib/ico";
 import type { FileChange, FileStatus } from "@/types/models";
+import styles from "./file-tree.module.css";
 
-const FOLDER_ICO =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>';
-const TREE_CARET =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
+/** Shared file-tree styles — re-exported so consumer pages (Changes, PR reviewer)
+ *  use the same hashed class names as the tree rows (was global CSS). */
+export { default as treeStyles } from "./file-tree.module.css";
 
 const STAT_LETTER: Record<string, string> = {
   new: "A",
@@ -29,9 +29,9 @@ export function fileIconHtml(name: string): string {
   const seti = window.SetiIcons;
   if (seti) {
     const { char, color } = seti.forFile(name);
-    return `<span class="tree-ico seti-ico" style="color:${color}">${char}</span>`;
+    return `<span class="${styles.treeIco} ${styles.setiIco}" style="color:${color}">${char}</span>`;
   }
-  return `<span class="tree-ico file-ico">${FOLDER_ICO}</span>`;
+  return `<span class="${styles.treeIco}">${ICONS.folder}</span>`;
 }
 
 interface TreeNode {
@@ -96,6 +96,11 @@ export function fileOrder(files: FileChange[], viewMode: "tree" | "list"): strin
 export type FileAction = "stage" | "unstage" | "discard";
 export type FileGroup = "staged" | "unstaged" | null;
 
+export interface FileTreeActionClasses {
+  actions: string;
+  action: string;
+}
+
 /** All directory paths in a file list — used to collapse-all a tree. */
 export function allDirPaths(files: FileChange[]): string[] {
   const dirs = new Set<string>();
@@ -123,6 +128,7 @@ export interface FileTreeProps {
   /** Optional controlled collapse state (e.g. commit-detail "collapse all"). */
   collapsed?: Set<string>;
   onToggleCollapse?: (key: string) => void;
+  actionClasses?: FileTreeActionClasses;
 }
 
 /** Renders staged/unstaged/PR/commit file rows as a collapsible tree or a flat list. */
@@ -148,25 +154,27 @@ export function FileTree(props: FileTreeProps) {
 
   const rowActions = (scope: "file" | "folder", key: string) => {
     if (!withActions) return null;
+    const actionsClass = props.actionClasses?.actions;
+    const actionClass = props.actionClasses?.action;
     const fire = (act: FileAction, e: MouseEvent) => {
       e.stopPropagation();
       if (scope === "folder") props.onFolderAction?.(act, key);
       else props.onAction?.(act, key);
     };
     return (
-      <span class="scm-actions">
+      <span class={actionsClass ? `${styles.rowActions} ${actionsClass}` : styles.rowActions}>
         {group === "unstaged" ? (
           <>
-            <button class="scm-act" data-act="discard" type="button" title="Discard changes" onClick={(e) => fire("discard", e)}>
-              <Raw html={DISCARD_ICO} />
+            <button class={actionClass} data-act="discard" type="button" title="Discard changes" onClick={(e) => fire("discard", e)}>
+              <Raw html={ICONS.discard} />
             </button>
-            <button class="scm-act" type="button" title="Stage changes" onClick={(e) => fire("stage", e)}>
-              <Raw html={STAGE_ICO} />
+            <button class={actionClass} type="button" title="Stage changes" onClick={(e) => fire("stage", e)}>
+              <Raw html={ICONS.plus} />
             </button>
           </>
         ) : (
-          <button class="scm-act" type="button" title="Unstage changes" onClick={(e) => fire("unstage", e)}>
-            <Raw html={UNSTAGE_ICO} />
+          <button class={actionClass} type="button" title="Unstage changes" onClick={(e) => fire("unstage", e)}>
+            <Raw html={ICONS.minus} />
           </button>
         )}
       </span>
@@ -177,18 +185,18 @@ export function FileTree(props: FileTreeProps) {
     const active = props.activeFile === f.path;
     return (
       <div
-        class={`tree-row tree-file${active ? " selected" : ""}`}
+        class={`${styles.treeRow} ${styles.treeFile}${active ? ` ${styles.selected}` : ""}`}
         style={{ "--d": depth } as JSX.CSSProperties}
         title={f.path}
         key={f.path}
         onClick={() => props.onSelect(f.path)}
       >
-        {showTwisty ? <span class="tree-twisty" style={{ visibility: "hidden" }} dangerouslySetInnerHTML={{ __html: TREE_CARET }} /> : null}
+        {showTwisty ? <span class={`${styles.treeTwisty} ${styles.hiddenTwisty}`} dangerouslySetInnerHTML={{ __html: ICONS.chevronDown }} /> : null}
         <Raw html={fileIconHtml(f.name)} />
-        <span class="tree-name">{f.name}</span>
+        <span class={styles.treeName}>{f.name}</span>
         {rowActions("file", f.path)}
         {props.fileBadge?.(f.path)}
-        <span class={`change-stat ${f.status}`} title={f.status}>
+        <span class={`${styles.changeStat} ${styles[f.status] ?? ""}`} title={f.status}>
           {statBadge(f.status)}
         </span>
       </div>
@@ -208,20 +216,19 @@ export function FileTree(props: FileTreeProps) {
         const active = props.activeFile === f.path;
         rows.push(
           <div
-            class={`tree-row tree-file${active ? " selected" : ""}`}
-            style={{ "--d": 0 } as JSX.CSSProperties}
+            class={`${styles.treeRow} ${styles.treeFile}${active ? ` ${styles.selected}` : ""}`}
             title={f.path}
             key={f.path}
             onClick={() => props.onSelect(f.path)}
           >
             <Raw html={fileIconHtml(name)} />
-            <span class="tree-name">
-              <span class="change-dir">{dir}</span>
+            <span class={styles.treeName}>
+              <span class={styles.changeDir}>{dir}</span>
               {name}
             </span>
             {rowActions("file", f.path)}
             {props.fileBadge?.(f.path)}
-            <span class={`change-stat ${f.status}`} title={f.status}>
+            <span class={`${styles.changeStat} ${styles[f.status] ?? ""}`} title={f.status}>
               {statBadge(f.status)}
             </span>
           </div>,
@@ -241,14 +248,14 @@ export function FileTree(props: FileTreeProps) {
         const isCollapsed = collapsed.has(eff.path);
         const desc = collectFiles(eff);
         rows.push(
-          <div class="tree-row tree-folder" style={{ "--d": depth } as JSX.CSSProperties} key={"d:" + eff.path} onClick={() => toggle(eff.path)}>
-            <span class={`tree-twisty ${isCollapsed ? "collapsed" : ""}`} dangerouslySetInnerHTML={{ __html: TREE_CARET }} />
-            <span class="tree-ico" dangerouslySetInnerHTML={{ __html: FOLDER_ICO }} />
-            <span class="tree-name" title={eff.path}>
+          <div class={`${styles.treeRow} ${styles.treeFolder}`} style={{ "--d": depth } as JSX.CSSProperties} key={"d:" + eff.path} onClick={() => toggle(eff.path)}>
+            <span class={`${styles.treeTwisty} ${isCollapsed ? styles.collapsed : ""}`} dangerouslySetInnerHTML={{ __html: ICONS.chevronDown }} />
+            <span class={styles.treeIco} dangerouslySetInnerHTML={{ __html: ICONS.folder }} />
+            <span class={styles.treeName} title={eff.path}>
               {label}
             </span>
             {rowActions("folder", eff.path)}
-            <span class="tree-count">{desc.length}</span>
+            <span class={styles.treeCount}>{desc.length}</span>
           </div>,
         );
         if (!isCollapsed) walk(eff, depth + 1);
@@ -261,15 +268,8 @@ export function FileTree(props: FileTreeProps) {
     walk(buildTree(props.files), 0);
   }
 
-  if (!rows.length) return <div class="changes-empty">No files.</div>;
+  if (!rows.length) return <div class={styles.changesEmpty}>No files.</div>;
   return <>{rows}</>;
 }
-
-const STAGE_ICO =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
-const UNSTAGE_ICO =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>';
-const DISCARD_ICO =
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor"><path d="M3.00098 2.5C3.00098 2.22386 3.22483 2 3.50098 2C3.77712 2 4.00098 2.22386 4.00098 2.5V6.34262L7.17202 3.17157C8.73412 1.60948 11.2668 1.60948 12.8289 3.17157C14.391 4.73367 14.391 7.26633 12.8289 8.82843L7.80375 13.8536C7.60849 14.0488 7.2919 14.0488 7.09664 13.8536C6.90138 13.6583 6.90138 13.3417 7.09664 13.1464L12.1218 8.12132C13.2933 6.94975 13.2933 5.05025 12.1218 3.87868C10.9502 2.70711 9.0507 2.70711 7.87913 3.87868L4.75781 7H8.50098C8.77712 7 9.00098 7.22386 9.00098 7.5C9.00098 7.77614 8.77712 8 8.50098 8H3.60098C3.26961 8 3.00098 7.73137 3.00098 7.4V2.5Z"/></svg>';
 
 export type { FileStatus };

@@ -27,6 +27,7 @@ import { modal } from "@/components/modal";
 import { Multiselect, type MultiOption } from "@/components/Multiselect";
 import { openTagEditor as tagEditorModal } from "@/components/TagEditor";
 import type { Repo } from "@/types/models";
+import styles from "./GitBoard.module.css";
 
 const ACCT_KEY = "dc.repos.accountFilter";
 const TAG_KEY = "dc.repos.tagFilter";
@@ -91,7 +92,7 @@ export function GitBoard() {
         </div>
         <div class="page-actions">
           <div class="search">
-            <Raw html={SEARCH_SVG} />
+            <Raw html={ICONS.search} />
             <input
               type="text"
               placeholder="Search repositories…"
@@ -105,7 +106,7 @@ export function GitBoard() {
               selected={acctFilter.value}
               onChange={setAcct}
               allLabel="All accounts"
-              buttonIcon={ACCT_SVG}
+              buttonIcon={ICONS.card}
               countNoun="accounts"
               ariaLabel="Repository accounts"
             />
@@ -126,7 +127,7 @@ export function GitBoard() {
         </div>
       </header>
 
-      <div class="repo-list">
+      <div class={styles.repoList}>
         {list.value.map((r) => (
           <RepoRow key={r.id} repo={r} />
         ))}
@@ -146,17 +147,12 @@ export function GitBoard() {
   );
 }
 
-const SEARCH_SVG =
-  '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>';
-const ACCT_SVG =
-  '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M3 10h18"/></svg>';
-
 function RepoRow({ repo: r }: { repo: Repo }) {
   const busy = useSignal(false);
   const provider = r.provider === "github" || r.provider === "azure" ? r.provider : "other";
   const ahead = r.ahead || 0;
   const behind = r.behind || 0;
-  const dotClass = r.status === "dirty" ? "error" : "running";
+  const statusClass = r.status === "dirty" ? styles.error : styles.running;
   const canSync = ipc.hasBackend;
 
   const openInChanges = (tab: "changes" | "history" | "pulls" = "changes") => {
@@ -283,18 +279,18 @@ function RepoRow({ repo: r }: { repo: Repo }) {
 
   return (
     <div
-      class={`repo-row ${dotClass}`}
+      class={`${styles.repoRow} ${statusClass}`}
       onContextMenu={(e) => {
         e.preventDefault();
         openContextMenu(e.clientX, e.clientY, menuItems());
       }}
     >
-      <div class={`repo-icon ${provider}`}>
+      <div class={`${styles.repoIcon} ${provider === "github" ? styles.github : provider === "azure" ? styles.azure : ""}`}>
         <Raw html={providerIconHtml(provider)} />
       </div>
-      <div class="repo-main">
-        <div class="repo-title-row">
-          <span class="repo-name repo-open-link" title="Open in Changes" onClick={() => openInChanges()}>
+      <div class={styles.repoMain}>
+        <div class={styles.repoTitleRow}>
+          <span class={`${styles.repoName} repo-open-link`} title="Open in Changes" onClick={() => openInChanges()}>
             {r.name || ""}
           </span>
           {canSync ? (
@@ -338,11 +334,12 @@ function RepoRow({ repo: r }: { repo: Repo }) {
             </span>
           ))}
         </div>
-        <div class="repo-sub">
-          <span class="repo-path">{r.path || ""}</span>
+        <div class={styles.repoSub}>
+          <span class={styles.repoPath}>{r.path || ""}</span>
           <span class="repo-dot">·</span>
           <span
-            class={`repo-fetch${spinning ? " fetching" : ""}`}
+            class={`${styles.repoFetch}${spinning ? ` ${styles.fetching}` : ""}`}
+            data-fetch-now={canSync || undefined}
             title={canSync ? "Fetch now" : undefined}
             onClick={canSync ? doFetch : undefined}
           >
@@ -351,9 +348,9 @@ function RepoRow({ repo: r }: { repo: Repo }) {
           </span>
         </div>
       </div>
-      <div class="repo-actions">
+      <div class={styles.repoActions}>
         {r.watched ? (
-          <button class="btn btn-ghost btn-sm watching" title="Stop watching PRs" onClick={toggleWatch}>
+          <button class={`btn btn-ghost btn-sm ${styles.watching}`} title="Stop watching PRs" onClick={toggleWatch}>
             <Raw html={ICONS.eye} />
             Watching
           </button>
@@ -445,15 +442,12 @@ function AddExistingButton() {
           <Raw html={ICONS.sync} />
         </span>
       ) : (
-        <Raw html={ADD_SVG} />
+        <Raw html={ICONS.folderPlus} />
       )}
       {busy ? "Scanning…" : "Add existing"}
     </button>
   );
 }
-
-const ADD_SVG =
-  '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/><line x1="12" y1="10" x2="12" y2="16"/><line x1="9" y1="13" x2="15" y2="13"/></svg>';
 
 function CloneButton() {
   const [busy, setBusy] = useState(false);

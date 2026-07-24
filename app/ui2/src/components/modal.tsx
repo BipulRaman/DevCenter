@@ -1,12 +1,13 @@
 // Modal dialog host — the Preact equivalent of the `Modal` singleton in
 // app/ui/js/components.js. A single <ModalHost/> lives at the app root; code
 // calls `modal.alert / confirm / prompt / custom`, each returning a Promise.
-// Reuses the exact CSS classes from app/ui (.modal-overlay/.modal/.modal-*).
+// Shared form primitives stay global; the modal shell itself is locally scoped.
 
 import { signal } from "@preact/signals";
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { ComponentChildren } from "preact";
 import { Ico } from "@/lib/ico";
+import styles from "./modal.module.css";
 
 type CloseFn<T> = (value: T) => void;
 
@@ -205,7 +206,7 @@ export function ModalHost() {
 
   return (
     <div
-      class="modal-overlay open"
+      class={styles.overlay}
       aria-hidden="false"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) closeCurrent(null);
@@ -213,15 +214,15 @@ export function ModalHost() {
     >
       <div
         ref={modalRef}
-        class={`modal${def.wide ? " modal-wide" : ""}`}
+        class={`${styles.dialog}${def.wide ? ` ${styles.wide}` : ""}`}
         role="dialog"
         aria-modal="true"
         tabIndex={-1}
       >
-        <div class="modal-head">
-          <h2 class="modal-title">{def.title}</h2>
+        <div class={styles.head}>
+          <h2 class={styles.title}>{def.title}</h2>
           <button
-            class="btn btn-icon modal-close"
+            class={`btn btn-icon ${styles.close}`}
             type="button"
             title="Close"
             aria-label="Close"
@@ -230,7 +231,7 @@ export function ModalHost() {
             <Ico name="x" />
           </button>
         </div>
-        <div class="modal-body">{def.body(closeCurrent)}</div>
+        <div class={styles.body}>{def.body(closeCurrent)}</div>
         {isPrompt ? null : <div class="modal-foot">{def.foot!(closeCurrent)}</div>}
       </div>
     </div>

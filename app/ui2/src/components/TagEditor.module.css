@@ -1,0 +1,8 @@
+.tagList { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 12px; min-height: 8px; }
+.tag { display: inline-flex; align-items: center; gap: 6px; padding: 5px 6px 5px 11px; border-radius: 20px; background: var(--accent-soft); color: var(--accent-hover); font-size: 12.5px; font-weight: 600; }
+.tag button { display: inline-grid; place-items: center; width: 16px; height: 16px; border: none; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; opacity: .8; }
+.tag button svg { width: 11px; height: 11px; }
+.empty { color: var(--text-faint); font-size: 12.5px; }
+.suggestions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.suggestionsLabel { width: 100%; font-size: 11.5px; color: var(--text-faint); margin-bottom: 2px; }
+.suggestions button { padding: 4px 10px; border-radius: 20px; border: 1px dashed var(--border); background: transparent; color: var(--text-dim); font-family: inherit; font-size: 12px; cursor: pointer; }

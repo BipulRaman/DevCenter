@@ -5,6 +5,7 @@
 import { useState } from "preact/hooks";
 import { modal } from "@/components/modal";
 import { ICONS, Raw } from "@/lib/ico";
+import styles from "./TagEditor.module.css";
 
 export function openTagEditor(opts: {
   title: string;
@@ -41,10 +42,10 @@ function TagEditorBody({
 
   return (
     <>
-      <div class="tag-edit-list">
+      <div class={styles.tagList}>
         {tags.length ? (
           tags.map((t, i) => (
-            <span class="tag-edit" key={t}>
+            <span class={styles.tag} key={t}>
               {t}
               <button type="button" title="Remove" onClick={() => remove(i)}>
                 <Raw html={ICONS.x} />
@@ -52,7 +53,7 @@ function TagEditorBody({
             </span>
           ))
         ) : (
-          <span style={{ color: "var(--text-faint)", fontSize: "12.5px" }}>No tags yet.</span>
+          <span class={styles.empty}>No tags yet.</span>
         )}
       </div>
       <input
@@ -75,8 +76,8 @@ function TagEditorBody({
         }}
       />
       {avail.length ? (
-        <div class="tag-suggest">
-          <span class="tag-suggest-label">Suggestions</span>
+        <div class={styles.suggestions}>
+          <span class={styles.suggestionsLabel}>Suggestions</span>
           {avail.slice(0, 12).map((s) => (
             <button type="button" key={s} onClick={() => add(s)}>
               {s}

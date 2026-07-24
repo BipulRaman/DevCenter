@@ -12,6 +12,7 @@ import { Multiselect, type MultiOption } from "@/components/Multiselect";
 import { openRepoById } from "@/state/changes";
 import { openReviewer } from "@/state/reviewer";
 import type { PullRequest } from "@/types/models";
+import styles from "./PullRequests.module.css";
 
 const REPO_KEY = "dc.pr.repoSelected";
 const ACCT_KEY = "dc.pr.accountFilter";
@@ -82,7 +83,7 @@ export function PullRequests() {
         </div>
         <div class="page-actions">
           <div class="search">
-            <Raw html={SEARCH_SVG} />
+            <Raw html={ICONS.search} />
             <input
               type="text"
               placeholder="Search pull requests…"
@@ -96,7 +97,7 @@ export function PullRequests() {
               selected={acctFilter.value}
               onChange={setAcct}
               allLabel="All accounts"
-              buttonIcon={ACCT_SVG}
+              buttonIcon={ICONS.card}
               countNoun="accounts"
               ariaLabel="Repository accounts"
             />
@@ -107,7 +108,7 @@ export function PullRequests() {
               selected={repoSelected.value}
               onChange={setRepoSel}
               allLabel="All watched repos"
-              buttonIcon={REPO_SVG}
+              buttonIcon={ICONS.repo}
               countNoun="repos"
               ariaLabel="Watched repositories"
             />
@@ -128,7 +129,7 @@ export function PullRequests() {
         </div>
       </header>
 
-      <div class="pr-list">
+      <div class={styles.prList}>
         {watched.value.length === 0 ? (
           <EmptyState message='No repositories are being watched. Enable "Watch PRs" on a repo in Git Board to see its pull requests here.' />
         ) : pullsLoading.value && list.value.length === 0 ? (
@@ -142,13 +143,6 @@ export function PullRequests() {
     </>
   );
 }
-
-const SEARCH_SVG =
-  '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>';
-const ACCT_SVG =
-  '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M3 10h18"/></svg>';
-const REPO_SVG =
-  '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6a2 2 0 0 1 2-2h14v16H5a2 2 0 0 1-2-2Z"/><path d="M19 16H5a2 2 0 0 0-2 2"/></svg>';
 
 function PrRow({ pr: p }: { pr: PullRequest }) {
   const status = (["open", "draft", "merged"] as const).includes(p.status) ? p.status : "open";
@@ -167,13 +161,13 @@ function PrRow({ pr: p }: { pr: PullRequest }) {
   };
 
   return (
-    <div class={`pr-row ${status}`}>
-      <div class={`pr-icon ${status}`}>
+    <div class={`${styles.prRow} ${styles[status]}`}>
+      <div class={`${styles.prIcon} ${styles[status]}`}>
         <Raw html={status === "merged" ? ICONS.merge : ICONS.pr} />
       </div>
-      <div class="pr-main">
-        <div class="pr-title-row">
-          <span class={`pr-name${p.repoId ? " repo-open-link" : ""}`} title={p.repoId ? "Open in PR Review" : undefined} onClick={p.repoId ? review : undefined}>
+      <div class={styles.prMain}>
+        <div class={styles.prTitleRow}>
+          <span class={`${styles.prName}${p.repoId ? " repo-open-link" : ""}`} title={p.repoId ? "Open in PR Review" : undefined} onClick={p.repoId ? review : undefined}>
             {p.title || ""}
           </span>
           {status === "merged" ? (
@@ -193,7 +187,7 @@ function PrRow({ pr: p }: { pr: PullRequest }) {
             </span>
           )}
         </div>
-        <div class="pr-sub">
+        <div class={styles.prSub}>
           <span>
             {p.repoId ? (
               <span class="repo-open-link" title="Open in Changes" onClick={openInChanges}>
@@ -214,13 +208,13 @@ function PrRow({ pr: p }: { pr: PullRequest }) {
           <span>{p.updated || ""}</span>
         </div>
       </div>
-      <div class="pr-meta">
+      <div class={styles.prMeta}>
         <span class={`chip review ${rev.cls}`}>
           <Raw html={rev.icon} />
           {rev.label}
         </span>
       </div>
-      <div class="pr-actions">
+      <div class={styles.prActions}>
         {p.repoId ? (
           <button class="btn btn-primary btn-sm" onClick={review}>
             Review

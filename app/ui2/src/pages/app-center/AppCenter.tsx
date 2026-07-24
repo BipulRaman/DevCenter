@@ -15,6 +15,7 @@ import { Multiselect, type MultiOption } from "@/components/Multiselect";
 import { openTagEditor as tagEditorModal } from "@/components/TagEditor";
 import * as LogFmt from "@/lib/logfmt";
 import type { AppLogEvent, ManagedApp, ServeMode } from "@/types/models";
+import styles from "./AppCenter.module.css";
 
 const TAG_KEY = "dc.apps.tagFilter";
 const search = signal("");
@@ -67,7 +68,7 @@ export function AppCenter() {
         </div>
         <div class="page-actions">
           <div class="search">
-            <Raw html={SEARCH_SVG} />
+            <Raw html={ICONS.search} />
             <input
               type="text"
               placeholder="Search applications…"
@@ -106,7 +107,7 @@ export function AppCenter() {
         </div>
       </header>
 
-      <div class="app-list">
+      <div class={styles.appList}>
         {list.value.map((a) => (
           <AppRow key={a.id} app={a} />
         ))}
@@ -125,9 +126,6 @@ export function AppCenter() {
     </>
   );
 }
-
-const SEARCH_SVG =
-  '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>';
 
 function AppRow({ app: a }: { app: ManagedApp }) {
   const busy = useSignal(false);
@@ -169,7 +167,7 @@ function AppRow({ app: a }: { app: ManagedApp }) {
   const onDragStart = (e: PointerEvent, handle: HTMLElement) => {
     if (e.button !== 0) return;
     e.preventDefault();
-    const row = handle.closest(".app-row") as HTMLElement | null;
+    const row = handle.closest(`.${styles.appRow}`) as HTMLElement | null;
     const listEl = row?.parentElement;
     if (!row || !listEl) return;
     const startY = e.clientY;
@@ -178,8 +176,8 @@ function AppRow({ app: a }: { app: ManagedApp }) {
     const onMove = (ev: PointerEvent) => {
       if (!moved && Math.abs(ev.clientY - startY) < 4) return;
       moved = true;
-      row.classList.add("dragging");
-      const others = [...listEl.querySelectorAll(".app-row:not(.dragging)")] as HTMLElement[];
+      row.classList.add(styles.dragging);
+      const others = [...listEl.querySelectorAll(`.${styles.appRow}:not(.${styles.dragging})`)] as HTMLElement[];
       const before = others.find((r) => {
         const rect = r.getBoundingClientRect();
         return ev.clientY < rect.top + rect.height / 2;
@@ -191,9 +189,9 @@ function AppRow({ app: a }: { app: ManagedApp }) {
       window.removeEventListener("pointermove", onMove, true);
       window.removeEventListener("pointerup", onUp, true);
       window.removeEventListener("pointercancel", onUp, true);
-      row.classList.remove("dragging");
+      row.classList.remove(styles.dragging);
       if (moved) {
-        const orderedIds = [...listEl.querySelectorAll(".app-row")].map((r) => Number((r as HTMLElement).dataset.row));
+        const orderedIds = [...listEl.querySelectorAll(`.${styles.appRow}`)].map((r) => Number((r as HTMLElement).dataset.row));
         const byId = new Map(apps.value.map((x) => [x.id, x]));
         const ordered = orderedIds.map((id) => byId.get(id)).filter((x): x is ManagedApp => !!x);
         await reorderApps(ordered);
@@ -208,7 +206,7 @@ function AppRow({ app: a }: { app: ManagedApp }) {
 
   return (
     <div
-      class={`app-row ${status}`}
+      class={`${styles.appRow} ${styles[status]}`}
       data-row={a.id}
       onContextMenu={(e) => {
         e.preventDefault();
@@ -217,7 +215,7 @@ function AppRow({ app: a }: { app: ManagedApp }) {
       }}
     >
       <button
-        class="app-drag"
+        class={styles.appDrag}
         type="button"
         title={`Reorder ${a.name}. Use Up and Down arrow keys.`}
         onPointerDown={(e) => onDragStart(e, e.currentTarget as HTMLElement)}
@@ -236,11 +234,11 @@ function AppRow({ app: a }: { app: ManagedApp }) {
       >
         <Raw html={ICONS.grip} />
       </button>
-      <span class={`app-status-dot ${status}`} />
-      <div class="app-main">
-        <div class="app-title-row">
-          <span class="app-name">{a.name}</span>
-          <span class={`app-state ${status}`}>{statusLabel}</span>
+      <span class={`${styles.statusDot} ${styles[status]}`} />
+      <div class={styles.appMain}>
+        <div class={styles.titleRow}>
+          <span class={styles.appName}>{a.name}</span>
+          <span class={`${styles.appState} ${styles[status]}`}>{statusLabel}</span>
           {(a.tags || []).map((t) => (
             <span class="chip tag-chip" key={t}>
               <Raw html={ICONS.tag} />
@@ -248,31 +246,31 @@ function AppRow({ app: a }: { app: ManagedApp }) {
             </span>
           ))}
         </div>
-        <div class="app-sub">
-          {a.appType ? <span class="app-type-label">{a.appType}</span> : null}
+        <div class={styles.appSub}>
+          {a.appType ? <span class={styles.appTypeLabel}>{a.appType}</span> : null}
           {a.port ? (
             running ? (
-              <span class="port-badge link" onClick={() => ipc.openUrl(`http://localhost:${a.port}`).catch(() => {})}>
+              <span class={`${styles.portBadge} ${styles.link}`} onClick={() => ipc.openUrl(`http://localhost:${a.port}`).catch(() => {})}>
                 Port <b>{a.port}</b>
               </span>
             ) : (
-              <span class="port-badge">
+              <span class={styles.portBadge}>
                 Port <b>{a.port}</b>
               </span>
             )
           ) : null}
-          <span class="app-path" title={a.projectDir}>
+          <span class={styles.appPath} title={a.projectDir}>
             {a.projectDir}
           </span>
           {running && a.uptime ? (
             <>
-              <span class="app-dot">·</span>
+              <span class={styles.appDot}>·</span>
               <span>{a.uptime}</span>
             </>
           ) : null}
         </div>
       </div>
-      <div class="app-controls">
+      <div class={styles.appControls}>
         {building ? (
           <button class="btn btn-ghost btn-sm" onClick={() => action("stop")}>
             <span class="spin">
@@ -282,7 +280,7 @@ function AppRow({ app: a }: { app: ManagedApp }) {
           </button>
         ) : running ? (
           <>
-            <button class="btn btn-stop btn-sm" disabled={spinning} onClick={() => action("stop")}>
+            <button class={`btn btn-sm ${styles.btnStop}`} disabled={spinning} onClick={() => action("stop")}>
               <Raw html={ICONS.stop} />
               Stop
             </button>
@@ -291,7 +289,7 @@ function AppRow({ app: a }: { app: ManagedApp }) {
             </button>
           </>
         ) : (
-          <button class="btn btn-start btn-sm" disabled={spinning} onClick={() => action("start")}>
+          <button class={`btn btn-sm ${styles.btnStart}`} disabled={spinning} onClick={() => action("start")}>
             <Raw html={ICONS.play} />
             Start
           </button>
@@ -455,7 +453,7 @@ function AppForm({ existing, close }: { existing: ManagedApp | null; close: (v: 
       </div>
       <div class="form-row">
         <label class="form-label">Project directory</label>
-        <div class="input-row">
+        <div class={styles.inputRow}>
           <input
             class="modal-input"
             value={f.projectDir}
@@ -524,7 +522,7 @@ function AppForm({ existing, close }: { existing: ManagedApp | null; close: (v: 
       {mode === "script" ? (
         <div class="form-row">
           <label class="form-label">Script file</label>
-          <div class="input-row">
+          <div class={styles.inputRow}>
             <input class="modal-input" value={f.scriptFile || ""} placeholder="run.ps1 / start.sh" spellcheck={false} onInput={(e) => set({ scriptFile: (e.target as HTMLInputElement).value })} />
             <button
               class="btn btn-ghost btn-sm"
@@ -542,7 +540,7 @@ function AppForm({ existing, close }: { existing: ManagedApp | null; close: (v: 
       {mode === "apimock" ? (
         <div class="form-row">
           <label class="form-label">OpenAPI / Swagger JSON</label>
-          <div class="input-row">
+          <div class={styles.inputRow}>
             <input class="modal-input" value={f.specFile || ""} placeholder="openapi.json" spellcheck={false} onInput={(e) => set({ specFile: (e.target as HTMLInputElement).value })} />
             <button
               class="btn btn-ghost btn-sm"
@@ -658,21 +656,22 @@ function LogsViewer({ app: a, close }: { app: ManagedApp; close: (v: boolean) =>
   const html = visible
     .map((l) => {
       const lvl = LogFmt.detectLevel(l.line) || (l.level === "error" ? "error" : l.stream === "system" ? "sys" : "out");
-      const ts = l.ts ? `<span class="log-ts">${escapeHtml(l.ts)}</span>` : "";
-      return `<span class="log-line log-${lvl}">${ts}<span class="log-text">${LogFmt.format(l.line)}</span></span>`;
+      const lvlClass = lvl === "error" ? styles.logError : lvl === "warn" ? styles.logWarn : lvl === "sys" ? styles.logSys : "";
+      const ts = l.ts ? `<span class="${styles.logTs}">${escapeHtml(l.ts)}</span>` : "";
+      return `<span class="${styles.logLine} ${lvlClass}">${ts}<span class="${styles.logText}">${LogFmt.format(l.line)}</span></span>`;
     })
     .join("");
 
   return (
     <>
-      <div class="log-bar">
-        <div class="search log-search">
-          <Raw html={SEARCH_SVG} />
+      <div class={styles.logBar}>
+        <div class={`search ${styles.logSearch}`}>
+          <Raw html={ICONS.search} />
           <input placeholder="Filter logs…" spellcheck={false} value={filter} onInput={(e) => setFilter((e.target as HTMLInputElement).value)} />
         </div>
-        <div class="log-actions">
+        <div class={styles.logActions}>
           <button
-            class={`log-pause${following ? "" : " paused"}`}
+            class={`${styles.logPause}${following ? "" : ` ${styles.paused}`}`}
             type="button"
             title={following ? "Pause auto-scroll" : "Resume auto-scroll"}
             onClick={() => {
@@ -685,25 +684,25 @@ function LogsViewer({ app: a, close }: { app: ManagedApp; close: (v: boolean) =>
               }
             }}
           >
-            <span class="log-pause-ico">
-              <Raw html={following ? PAUSE_SVG : ICONS.play} />
+            <span class={styles.logPauseIco}>
+              <Raw html={following ? ICONS.pause : ICONS.play} />
             </span>
-            <span class="log-pause-label">{following ? "Pause" : "Resume"}</span>
+            <span>{following ? "Pause" : "Resume"}</span>
           </button>
-          <button class={`log-icon${wrap ? " active" : ""}`} type="button" title="Toggle line wrapping" onClick={() => setWrap((v) => !v)}>
+          <button class={`${styles.logIcon}${wrap ? ` ${styles.active}` : ""}`} type="button" title="Toggle line wrapping" onClick={() => setWrap((v) => !v)}>
             <Raw html={ICONS.swap} />
           </button>
-          <button class="log-icon" type="button" title="Copy logs" onClick={() => navigator.clipboard?.writeText(asText()).catch(() => {})}>
+          <button class={styles.logIcon} type="button" title="Copy logs" onClick={() => navigator.clipboard?.writeText(asText()).catch(() => {})}>
             <Raw html={ICONS.copy} />
           </button>
-          <button class="log-icon" type="button" title="Export logs to a file" onClick={onExport}>
+          <button class={styles.logIcon} type="button" title="Export logs to a file" onClick={onExport}>
             <Raw html={ICONS.archive} />
           </button>
         </div>
       </div>
       <pre
         ref={viewRef}
-        class={`log-view${wrap ? " wrap" : ""}`}
+        class={`${styles.logView}${wrap ? ` ${styles.wrap}` : ""}`}
         onScroll={(e) => {
           const el = e.currentTarget;
           const f = el.scrollHeight - el.scrollTop - el.clientHeight < 28;
@@ -717,14 +716,14 @@ function LogsViewer({ app: a, close }: { app: ManagedApp; close: (v: boolean) =>
           }
         }}
         dangerouslySetInnerHTML={{
-          __html: html || `<span class="log-empty">No log output ${filter ? "matches the filter" : "yet"}.</span>`,
+          __html: html || `<span class="${styles.logEmpty}">No log output ${filter ? "matches the filter" : "yet"}.</span>`,
         }}
       />
-      <div class="log-status">
+      <div class={styles.logStatus}>
         <span id="logCount">
           {filter ? `${visible.length} of ${lines.length} lines` : `${lines.length} line${lines.length === 1 ? "" : "s"}`}
         </span>
-        <span class={`log-live${following ? "" : " paused"}`} title={following ? "Following new output" : "Paused — scrolled up"} />
+        <span class={`${styles.logLive}${following ? "" : ` ${styles.paused}`}`} title={following ? "Following new output" : "Paused — scrolled up"} />
       </div>
       <div class="modal-foot">
         <button
@@ -744,6 +743,3 @@ function LogsViewer({ app: a, close }: { app: ManagedApp; close: (v: boolean) =>
     </>
   );
 }
-
-const PAUSE_SVG =
-  '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>';

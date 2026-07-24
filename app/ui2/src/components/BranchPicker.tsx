@@ -5,12 +5,14 @@
 // menu, and the GitHub-Desktop dirty-switch prompt.
 
 import { signal } from "@preact/signals";
-import { useLayoutEffect, useRef, useState, useEffect } from "preact/hooks";
+import { useRef, useState, useEffect } from "preact/hooks";
 import { ipc } from "@/platform/ipc";
 import { Raw, ICONS } from "@/lib/ico";
 import { modal } from "@/components/modal";
 import { openContextMenu } from "@/components/menu";
+import { useDismiss, useFloatingPosition, type ComputePosition } from "@/lib/floating";
 import type { Repo } from "@/types/models";
+import styles from "./BranchPicker.module.css";
 
 // ---- branch name validation + helpers --------------------------------------
 
@@ -160,19 +162,19 @@ function SwitchBranchBody({
   return (
     <>
       <p class="modal-msg">You have changes on this branch. What would you like to do with them?</p>
-      <div class="switch-opts">
-        <label class={`switch-opt${choice === "leave" ? " active" : ""}`}>
+      <div class={styles.switchOpts}>
+        <label class={`${styles.switchOpt}${choice === "leave" ? ` ${styles.active}` : ""}`}>
           <input type="radio" name="switchChoice" checked={choice === "leave"} onChange={() => setChoice("leave")} />
-          <span class="switch-opt-body">
-            <span class="switch-opt-title">Leave my changes on {current}</span>
-            <span class="switch-opt-desc">Your in-progress work will be stashed on this branch for you to return to later</span>
+          <span class={styles.switchOptBody}>
+            <span class={styles.switchOptTitle}>Leave my changes on {current}</span>
+            <span class={styles.switchOptDesc}>Your in-progress work will be stashed on this branch for you to return to later</span>
           </span>
         </label>
-        <label class={`switch-opt${choice === "bring" ? " active" : ""}`}>
+        <label class={`${styles.switchOpt}${choice === "bring" ? ` ${styles.active}` : ""}`}>
           <input type="radio" name="switchChoice" checked={choice === "bring"} onChange={() => setChoice("bring")} />
-          <span class="switch-opt-body">
-            <span class="switch-opt-title">Bring my changes to {target}</span>
-            <span class="switch-opt-desc">Your in-progress work will follow you to the new branch</span>
+          <span class={styles.switchOptBody}>
+            <span class={styles.switchOptTitle}>Bring my changes to {target}</span>
+            <span class={styles.switchOptDesc}>Your in-progress work will follow you to the new branch</span>
           </span>
         </label>
       </div>
@@ -283,41 +285,19 @@ export function BranchPickerHost() {
 }
 
 function BranchPanel({ state }: { state: PickerState }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
   const [filter, setFilter] = useState("");
 
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
+  const compute: ComputePosition = (mw, mh) => {
     const r = state.anchor;
-    const mw = el.offsetWidth;
-    const mh = el.offsetHeight;
     let left = r.left;
     let top = r.bottom + 6;
     if (left + mw > window.innerWidth - 8) left = window.innerWidth - 8 - mw;
     if (left < 8) left = 8;
     if (top + mh > window.innerHeight - 8 && r.top - 6 - mh > 8) top = r.top - 6 - mh;
-    setPos({ left: Math.round(left), top: Math.round(top) });
-  }, [state]);
-
-  useLayoutEffect(() => {
-    const onDoc = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) closeBranchPicker();
-    };
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && closeBranchPicker();
-    const onScroll = () => closeBranchPicker();
-    document.addEventListener("mousedown", onDoc, true);
-    document.addEventListener("keydown", onKey, true);
-    window.addEventListener("scroll", onScroll, true);
-    window.addEventListener("resize", onScroll, true);
-    return () => {
-      document.removeEventListener("mousedown", onDoc, true);
-      document.removeEventListener("keydown", onKey, true);
-      window.removeEventListener("scroll", onScroll, true);
-      window.removeEventListener("resize", onScroll, true);
-    };
-  }, []);
+    return { left: Math.round(left), top: Math.round(top) };
+  };
+  const { ref, style } = useFloatingPosition(compute, [state]);
+  useDismiss(closeBranchPicker, { isInside: (t) => !!ref.current?.contains(t as Node), scrollIgnoresInside: true });
 
   const f = filter.trim().toLowerCase();
   const matches = state.branches.filter((b) => b.toLowerCase().includes(f));
@@ -382,26 +362,16 @@ function BranchPanel({ state }: { state: PickerState }) {
   };
 
   return (
-    <div
-      ref={ref}
-      class="dropdown-menu"
-      style={{
-        position: "fixed",
-        left: pos ? pos.left : -9999,
-        top: pos ? pos.top : -9999,
-        visibility: pos ? "visible" : "hidden",
-        minWidth: "260px",
-      }}
-    >
-      <div class="dropdown-head">
-        <span class="dropdown-head-title">Switch branch</span>
-        <button class="dropdown-head-action" type="button" title="Create a new branch" onClick={newBranch}>
+    <div ref={ref} class={styles.dropdownMenu} style={{ ...style, minWidth: "260px" }}>
+      <div class={styles.dropdownHead}>
+        <span class={styles.dropdownHeadTitle}>Switch branch</span>
+        <button class={styles.dropdownHeadAction} type="button" title="Create a new branch" onClick={newBranch}>
           <Raw html={ICONS.plus} />
           <span>New branch</span>
         </button>
       </div>
-      <div class="dropdown-search">
-        <Raw html={SEARCH_SVG} />
+      <div class={styles.dropdownSearch}>
+        <Raw html={ICONS.search} />
         <input
           autofocus
           type="text"
@@ -411,9 +381,9 @@ function BranchPanel({ state }: { state: PickerState }) {
           onInput={(e) => setFilter((e.target as HTMLInputElement).value)}
         />
       </div>
-      <div class="dropdown-list" role="listbox">
+      <div class={styles.dropdownList} role="listbox">
         {matches.length === 0 ? (
-          <div class="dropdown-empty">{f ? "No matching branches." : "No local branches."}</div>
+          <div class={styles.dropdownEmpty}>{f ? "No matching branches." : "No local branches."}</div>
         ) : (
           matches.map((b) => {
             const isCur = b === state.current;
@@ -422,18 +392,18 @@ function BranchPanel({ state }: { state: PickerState }) {
               <button
                 key={b}
                 type="button"
-                class={`dropdown-opt${isCur ? " current" : ""}`}
+                class={`${styles.dropdownOpt}${isCur ? ` ${styles.current}` : ""}`}
                 title={b}
                 role="option"
                 aria-selected={isCur}
                 onClick={() => (isCur ? closeBranchPicker() : doSwitch(b))}
                 onContextMenu={(e) => contextMenu(e, b, isCur)}
               >
-                <span class="opt-check">
+                <span class={styles.optCheck}>
                   <Raw html={ICONS.check} />
                 </span>
-                <span class="opt-name" dangerouslySetInnerHTML={{ __html: highlight(b, f) }} />
-                <span class={`opt-badge ${meta.tone}`}>{meta.label}</span>
+                <span class={styles.optName} dangerouslySetInnerHTML={{ __html: highlight(b, f) }} />
+                <span class={`${styles.optBadge} ${styles[meta.tone]}`}>{meta.label}</span>
               </button>
             );
           })
@@ -452,6 +422,3 @@ function highlight(text: string, f: string): string {
   if (i < 0) return esc(text);
   return esc(text.slice(0, i)) + "<mark>" + esc(text.slice(i, i + f.length)) + "</mark>" + esc(text.slice(i + f.length));
 }
-
-const SEARCH_SVG =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>';

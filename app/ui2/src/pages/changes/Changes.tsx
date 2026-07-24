@@ -5,6 +5,7 @@
 import { signal, useComputed } from "@preact/signals";
 import { useState, useEffect, useRef } from "preact/hooks";
 import { ipc } from "@/platform/ipc";
+import { Avatar } from "@/components/Avatar";
 import { pickDirectory } from "@/platform/tauri";
 import { repos, upsertRepo, repoAccount } from "@/state/repos";
 import {
@@ -63,10 +64,14 @@ import { ICONS, providerIconHtml, Raw, EmptyState } from "@/lib/ico";
 import { openMenu, openContextMenu, type MenuItem } from "@/components/menu";
 import { openBranchPicker, openNewBranchDialog, validateBranchName, defaultBranchFrom } from "@/components/BranchPicker";
 import { modal } from "@/components/modal";
-import { FileTree, fileOrder, allDirPaths, type FileAction } from "@/lib/file-tree";
+import { FileTree, fileOrder, allDirPaths, treeStyles, type FileAction } from "@/lib/file-tree";
 import { Multiselect, type MultiOption } from "@/components/Multiselect";
 import { PaneResizer } from "@/components/PaneResizer";
+import { DiffView, diffStyles } from "@/components/DiffView";
 import type { FileChange, FileDiff, GitTagInfo, RemoteInfo, StashEntry, WorktreeInfo } from "@/types/models";
+import styles from "./Changes.module.css";
+
+const FILE_TREE_ACTION_CLASSES = { actions: styles.scmActions, action: styles.scmAct };
 
 const viewMode = signal<"tree" | "list">(
   (localStorage.getItem("dc.changes.view") as "tree" | "list") || "list",
@@ -96,8 +101,6 @@ function toggleGroup(key: string) {
 
 // Account filter that scopes the repo picker (persisted).
 const CHG_ACCT_KEY = "dc.changes.accountFilter";
-const ACCT_SVG =
-  '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M3 10h18"/></svg>';
 const chgAcct = signal<Set<string>>(loadFilterSet(CHG_ACCT_KEY));
 function matchesChgAccount(r: { provider: string; remote: string }): boolean {
   if (chgAcct.value.size === 0) return true;
@@ -150,7 +153,7 @@ export function Changes() {
       <header class="page-head">
         <div>
           <h1>Changes</h1>
-          <p class="page-desc">Review changes, write a message and commit — like GitHub Desktop.</p>
+          <p class="page-desc">Review changes, write a message and commit, view commits and PRs.</p>
         </div>
         <div class="page-actions">
           {acctOptions.value.length > 1 ? (
@@ -159,17 +162,17 @@ export function Changes() {
               selected={chgAcct.value}
               onChange={setChgAcct}
               allLabel="All accounts"
-              buttonIcon={ACCT_SVG}
+              buttonIcon={ICONS.card}
               countNoun="accounts"
               ariaLabel="Repository accounts"
             />
           ) : null}
-          <button class="chg-repo-btn" type="button" aria-haspopup="true" onClick={(e) => pickRepo(e.currentTarget as HTMLElement)}>
-            <span class="chg-repo-ico">
+          <button class={styles.chgRepoBtn} type="button" aria-haspopup="true" onClick={(e) => pickRepo(e.currentTarget as HTMLElement)}>
+            <span class={styles.chgRepoIco}>
               <Raw html={repo.value ? providerIconHtml(repo.value.provider) : ICONS.repo} />
             </span>
-            <span class="chg-repo-label">{repo.value ? repo.value.name : "Select repository"}</span>
-            <Raw html={ICONS.caret} class="caret" />
+            <span class={styles.chgRepoLabel}>{repo.value ? repo.value.name : "Select repository"}</span>
+            <Raw html={ICONS.caret} class={styles.caret} />
           </button>
         </div>
       </header>
@@ -177,22 +180,22 @@ export function Changes() {
       {!repoId ? (
         <EmptyState message="Select a repository to review and commit its changes." />
       ) : (
-        <div class={`commit-layout${changesTab.value === "history" ? " mode-history" : changesTab.value === "pulls" ? " mode-pulls" : ""}`}>
-          <aside class="commit-side">
-            <div class="commit-tabs" role="tablist">
+        <div class={`${styles.commitLayout}${changesTab.value === "history" ? ` ${styles.modeHistory}` : changesTab.value === "pulls" ? ` ${styles.modePulls}` : ""}`}>
+          <aside class={styles.commitSide}>
+            <div class={styles.commitTabs} role="tablist">
               <button
-                class={`commit-tab${changesTab.value === "changes" ? " active" : ""}`}
+                class={`${styles.commitTab}${changesTab.value === "changes" ? ` ${styles.active}` : ""}`}
                 type="button"
                 role="tab"
                 onClick={() => (changesTab.value = "changes")}
               >
-                <span class="ct-ico">
+                <span class={styles.ctIco}>
                   <Raw html={ICONS.changes} />
                 </span>
                 <span>Changes</span>
               </button>
               <button
-                class={`commit-tab${changesTab.value === "history" ? " active" : ""}`}
+                class={`${styles.commitTab}${changesTab.value === "history" ? ` ${styles.active}` : ""}`}
                 type="button"
                 role="tab"
                 onClick={() => {
@@ -200,13 +203,13 @@ export function Changes() {
                   if (repoId) void loadHistory(repoId);
                 }}
               >
-                <span class="ct-ico">
+                <span class={styles.ctIco}>
                   <Raw html={ICONS.clock} />
                 </span>
                 <span>Commits</span>
               </button>
               <button
-                class={`commit-tab${changesTab.value === "pulls" ? " active" : ""}`}
+                class={`${styles.commitTab}${changesTab.value === "pulls" ? ` ${styles.active}` : ""}`}
                 type="button"
                 role="tab"
                 onClick={() => {
@@ -214,11 +217,11 @@ export function Changes() {
                   if (repoId) void loadRepoPulls(repoId);
                 }}
               >
-                <span class="ct-ico">
+                <span class={styles.ctIco}>
                   <Raw html={ICONS.pr} />
                 </span>
-                <span class="ct-full">Pull Requests</span>
-                <span class="ct-short">PRs</span>
+                <span class={styles.ctFull}>Pull Requests</span>
+                <span class={styles.ctShort}>PRs</span>
               </button>
             </div>
 
@@ -229,12 +232,12 @@ export function Changes() {
           {changesTab.value === "history" ? (
             <>
               <CommitDetail />
-              <PaneResizer resize="detail" extraClass="rz-detail" varName="--w-detail" storageKey="dc.changes.detail" min={180} max={480} def={240} ariaLabel="Resize detail panel" />
+              <PaneResizer resize="detail" extraClass={styles.rzDetail} varName="--w-detail" storageKey="dc.changes.detail" min={180} max={480} def={240} ariaLabel="Resize detail panel" />
             </>
           ) : changesTab.value === "pulls" ? (
             <>
               <PrDetail />
-              <PaneResizer resize="detail" extraClass="rz-detail" varName="--w-detail" storageKey="dc.changes.detail" min={180} max={480} def={240} ariaLabel="Resize detail panel" />
+              <PaneResizer resize="detail" extraClass={styles.rzDetail} varName="--w-detail" storageKey="dc.changes.detail" min={180} max={480} def={240} ariaLabel="Resize detail panel" />
             </>
           ) : null}
 
@@ -270,22 +273,22 @@ function ChangesPane() {
   };
 
   return (
-    <div class="commit-pane">
+    <div class={styles.commitPane}>
       {conflicts.length > 0 ? (
-        <button class="conflict-banner" type="button" onClick={() => changesRepoId.value && openConflict(changesRepoId.value)}>
-          <svg class="conflict-banner-ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <button class={styles.conflictBanner} type="button" onClick={() => changesRepoId.value && openConflict(changesRepoId.value)}>
+          <svg class={styles.conflictBannerIco} viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
             <line x1="12" y1="9" x2="12" y2="13" />
             <line x1="12" y1="17" x2="12.01" y2="17" />
           </svg>
-          <span class="conflict-banner-text">
+          <span class={styles.conflictBannerText}>
             {conflicts.length} merge conflict{conflicts.length === 1 ? "" : "s"}
           </span>
-          <span class="conflict-banner-go">Resolve →</span>
+          <span class={styles.conflictBannerGo}>Resolve →</span>
         </button>
       ) : null}
-      <div class="commit-filter">
-        <Raw html={SEARCH_MINI} />
+      <div class={styles.commitFilter}>
+        <Raw html={ICONS.search} />
         <input
           type="text"
           placeholder="Filter files…"
@@ -293,31 +296,31 @@ function ChangesPane() {
           value={changeFilter.value}
           onInput={(e) => (changeFilter.value = (e.target as HTMLInputElement).value)}
         />
-        <button class="icon-mini" type="button" title="Refresh changes" onClick={() => changesRepoId.value && loadChanges(changesRepoId.value)}>
+        <button class={styles.iconMini} type="button" title="Refresh changes" onClick={() => changesRepoId.value && loadChanges(changesRepoId.value)}>
           <Raw html={ICONS.sync} />
         </button>
       </div>
-      <div class="changes-head">
-        <span class="changes-head-title">{total ? `${total} change${total === 1 ? "" : "s"}` : "No changes"}</span>
-        <div class="changes-head-actions">
-          <div class="seg view-toggle" role="group" aria-label="File display" title="Toggle file tree / flat list">
+      <div class={styles.changesHead}>
+        <span class={styles.changesHeadTitle}>{total ? `${total} change${total === 1 ? "" : "s"}` : "No changes"}</span>
+        <div class={styles.changesHeadActions}>
+          <div class={`seg ${styles.viewToggle}`} role="group" aria-label="File display" title="Toggle file tree / flat list">
             <button class={`seg-btn${viewMode.value === "tree" ? " active" : ""}`} type="button" title="Tree view" aria-pressed={viewMode.value === "tree"} onClick={() => setViewMode("tree")}>
-              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h8"/><path d="M3 12h6"/><path d="M3 19h10"/><path d="M15 5h6"/><path d="M18 5v14"/><path d="M15 19h6"/></svg>
+              <Raw html={ICONS.treeView} />
             </button>
             <button class={`seg-btn${viewMode.value === "list" ? " active" : ""}`} type="button" title="Flat list" aria-pressed={viewMode.value === "list"} onClick={() => setViewMode("list")}>
-              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+              <Raw html={ICONS.listView} />
             </button>
           </div>
           <div class="seg">
             <button class="seg-btn" type="button" title="Stash changes" disabled={total === 0} onClick={onStash}>
-              <Raw html={STASH_ICO} />
+              <Raw html={ICONS.archive} />
             </button>
           </div>
         </div>
       </div>
 
       <div
-        class="file-tree"
+        class={treeStyles.fileTree}
         tabIndex={0}
         onKeyDown={(e) => {
           if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
@@ -335,11 +338,11 @@ function ChangesPane() {
         }}
       >
         {changesLoading.value && !cs ? (
-          <div class="changes-empty">Loading…</div>
+          <div class={treeStyles.changesEmpty}>Loading…</div>
         ) : total === 0 && stashes.length === 0 ? (
-          <div class="changes-empty">No uncommitted changes.</div>
+          <div class={treeStyles.changesEmpty}>No uncommitted changes.</div>
         ) : filter && fStaged.length === 0 && fUnstaged.length === 0 && stashes.length === 0 ? (
-          <div class="changes-empty">No files match the filter.</div>
+          <div class={treeStyles.changesEmpty}>No files match the filter.</div>
         ) : (
           <>
             {fStaged.length > 0 ? (
@@ -433,7 +436,7 @@ function StashGroup({ stashes }: { stashes: StashEntry[] }) {
   const ctxMenu = (e: MouseEvent, s: StashEntry) => {
     e.preventDefault();
     openContextMenu(e.clientX, e.clientY, [
-      { label: "Restore (apply & remove)", icon: RESTORE_ICO, onClick: () => stashPop(s.index).catch((err) => modal.alert({ title: "Restore failed", message: String(err) })) },
+      { label: "Restore (apply & remove)", icon: ICONS.restore, onClick: () => stashPop(s.index).catch((err) => modal.alert({ title: "Restore failed", message: String(err) })) },
       { label: "Apply (keep stash)", icon: ICONS.copy, onClick: () => stashApply(s.index).catch((err) => modal.alert({ title: "Apply failed", message: String(err) })) },
       { label: "View…", icon: ICONS.eye, onClick: () => viewStash(s) },
       { separator: true },
@@ -441,29 +444,29 @@ function StashGroup({ stashes }: { stashes: StashEntry[] }) {
     ]);
   };
   return (
-    <div class={`scm-group scm-stashes${collapsedGroups.value.has("stashes") ? " collapsed" : ""}`}>
-      <div class="scm-group-head" onClick={() => toggleGroup("stashes")}>
-        <span class={`tree-twisty${collapsedGroups.value.has("stashes") ? " collapsed" : ""}`} dangerouslySetInnerHTML={{ __html: GROUP_CARET }} />
-        <span class="scm-group-title">Stashes</span>
-        <span class="scm-group-count">{stashes.length}</span>
+    <div class={`${styles.scmGroup} ${styles.scmStashes}${collapsedGroups.value.has("stashes") ? ` ${styles.collapsed}` : ""}`}>
+      <div class={styles.scmGroupHead} onClick={() => toggleGroup("stashes")}>
+        <span class={`${treeStyles.treeTwisty}${collapsedGroups.value.has("stashes") ? ` ${treeStyles.collapsed}` : ""}`} dangerouslySetInnerHTML={{ __html: ICONS.chevronDown }} />
+        <span class={styles.scmGroupTitle}>Stashes</span>
+        <span class={styles.scmGroupCount}>{stashes.length}</span>
       </div>
       {collapsedGroups.value.has("stashes") ? null : (
-        <div class="scm-group-body">
+        <div class={styles.scmGroupBody}>
           {stashes.map((s) => (
-            <div class="stash-row" key={s.index} title={s.message} onContextMenu={(e) => ctxMenu(e, s)}>
-              <span class="stash-ico">
+            <div class={styles.stashRow} key={s.index} title={s.message} onContextMenu={(e) => ctxMenu(e, s)}>
+              <span class={styles.stashIco}>
                 <Raw html={ICONS.archive} />
               </span>
-              <div class="stash-main">
-                <span class="stash-msg">{s.message}</span>
-                <span class="stash-meta">
+              <div class={styles.stashMain}>
+                <span class={styles.stashMsg}>{s.message}</span>
+                <span class={styles.stashMeta}>
                   {s.branch ? `${s.branch} · ` : ""}
                   {s.when}
                 </span>
               </div>
-              <div class="scm-actions">
+              <div class={styles.scmActions}>
                 <button
-                  class="scm-act"
+                  class={styles.scmAct}
                   type="button"
                   title="Restore — apply & remove"
                   onClick={(e) => {
@@ -471,10 +474,10 @@ function StashGroup({ stashes }: { stashes: StashEntry[] }) {
                     stashPop(s.index).catch((err) => modal.alert({ title: "Restore failed", message: String(err) }));
                   }}
                 >
-                  <Raw html={RESTORE_ICO} />
+                  <Raw html={ICONS.restore} />
                 </button>
                 <button
-                  class="scm-act"
+                  class={styles.scmAct}
                   type="button"
                   title="Delete stash"
                   onClick={(e) => {
@@ -492,9 +495,6 @@ function StashGroup({ stashes }: { stashes: StashEntry[] }) {
     </div>
   );
 }
-
-const RESTORE_ICO =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/><polyline points="8 8 12 4 16 8"/><line x1="12" y1="4" x2="12" y2="15"/></svg>';
 
 function ScmGroup({
   groupKey,
@@ -532,22 +532,22 @@ function ScmGroup({
     else if (act === "unstage") void unstageFiles(paths);
   };
   return (
-    <div class={`scm-group${collapsed ? " collapsed" : ""}`}>
-      <div class="scm-group-head" onClick={(e) => {
-        if ((e.target as HTMLElement).closest(".scm-act")) return;
+    <div class={`${styles.scmGroup}${collapsed ? ` ${styles.collapsed}` : ""}`}>
+      <div class={styles.scmGroupHead} onClick={(e) => {
+        if ((e.target as HTMLElement).closest(`.${styles.scmAct}`)) return;
         toggleGroup(groupKey);
       }}>
-        <span class={`tree-twisty${collapsed ? " collapsed" : ""}`} dangerouslySetInnerHTML={{ __html: GROUP_CARET }} />
-        <span class="scm-group-title">{title}</span>
-        <div class="scm-group-actions">
-          <button class="scm-act" type="button" title={groupActionTitle} onClick={(e) => { e.stopPropagation(); onGroupAction(); }}>
+        <span class={`${treeStyles.treeTwisty}${collapsed ? ` ${treeStyles.collapsed}` : ""}`} dangerouslySetInnerHTML={{ __html: ICONS.chevronDown }} />
+        <span class={styles.scmGroupTitle}>{title}</span>
+        <div class={styles.scmGroupActions}>
+          <button class={styles.scmAct} type="button" title={groupActionTitle} onClick={(e) => { e.stopPropagation(); onGroupAction(); }}>
             <Raw html={groupActionIcon} />
           </button>
         </div>
-        <span class="scm-group-count">{count}</span>
+        <span class={styles.scmGroupCount}>{count}</span>
       </div>
       {collapsed ? null : (
-        <div class="scm-group-body">
+        <div class={styles.scmGroupBody}>
           <FileTree
             files={files}
             viewMode={viewMode.value}
@@ -556,18 +556,13 @@ function ScmGroup({
             onSelect={onSelect}
             onAction={onAction}
             onFolderAction={onFolderAction}
+            actionClasses={FILE_TREE_ACTION_CLASSES}
           />
         </div>
       )}
     </div>
   );
 }
-
-const GROUP_CARET =
-  '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
-
-const STASH_ICO =
-  '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/></svg>';
 
 async function confirmDiscard(path: string) {
   const ok = await modal.confirm({
@@ -778,20 +773,20 @@ function CommitBox({ stagedCount, unstagedCount }: { stagedCount: number; unstag
   };
 
   return (
-    <div class="commit-box">
-      <div class="branch-row">
-        <button class="commit-branch-btn" type="button" title="Switch branch" onClick={(e) => openBranchMenu(e.currentTarget as HTMLElement)}>
+    <div class={styles.commitBox}>
+      <div class={styles.branchRow}>
+        <button class={styles.commitBranchBtn} type="button" title="Switch branch" onClick={(e) => openBranchMenu(e.currentTarget as HTMLElement)}>
           <Raw html={ICONS.branch} />
           <span>{branch || "—"}</span>
-          <Raw html={ICONS.caret} class="caret" />
+          <Raw html={ICONS.caret} class={styles.caret} />
         </button>
-        <button class={`git-menu-btn${gitBusy.value ? " busy" : ""}`} type="button" title="Git actions" onClick={(e) => gitMenu(e.currentTarget as HTMLElement)}>
+        <button class={`${styles.gitMenuBtn}${gitBusy.value ? ` ${styles.busy}` : ""}`} type="button" title="Git actions" onClick={(e) => gitMenu(e.currentTarget as HTMLElement)}>
           <Raw html={ICONS.gear} />
-          {cs && (cs.ahead || cs.behind) ? <span class="sync-count">{(cs.ahead || 0) + (cs.behind || 0)}</span> : null}
+          {cs && (cs.ahead || cs.behind) ? <span class={styles.syncCount}>{(cs.ahead || 0) + (cs.behind || 0)}</span> : null}
         </button>
       </div>
       <input
-        class="commit-input"
+        class={styles.commitInput}
         placeholder="Summary (required)"
         value={summary}
         onInput={(e) => setSummary((e.target as HTMLInputElement).value)}
@@ -799,8 +794,8 @@ function CommitBox({ stagedCount, unstagedCount }: { stagedCount: number; unstag
           if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) commit();
         }}
       />
-      <textarea class="commit-textarea" placeholder="Description" value={desc} onInput={(e) => setDesc((e.target as HTMLTextAreaElement).value)} />
-      <button class="btn btn-primary commit-btn" disabled={!canCommit} onClick={commit}>
+      <textarea class={styles.commitTextarea} placeholder="Description" value={desc} onInput={(e) => setDesc((e.target as HTMLTextAreaElement).value)} />
+      <button class={`btn btn-primary ${styles.commitBtn}`} disabled={!canCommit} onClick={commit}>
         {stagedCount > 0 ? "Commit" : "Commit all"}
       </button>
     </div>
@@ -833,9 +828,9 @@ function PullsPane() {
       )
     : all;
   return (
-    <div class="commit-pane">
-      <div class="commit-filter">
-        <Raw html={SEARCH_MINI} />
+    <div class={styles.commitPane}>
+      <div class={styles.commitFilter}>
+        <Raw html={ICONS.search} />
         <input
           type="text"
           placeholder="Filter pull requests…"
@@ -845,7 +840,7 @@ function PullsPane() {
         />
       </div>
       <div
-        class="history-list"
+        class={styles.historyList}
         tabIndex={0}
         onKeyDown={(e) => {
           if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
@@ -858,28 +853,28 @@ function PullsPane() {
         }}
       >
         {repoPullsLoading.value && all.length === 0 ? (
-          <div class="changes-empty">Loading pull requests…</div>
+          <div class={treeStyles.changesEmpty}>Loading pull requests…</div>
         ) : all.length === 0 ? (
-          <div class="changes-empty">No open pull requests for this repository.</div>
+          <div class={treeStyles.changesEmpty}>No open pull requests for this repository.</div>
         ) : list.length === 0 ? (
-          <div class="changes-empty">No pull requests match the filter.</div>
+          <div class={treeStyles.changesEmpty}>No pull requests match the filter.</div>
         ) : (
           list.map((p) => (
-            <div class={`history-row${selectedPull.value?.id === p.id ? " selected" : ""}`} key={p.id} onClick={() => selectPull(p.id)}>
-              <div class="history-main">
-                <div class="history-summary" title={p.title}>
+            <div class={`${styles.historyRow}${selectedPull.value?.id === p.id ? ` ${styles.selected}` : ""}`} key={p.id} onClick={() => selectPull(p.id)}>
+              <div class={styles.historyMain}>
+                <div class={styles.historySummary} title={p.title}>
                   {p.title}
                 </div>
-                <div class="history-meta">
-                  <span class="history-hash">#{p.id}</span>
-                  <span class="history-author" title={p.author}>
+                <div class={styles.historyMeta}>
+                  <span class={styles.historyHash}>#{p.id}</span>
+                  <span class={styles.historyAuthor} title={p.author}>
                     {p.author}
                   </span>
-                  <span class="hm-dot">·</span>
-                  <span class="history-when">{p.updated}</span>
+                  <span class={styles.hmDot}>·</span>
+                  <span class={styles.historyWhen}>{p.updated}</span>
                 </div>
               </div>
-              <div class="history-badges">
+              <div class={styles.historyBadges}>
                 <span class={`pr-state ${p.status}`}>{prStateLabel(p.status)}</span>
               </div>
             </div>
@@ -899,37 +894,36 @@ function PrDetail() {
   }, [prId]);
   if (!pr) {
     return (
-      <section class="commit-detail">
-        <div class="detail-head" />
-        <div class="detail-filebar">Files</div>
-        <div class="file-tree">
-          <div class="changes-empty">Select a pull request.</div>
+      <section class={styles.commitDetail}>
+        <div class={styles.detailHead} />
+        <div class={styles.detailFilebar}>Files</div>
+        <div class={treeStyles.fileTree}>
+          <div class={treeStyles.changesEmpty}>Select a pull request.</div>
         </div>
       </section>
     );
   }
-  const initials = (pr.author || "?").slice(0, 2).toUpperCase();
   const rev = prReviewChip(pr);
   const hasFolders = files.some((ff) => ff.path.includes("/"));
   return (
-    <section class="commit-detail">
-      <div class="detail-head">
-        <div class="detail-msg">{pr.title}</div>
-        <div class="detail-meta">
-          <span class="avatar">{initials}</span>
-          <span class="detail-author" title={pr.author}>
+    <section class={styles.commitDetail}>
+      <div class={styles.detailHead}>
+        <div class={styles.detailMsg}>{pr.title}</div>
+        <div class={styles.detailMeta}>
+          <Avatar name={pr.author} class={styles.detailAvatar} />
+          <span class={styles.detailAuthor} title={pr.author}>
             {pr.author}
           </span>
-          <span class="hm-dot">·</span>
-          <span class="history-when">{pr.updated}</span>
+          <span class={styles.hmDot}>·</span>
+          <span class={styles.historyWhen}>{pr.updated}</span>
           <span class={`pr-state ${pr.status}`}>{prStateLabel(pr.status)}</span>
         </div>
-        <div class="pr-detail-branch">
+        <div class={styles.prDetailBranch}>
           <code title={pr.branch}>{pr.branch}</code>
-          <span class="pr-arrow">→</span>
+          <span class={styles.prArrow}>→</span>
           <code title={pr.base}>{pr.base}</code>
         </div>
-        <div class="pr-detail-stats">
+        <div class={styles.prDetailStats}>
           <span class={`chip review ${rev.cls}`}>
             <Raw html={rev.icon} />
             {rev.label}
@@ -943,16 +937,16 @@ function PrDetail() {
           </button>
         </div>
       </div>
-      <div class="detail-filebar">
+      <div class={styles.detailFilebar}>
         <span>{files.length} file{files.length === 1 ? "" : "s"} changed</span>
         {hasFolders ? (
-          <button class="icon-mini" type="button" title="Collapse all folders" onClick={() => (collapsedPullDetail.value = new Set(allDirPaths(files)))}>
-            <Raw html={COLLAPSE_ALL_ICO} />
+          <button class={styles.iconMini} type="button" title="Collapse all folders" onClick={() => (collapsedPullDetail.value = new Set(allDirPaths(files)))}>
+            <Raw html={ICONS.collapseAll} />
           </button>
         ) : null}
       </div>
       <div
-        class="file-tree"
+        class={treeStyles.fileTree}
         tabIndex={0}
         onKeyDown={(e) => {
           if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
@@ -966,7 +960,7 @@ function PrDetail() {
         }}
       >
         {files.length === 0 ? (
-          <div class="changes-empty">This pull request has no file changes.</div>
+          <div class={treeStyles.changesEmpty}>This pull request has no file changes.</div>
         ) : (
           <FileTree
             files={files}
@@ -1021,9 +1015,9 @@ function HistoryPane() {
   };
 
   return (
-    <div class="commit-pane">
-      <div class="commit-filter">
-        <Raw html={SEARCH_MINI} />
+    <div class={styles.commitPane}>
+      <div class={styles.commitFilter}>
+        <Raw html={ICONS.search} />
         <input
           type="text"
           placeholder="Filter commits…"
@@ -1033,7 +1027,7 @@ function HistoryPane() {
         />
       </div>
       <div
-        class="history-list"
+        class={styles.historyList}
         tabIndex={0}
         onKeyDown={(e) => {
           if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
@@ -1046,38 +1040,38 @@ function HistoryPane() {
         }}
       >
         {shown.length === 0 ? (
-          <div class="changes-empty">{commits.value.length ? "No commits match." : "No commits yet."}</div>
+          <div class={treeStyles.changesEmpty}>{commits.value.length ? "No commits match." : "No commits yet."}</div>
         ) : (
           shown.map((c) => (
             <div
-              class={`history-row${selectedCommit.value === c.hash ? " selected" : ""}`}
+              class={`${styles.historyRow}${selectedCommit.value === c.hash ? ` ${styles.selected}` : ""}`}
               key={c.hash}
               onClick={() => selectCommit(c.hash)}
               onContextMenu={(e) => ctxMenu(e, c.hash)}
             >
-              <div class="history-main">
-                <div class="history-summary" title={c.summary}>
+              <div class={styles.historyMain}>
+                <div class={styles.historySummary} title={c.summary}>
                   {c.summary}
                 </div>
-                <div class="history-meta">
-                  <span class="history-hash">{c.id}</span>
-                  <span class="history-author" title={c.author}>
+                <div class={styles.historyMeta}>
+                  <span class={styles.historyHash}>{c.id}</span>
+                  <span class={styles.historyAuthor} title={c.author}>
                     {c.author}
                   </span>
-                  <span class="hm-dot">·</span>
-                  <span class="history-when">{c.when}</span>
+                  <span class={styles.hmDot}>·</span>
+                  <span class={styles.historyWhen}>{c.when}</span>
                 </div>
               </div>
               {(c.tags?.length || c.unpushed) ? (
-                <div class="history-badges">
+                <div class={styles.historyBadges}>
                   {(c.tags || []).map((t) => (
-                    <span class="history-tag" key={t} title={`Tag: ${t}`}>
+                    <span class={styles.historyTag} key={t} title={`Tag: ${t}`}>
                       <Raw html={ICONS.tag} />
                       <span>{t}</span>
                     </span>
                   ))}
                   {c.unpushed ? (
-                    <span class="history-unpushed" title="This commit hasn't been pushed yet">
+                    <span class={styles.historyUnpushed} title="This commit hasn't been pushed yet">
                       <Raw html={ICONS.up} />
                     </span>
                   ) : null}
@@ -1091,13 +1085,9 @@ function HistoryPane() {
   );
 }
 
-const SEARCH_MINI =
-  '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>';
-
 function CommitDetail() {
   const c = commits.value.find((x) => x.hash === selectedCommit.value) || null;
   const files = commitFiles.value;
-  const initials = (c?.author || "?").slice(0, 2).toUpperCase();
   // The commit-detail tree is always tree view with its own collapse state
   // (mirrors vanilla detailView="tree" + collapsedDetail), reset per commit.
   const sha = selectedCommit.value;
@@ -1106,34 +1096,34 @@ function CommitDetail() {
   }, [sha]);
   const hasFolders = files.some((f) => f.path.includes("/"));
   return (
-    <section class="commit-detail">
-      <div class="detail-head">
-        <div class="detail-msg">{c?.summary || ""}</div>
-        <div class="detail-meta">
-          <span class="avatar">{initials}</span>
-          <span class="detail-author" title={c?.author}>
+    <section class={styles.commitDetail}>
+      <div class={styles.detailHead}>
+        <div class={styles.detailMsg}>{c?.summary || ""}</div>
+        <div class={styles.detailMeta}>
+          <Avatar name={c?.author} class={styles.detailAvatar} />
+          <span class={styles.detailAuthor} title={c?.author}>
             {c?.author || ""}
           </span>
-          <span class="hm-dot">·</span>
-          <span class="history-when">{c?.when || ""}</span>
-          <span class="history-hash">{c?.id || ""}</span>
+          <span class={styles.hmDot}>·</span>
+          <span class={styles.historyWhen}>{c?.when || ""}</span>
+          <span class={styles.historyHash}>{c?.id || ""}</span>
         </div>
       </div>
-      <div class="detail-filebar">
+      <div class={styles.detailFilebar}>
         <span>{files.length} file{files.length === 1 ? "" : "s"} changed</span>
         {hasFolders ? (
           <button
-            class="icon-mini"
+            class={styles.iconMini}
             type="button"
             title="Collapse all folders"
             onClick={() => (collapsedDetail.value = new Set(allDirPaths(files)))}
           >
-            <Raw html={COLLAPSE_ALL_ICO} />
+            <Raw html={ICONS.collapseAll} />
           </button>
         ) : null}
       </div>
       <div
-        class="file-tree"
+        class={treeStyles.fileTree}
         tabIndex={0}
         onKeyDown={(e) => {
           if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
@@ -1147,9 +1137,9 @@ function CommitDetail() {
         }}
       >
         {!selectedCommit.value ? (
-          <div class="changes-empty">Select a commit.</div>
+          <div class={treeStyles.changesEmpty}>Select a commit.</div>
         ) : files.length === 0 ? (
-          <div class="changes-empty">No file changes.</div>
+          <div class={treeStyles.changesEmpty}>No file changes.</div>
         ) : (
           <FileTree
             files={files}
@@ -1172,8 +1162,6 @@ function CommitDetail() {
 }
 
 const collapsedDetail = signal<Set<string>>(new Set());
-const COLLAPSE_ALL_ICO =
-  '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>';
 
 function DiffPane() {
   const history = changesTab.value === "history";
@@ -1218,94 +1206,63 @@ function DiffPane() {
   })();
 
   return (
-    <div class="diff-view">
-      {loading ? (
-        <div class="diff-empty">Loading diff…</div>
-      ) : !active || !diff ? (
-        <div class="diff-empty">
-          {history
-            ? selectedCommit.value
+    <DiffView
+      diff={active ? diff : null}
+      loading={loading}
+      empty={
+        history
+          ? selectedCommit.value
+            ? "Select a file to view its diff."
+            : "Select a commit, then a file to view its diff."
+          : pulls
+            ? selectedPull.value
               ? "Select a file to view its diff."
-              : "Select a commit, then a file to view its diff."
-            : pulls
-              ? selectedPull.value
-                ? "Select a file to view its diff."
-                : "Select a pull request, then a file to view its diff."
-              : "Select a file to view its diff."}
-        </div>
-      ) : (
-        <DiffContent diff={diff} nav={nav} />
-      )}
-    </div>
-  );
-}
-
-function DiffContent({ diff, nav }: { diff: FileDiff; nav: { idx: number; total: number; go: (i: number) => void } }) {
-  const html = useComputed(() => renderDiffHtml(diff));
-  const isImage = !!(diff.oldImage || diff.newImage);
-  return (
-    <div class="diff-content">
-      <div class="diff-head">
-        <span class="diff-path" title={diff.path}>
-          {diff.path}
-        </span>
-        {nav.total > 1 ? (
-          <div class="diff-nav">
-            <button class="icon-mini" type="button" title="Previous file (↑)" disabled={nav.idx <= 0} onClick={() => nav.go(nav.idx - 1)}>
-              <Raw html={CHEV_UP} />
+              : "Select a pull request, then a file to view its diff."
+            : "Select a file to view its diff."
+      }
+      nav={
+        active && diff && nav.total > 1 ? (
+          <div class={diffStyles.diffNav}>
+            <button class={diffStyles.diffNavButton} type="button" title="Previous file (↑)" disabled={nav.idx <= 0} onClick={() => nav.go(nav.idx - 1)}>
+              <Raw html={ICONS.chevronUp} />
             </button>
-            <span class="diff-pos">
+            <span class={diffStyles.diffPos}>
               {nav.idx + 1} / {nav.total}
             </span>
-            <button class="icon-mini" type="button" title="Next file (↓)" disabled={nav.idx >= nav.total - 1} onClick={() => nav.go(nav.idx + 1)}>
-              <Raw html={CHEV_DOWN} />
+            <button class={diffStyles.diffNavButton} type="button" title="Next file (↓)" disabled={nav.idx >= nav.total - 1} onClick={() => nav.go(nav.idx + 1)}>
+              <Raw html={ICONS.chevronDown} />
             </button>
           </div>
-        ) : null}
-        <span class="diff-adds">+{diff.additions}</span>
-        <span class="diff-dels">−{diff.deletions}</span>
-        <button
-          class={`icon-mini diff-expand-btn${wholeFile.value ? " active" : ""}`}
-          type="button"
-          title={wholeFile.value ? "Show only changed lines" : "Show the whole file"}
-          onClick={toggleWholeFile}
-        >
-          <Raw html={wholeFile.value ? DIFF_COLLAPSE : DIFF_EXPAND} />
-        </button>
-      </div>
-      {isImage ? (
-        <ImageDiff diff={diff} />
-      ) : diff.binary ? (
-        <div class="diff-binary">Binary file — no text diff to display.</div>
-      ) : !diff.hunks.length ? (
-        <div class="diff-binary">No textual changes to display.</div>
-      ) : (
-        <div class="diff-body" dangerouslySetInnerHTML={{ __html: html.value }} />
-      )}
-    </div>
+        ) : null
+      }
+      wholeFile={wholeFile.value}
+      onToggleWholeFile={toggleWholeFile}
+      viewClass={styles.commitDiffView}
+    >
+      {active && diff ? <DiffBody diff={diff} /> : null}
+    </DiffView>
   );
 }
 
-const CHEV_UP =
-  '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>';
-const CHEV_DOWN =
-  '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
-const DIFF_EXPAND =
-  '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 9 12 4 17 9"/><polyline points="7 15 12 20 17 15"/></svg>';
-const DIFF_COLLAPSE =
-  '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 4 12 9 17 4"/><polyline points="7 20 12 15 17 20"/></svg>';
+function DiffBody({ diff }: { diff: FileDiff }) {
+  const html = useComputed(() => renderDiffHtml(diff));
+  if (diff.oldImage || diff.newImage) return <ImageDiff diff={diff} />;
+  if (diff.binary) return <div class={diffStyles.diffBinary}>Binary file — no text diff to display.</div>;
+  if (!diff.hunks.length) return <div class={diffStyles.diffBinary}>No textual changes to display.</div>;
+  return <div class={diffStyles.diffBody} dangerouslySetInnerHTML={{ __html: html.value }} />;
+}
 
 function ImageDiff({ diff }: { diff: FileDiff }) {
   const fig = (label: string, src: string) => (
-    <figure class="diff-img-fig" key={label}>
-      <figcaption class="diff-img-cap">{label}</figcaption>
-      <div class="diff-img-wrap">
-        <img class="diff-img" src={src} alt={diff.path} loading="lazy" />
+    <figure class={diffStyles.diffImgFig} key={label}>
+      <figcaption class={diffStyles.diffImgCap}>{label}</figcaption>
+      <div class={diffStyles.diffImgWrap}>
+        <img class={diffStyles.diffImg} src={src} alt={diff.path} loading="lazy" />
       </div>
     </figure>
   );
   return (
-    <div class="diff-image">
+    <div class={diffStyles.diffImage}>
       {diff.oldImage && diff.newImage
         ? [fig("Before", diff.oldImage), fig("After", diff.newImage)]
         : diff.newImage
@@ -1330,14 +1287,14 @@ function hl(content: string, path: string): string {
 function renderDiffHtml(diff: FileDiff): string {
   const out: string[] = [];
   for (const hunk of diff.hunks || []) {
-    out.push(`<div class="diff-hunk-head">${esc(hunk.header)}</div>`);
-    out.push('<div class="diff-code">');
+    out.push(`<div class="${diffStyles.diffHunkHead}">${esc(hunk.header)}</div>`);
+    out.push(`<div class="${diffStyles.diffCode}">`);
     for (const line of hunk.lines || []) {
-      const cls = line.kind === "add" ? "add" : line.kind === "del" ? "del" : "";
+      const cls = line.kind === "add" ? diffStyles.add : line.kind === "del" ? diffStyles.del : "";
       const oldNo = line.oldLineno != null ? String(line.oldLineno) : "";
       const newNo = line.newLineno != null ? String(line.newLineno) : "";
       out.push(
-        `<div class="diff-line ${cls}"><span class="diff-gutter"><span>${oldNo}</span><span>${newNo}</span></span><span class="diff-text">${hl(line.content, diff.path)}</span></div>`,
+        `<div class="${diffStyles.diffLine} ${cls}"><span class="${diffStyles.diffGutter}"><span>${oldNo}</span><span>${newNo}</span></span><span class="${diffStyles.diffText}">${hl(line.content, diff.path)}</span></div>`,
       );
     }
     out.push("</div>");
@@ -1774,8 +1731,8 @@ function stashMenuItems(anchor: HTMLElement): MenuItem[] {
     { label: "Apply Latest Stash", icon: ICONS.copy, disabled: !hasStashes, onClick: () => stashApply(stashes[0].index).catch(err("Apply failed")) },
     { label: "Apply Stash…", icon: ICONS.copy, disabled: !hasStashes, onClick: () => picker((s) => stashApply(s.index).catch(err("Apply failed"))) },
     { separator: true },
-    { label: "Pop Latest Stash", icon: RESTORE_ICO, disabled: !hasStashes, onClick: () => stashPop(stashes[0].index).catch(err("Pop failed")) },
-    { label: "Pop Stash…", icon: RESTORE_ICO, disabled: !hasStashes, onClick: () => picker((s) => stashPop(s.index).catch(err("Pop failed"))) },
+    { label: "Pop Latest Stash", icon: ICONS.restore, disabled: !hasStashes, onClick: () => stashPop(stashes[0].index).catch(err("Pop failed")) },
+    { label: "Pop Stash…", icon: ICONS.restore, disabled: !hasStashes, onClick: () => picker((s) => stashPop(s.index).catch(err("Pop failed"))) },
     { separator: true },
     { label: "Drop Stash…", icon: ICONS.trash, danger: true, disabled: !hasStashes, onClick: () => picker((s) => void dropOne(s)) },
     {
@@ -1811,7 +1768,7 @@ async function viewStash(s: StashEntry) {
     wide: true,
     body: (close) => (
       <>
-        <pre class="git-output-pre">{text || "(empty diff)"}</pre>
+        <pre class={styles.gitOutputPre}>{text || "(empty diff)"}</pre>
         <div class="modal-foot">
           <button class="btn btn-primary" type="button" onClick={() => close(null)}>
             Close
@@ -1884,7 +1841,7 @@ async function showGitOutput() {
         {entries.length === 0 ? (
           <p class="modal-msg">No git actions have run yet this session.</p>
         ) : (
-          <pre class="git-output-pre">
+          <pre class={styles.gitOutputPre}>
             {entries.map((e) => `[${e.time}] ${e.repo} — ${e.action} — ${e.ok ? "OK" : "ERROR: " + (e.detail || "")}`).join("\n")}
           </pre>
         )}

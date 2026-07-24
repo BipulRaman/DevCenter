@@ -81,13 +81,13 @@ function mdInline(s: string): string {
     .replace(/\*([^*]+)\*|_([^_]+)_/g, (_, a, b) => `<em>${a || b}</em>`);
 }
 
-export function mdLite(raw: string): string {
+export function mdLite(raw: string, codeBlockClass = "prr-md-pre"): string {
   if (!raw) return "";
   const blocks: string[] = [];
   const s = escapeHtml(String(raw))
     .replace(/\r\n/g, "\n")
     .replace(/```[a-zA-Z0-9]*\n([\s\S]*?)```/g, (_, code) => {
-      blocks.push(`<pre class="prr-md-pre"><code>${code.replace(/\n$/, "")}</code></pre>`);
+      blocks.push(`<pre class="${codeBlockClass}"><code>${code.replace(/\n$/, "")}</code></pre>`);
       return `\u0000${blocks.length - 1}\u0000`;
     });
   const out: string[] = [];

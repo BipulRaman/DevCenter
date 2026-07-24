@@ -1,0 +1,115 @@
+/* BranchPicker component styles. Scoped so these generic names cannot collide
+   with page styles. The dialog also uses global form primitives (`.form-row`,
+   `.modal-input`, `.modal-foot`); the floating menu container + internals are
+   scoped below (`.dropdownMenu` mirrors the context menu's own copy). */
+
+/* Switch-branch dialog: stacked radio-card choices. */
+.switchOpts { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+.switchOpt {
+  display: flex; align-items: flex-start; gap: 11px;
+  padding: 13px 14px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border); background: var(--bg-elev-2);
+  cursor: pointer; transition: border-color .14s, background .14s;
+}
+.switchOpt:hover { border-color: color-mix(in srgb, var(--text-faint) 40%, var(--border)); }
+.switchOpt.active { border-color: var(--accent); background: var(--accent-soft); }
+.switchOpt input { margin: 2px 0 0; width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
+.switchOptBody { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.switchOptTitle { font-size: 13.5px; font-weight: 600; color: var(--text); }
+.switchOptDesc { font-size: 12px; color: var(--text-faint); line-height: 1.45; }
+
+/* ---- Dropdown menu. The shared visual chrome lives in lib/floating.module.css
+   (`.panel`); the branch-picker-specific sizing (z-index/min-width/max-height/
+   padding) is kept here so nothing depends on cascade order. The dropdown
+   internals (head/search/list/opt) are scoped below. ---- */
+.dropdownMenu {
+  composes: panel from "../lib/floating.module.css";
+  z-index: 90;
+  min-width: 240px;
+  max-height: min(520px, calc(100vh - 16px));
+  padding: 7px;
+}
+
+.dropdownHead {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 5px 6px 7px 9px;
+}
+.dropdownHeadTitle {
+  font-size: 10px; text-transform: uppercase; letter-spacing: .9px;
+  color: var(--text-faint); font-weight: 600;
+}
+.dropdownHeadAction {
+  display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0;
+  height: 24px; padding: 0 9px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--bg-elev-2); color: var(--text-dim);
+  font-family: inherit; font-size: 11.5px; font-weight: 500; letter-spacing: 0;
+  text-transform: none; cursor: pointer;
+  transition: border-color .14s var(--ease), background .14s var(--ease), color .14s var(--ease);
+}
+.dropdownHeadAction:hover { border-color: color-mix(in srgb, var(--text-faint) 35%, var(--border)); background: var(--bg-hover); color: var(--text); }
+.dropdownHeadAction svg { width: 13px; height: 13px; flex-shrink: 0; }
+
+.dropdownSearch {
+  display: flex; align-items: center; gap: 7px;
+  padding: 0 9px; margin: 2px 2px 7px;
+  height: 32px; flex-shrink: 0;
+  background: var(--bg-elev-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  color: var(--text-faint);
+  transition: border-color .14s, box-shadow .14s;
+}
+.dropdownSearch:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); color: var(--text-dim); }
+.dropdownSearch svg { width: 14px; height: 14px; flex-shrink: 0; }
+.dropdownSearch input {
+  flex: 1; min-width: 0; background: transparent; border: none; outline: none;
+  color: var(--text); font-family: inherit; font-size: 12.5px; font-weight: 500;
+  border-radius: 0;
+}
+.dropdownSearch input::placeholder { color: var(--text-faint); }
+
+.dropdownList {
+  display: flex; flex-direction: column; gap: 1px; overflow-y: auto; min-height: 0;
+  scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+}
+.dropdownList::-webkit-scrollbar { width: 10px; height: 10px; }
+.dropdownList::-webkit-scrollbar-thumb { background: var(--border); border-radius: 0; border: 2px solid transparent; background-clip: padding-box; }
+.dropdownList::-webkit-scrollbar-thumb:hover { background: var(--text-faint); background-clip: padding-box; }
+.dropdownList::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+
+.dropdownOpt {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  min-height: 32px;
+  padding: 6px 9px; border-radius: var(--radius-sm); border: none; background: transparent;
+  color: var(--text-dim); font-family: inherit; font-size: 12.5px; font-weight: 500; letter-spacing: -.1px;
+  text-align: left; cursor: pointer; transition: background .14s var(--ease), color .14s var(--ease);
+}
+.dropdownOpt:hover:not(:disabled) { background: var(--bg-hover); color: var(--text); }
+.dropdownOpt:disabled { cursor: default; opacity: .5; }
+.dropdownOpt .optName { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: inherit; font-size: 12.5px; }
+.dropdownOpt .optName mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: inherit; border-radius: 3px; padding: 0 1px; }
+.dropdownOpt .optCheck { width: 13px; height: 13px; flex-shrink: 0; color: var(--accent-hover); opacity: 0; }
+.dropdownOpt .optCheck svg { width: 13px; height: 13px; }
+.dropdownOpt.current { color: var(--accent-hover); font-weight: 600; background: color-mix(in srgb, var(--accent) 18%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border)); }
+.dropdownOpt.current:disabled { opacity: 1; color: var(--accent-hover); }
+.dropdownOpt.current[aria-disabled="true"] { cursor: default; }
+.dropdownOpt.current:hover { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent-hover); }
+.dropdownOpt.current .optCheck { opacity: 1; }
+.dropdownOpt .optBadge {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: .25px;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  background: var(--bg-elev-2);
+}
+.dropdownOpt .optBadge.base { color: var(--green); border-color: color-mix(in srgb, var(--green) 35%, var(--border)); background: color-mix(in srgb, var(--green) 12%, var(--bg-elev-2)); }
+.dropdownOpt .optBadge.user { color: var(--accent-hover); border-color: color-mix(in srgb, var(--accent) 38%, var(--border)); background: color-mix(in srgb, var(--accent) 12%, var(--bg-elev-2)); }
+.dropdownOpt .optBadge.bot { color: #8b6cff; border-color: color-mix(in srgb, #8b6cff 40%, var(--border)); background: color-mix(in srgb, #8b6cff 12%, var(--bg-elev-2)); }
+.dropdownOpt .optBadge.feature { color: #2a8f7a; border-color: color-mix(in srgb, #2a8f7a 40%, var(--border)); background: color-mix(in srgb, #2a8f7a 12%, var(--bg-elev-2)); }
+.dropdownOpt .optBadge.release { color: #b77713; border-color: color-mix(in srgb, #b77713 40%, var(--border)); background: color-mix(in srgb, #b77713 12%, var(--bg-elev-2)); }
+.dropdownOpt .optBadge.hotfix { color: var(--red); border-color: color-mix(in srgb, var(--red) 40%, var(--border)); background: color-mix(in srgb, var(--red) 10%, var(--bg-elev-2)); }
+.dropdownEmpty { padding: 14px 10px; font-size: 12.5px; color: var(--text-faint); text-align: center; }

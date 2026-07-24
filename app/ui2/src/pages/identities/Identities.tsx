@@ -7,6 +7,7 @@ import { ipc } from "@/platform/ipc";
 import { ICONS, Raw } from "@/lib/ico";
 import { modal } from "@/components/modal";
 import type { GitIdentity, IdentityCondKind, IdentityCredential, IdentityProfile } from "@/types/models";
+import styles from "./Identities.module.css";
 
 const identity = signal<GitIdentity | null>(null);
 const loaded = signal(false);
@@ -77,37 +78,37 @@ export function Identities() {
 function IdentityBody({ g }: { g: GitIdentity }) {
   return (
     <>
-      <div class="identity-default">
-        <div class="identity-default-head">
+      <div class={styles.defaultCard}>
+        <div class={styles.defaultHead}>
           <div>
-            <div class="identity-default-label">Default identity</div>
-            <div class="identity-default-desc">Used for every repository that doesn't match a condition below.</div>
+            <div class={styles.defaultLabel}>Default identity</div>
+            <div class={styles.defaultDesc}>Used for every repository that doesn't match a condition below.</div>
           </div>
           <button class="btn btn-ghost btn-sm" onClick={editDefault}>
             <Raw html={ICONS.pencil} />
             Edit
           </button>
         </div>
-        <div class="identity-default-body">
-          <div class="identity-kv">
+        <div class={styles.defaultBody}>
+          <div class={styles.keyValue}>
             <span>Name</span>
             <strong>{g.defaultName || <em>Not set</em>}</strong>
           </div>
-          <div class="identity-kv">
+          <div class={styles.keyValue}>
             <span>Email</span>
             <strong>{g.defaultEmail || <em>Not set</em>}</strong>
           </div>
         </div>
       </div>
 
-      <div class="identity-section-head">
-        <div class="identity-section-title">Conditional identities</div>
+      <div class={styles.sectionHead}>
+        <div class={styles.sectionTitle}>Conditional identities</div>
         <button class="btn btn-primary btn-sm" onClick={() => editProfile(null)}>
           <Raw html={ICONS.plus} />
           Add identity
         </button>
       </div>
-      <div class="identity-list">
+      <div class={styles.identityList}>
         {g.profiles.length === 0 ? (
           <div class="account-empty">
             <Raw html={ICONS.branch} />
@@ -122,7 +123,7 @@ function IdentityBody({ g }: { g: GitIdentity }) {
         )}
       </div>
 
-      <div class="identity-foot">
+      <div class={styles.footer}>
         <Raw html={ICONS.gear} />
         <span>
           Saved to <code>{g.globalPath}</code> and per-identity <code>~/.gitconfig-*</code> files. {window.BRAND} only
@@ -135,12 +136,12 @@ function IdentityBody({ g }: { g: GitIdentity }) {
 
 function ProfileCard({ profile: p, index }: { profile: IdentityProfile; index: number }) {
   return (
-    <div class="identity-card">
-      <div class="identity-card-head">
-        <div class="identity-card-title">
-          <code class="identity-file identity-file-strong">~/.gitconfig-{p.key}</code>
+    <div class={styles.identityCard}>
+      <div class={styles.cardHead}>
+        <div class={styles.cardTitle}>
+          <code class={styles.identityFile}>~/.gitconfig-{p.key}</code>
         </div>
-        <div class="identity-card-actions">
+        <div class={styles.cardActions}>
           <button class="btn btn-ghost btn-sm" onClick={() => editProfile(index)}>
             <Raw html={ICONS.pencil} />
             Edit
@@ -150,38 +151,38 @@ function ProfileCard({ profile: p, index }: { profile: IdentityProfile; index: n
           </button>
         </div>
       </div>
-      <div class="identity-default-body">
-        <div class="identity-kv">
+      <div class={styles.defaultBody}>
+        <div class={styles.keyValue}>
           <span>Name</span>
           <strong>{p.name || <em>Not set</em>}</strong>
         </div>
-        <div class="identity-kv">
+        <div class={styles.keyValue}>
           <span>Email</span>
           <strong>{p.email || <em>Not set</em>}</strong>
         </div>
       </div>
-      <div class="identity-conds-list">
+      <div class={styles.conditions}>
         {p.conditions.length ? (
           p.conditions.map((c, i) => (
-            <div class="identity-cond-line" key={i}>
-              <span class="identity-chip-k">{COND[c.kind]?.short || "URL"}</span>
+            <div class={styles.conditionLine} key={i}>
+              <span class={styles.conditionKind}>{COND[c.kind]?.short || "URL"}</span>
               <code>{c.value || ""}</code>
             </div>
           ))
         ) : (
-          <div class="identity-cond-line identity-chip-warn">No conditions — never activates</div>
+          <div class={`${styles.conditionLine} ${styles.warning}`}>No conditions — never activates</div>
         )}
       </div>
       {p.credentials && p.credentials.length ? (
-        <div class="identity-creds">
-          <span class="identity-creds-label">
+        <div class={styles.credentials}>
+          <span class={styles.credentialsLabel}>
             <Raw html={ICONS.key} />
             Azure credentials
           </span>
-          <div class="identity-cred-chips">
+          <div class={styles.credentialList}>
             {p.credentials.map((c, i) => (
-              <div class="identity-cond-line" key={i}>
-                <span class="identity-chip-k identity-chip-org">{c.org}</span>
+              <div class={styles.conditionLine} key={i}>
+                <span class={`${styles.conditionKind} ${styles.organization}`}>{c.org}</span>
                 <code>{c.username}</code>
               </div>
             ))}
@@ -312,7 +313,7 @@ function ProfileForm({ existing, close }: { existing: IdentityProfile | null; cl
 
   return (
     <>
-      <div class="form-grid-2">
+      <div class={styles.formGrid}>
         <div class="form-row">
           <label class="form-label">Identity name</label>
           <input class="modal-input" placeholder="e.g. work" spellcheck={false} value={key} onInput={(e) => setKey((e.target as HTMLInputElement).value)} />
@@ -332,11 +333,11 @@ function ProfileForm({ existing, close }: { existing: IdentityProfile | null; cl
 
       <div class="form-row">
         <label class="form-label">Activate when…</label>
-        <div class="identity-rows">
+        <div class={styles.rows}>
           {conds.map((c, i) => (
-            <div class="identity-row" key={i}>
+            <div class={styles.row} key={i}>
               <select
-                class="modal-input identity-row-kind"
+                class="modal-input"
                 value={c.kind}
                 onChange={(e) => {
                   const kind = (e.target as HTMLSelectElement).value as IdentityCondKind;
@@ -347,7 +348,7 @@ function ProfileForm({ existing, close }: { existing: IdentityProfile | null; cl
                 <option value="gitdir">{COND.gitdir.label}</option>
               </select>
               <input
-                class="modal-input identity-row-val"
+                class="modal-input"
                 spellcheck={false}
                 placeholder={COND[c.kind].placeholder}
                 value={c.value}
@@ -356,28 +357,28 @@ function ProfileForm({ existing, close }: { existing: IdentityProfile | null; cl
                   setConds((prev) => prev.map((x, j) => (j === i ? { ...x, value } : x)));
                 }}
               />
-              <button class="btn btn-icon btn-sm identity-row-del" type="button" title="Remove" onClick={() => setConds((prev) => prev.filter((_, j) => j !== i))}>
+              <button class="btn btn-icon btn-sm" type="button" title="Remove" onClick={() => setConds((prev) => prev.filter((_, j) => j !== i))}>
                 <Raw html={ICONS.x} />
               </button>
             </div>
           ))}
         </div>
-        <button type="button" class="btn btn-ghost btn-sm" style={{ marginTop: "8px" }} onClick={() => setConds((prev) => [...prev, { kind: "remoteUrl", value: "" }])}>
+        <button type="button" class={`btn btn-ghost btn-sm ${styles.addRowButton}`} onClick={() => setConds((prev) => [...prev, { kind: "remoteUrl", value: "" }])}>
           <Raw html={ICONS.plus} />
           Add condition
         </button>
       </div>
 
-      <details class="identity-advanced" open={creds.length > 0}>
+      <details class={styles.advanced} open={creds.length > 0}>
         <summary>Azure DevOps credential usernames (optional)</summary>
-        <div class="form-hint" style={{ margin: "8px 0" }}>
+        <div class={`form-hint ${styles.advancedHint}`}>
           Maps a sign-in username to an Azure DevOps organization so the credential helper picks the right account.
         </div>
-        <div class="identity-rows">
+        <div class={styles.rows}>
           {creds.map((c, i) => (
-            <div class="identity-row identity-row-cred" key={i}>
+            <div class={`${styles.row} ${styles.credentialRow}`} key={i}>
               <input
-                class="modal-input identity-cred-org"
+                class="modal-input"
                 placeholder="organization"
                 spellcheck={false}
                 value={c.org}
@@ -387,7 +388,7 @@ function ProfileForm({ existing, close }: { existing: IdentityProfile | null; cl
                 }}
               />
               <input
-                class="modal-input identity-cred-user"
+                class="modal-input"
                 placeholder="user@contoso.com"
                 spellcheck={false}
                 value={c.username}
@@ -396,13 +397,13 @@ function ProfileForm({ existing, close }: { existing: IdentityProfile | null; cl
                   setCreds((prev) => prev.map((x, j) => (j === i ? { ...x, username } : x)));
                 }}
               />
-              <button class="btn btn-icon btn-sm identity-row-del" type="button" title="Remove" onClick={() => setCreds((prev) => prev.filter((_, j) => j !== i))}>
+              <button class="btn btn-icon btn-sm" type="button" title="Remove" onClick={() => setCreds((prev) => prev.filter((_, j) => j !== i))}>
                 <Raw html={ICONS.x} />
               </button>
             </div>
           ))}
         </div>
-        <button type="button" class="btn btn-ghost btn-sm" style={{ marginTop: "8px" }} onClick={() => setCreds((prev) => [...prev, { org: "", username: "", authority: null }])}>
+        <button type="button" class={`btn btn-ghost btn-sm ${styles.addRowButton}`} onClick={() => setCreds((prev) => [...prev, { org: "", username: "", authority: null }])}>
           <Raw html={ICONS.plus} />
           Add credential
         </button>

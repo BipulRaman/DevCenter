@@ -1,0 +1,81 @@
+/* File-tree / list renderer styles — owned by lib/file-tree.tsx and EXPORTED as
+   `treeStyles` (see file-tree.tsx) so the Changes page and PR reviewer share the
+   exact same hashed class names instead of leaning on global CSS. The seti
+   @font-face stays global in styles.css: its url() must resolve relative to
+   public/css and the font-family name isn't hashable. */
+
+/* Scroll container (rendered by consumer pages) + collapse twisty + empty state.
+   Exported via treeStyles for Changes/PR reviewer; previously global in styles.css. */
+.fileTree { flex: 1; overflow: auto; padding: 2px 0 8px; min-height: 0; outline: none; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+.fileTree:focus-visible { box-shadow: inset 0 0 0 1px var(--accent-soft); }
+.fileTree::-webkit-scrollbar { width: 10px; height: 10px; }
+.fileTree::-webkit-scrollbar-thumb { background: var(--border); border-radius: 0; border: 2px solid transparent; background-clip: padding-box; }
+.fileTree::-webkit-scrollbar-thumb:hover { background: var(--text-faint); background-clip: padding-box; }
+.fileTree::-webkit-scrollbar-corner { background: transparent; }
+.fileTree::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+
+.treeTwisty { width: 16px; height: 16px; flex-shrink: 0; color: var(--text-faint); display: grid; place-items: center; transition: transform .1s; }
+.treeTwisty svg { width: 11px; height: 11px; }
+.treeTwisty.collapsed { transform: rotate(-90deg); }
+.hiddenTwisty { visibility: hidden; }
+
+.changesEmpty { padding: 30px 16px; text-align: center; color: var(--text-faint); font-size: 12.5px; }
+
+.treeRow {
+  display: flex; align-items: center; gap: 8px; height: 26px;
+  padding-left: calc(8px + var(--d, 0) * 8px); padding-right: 10px;
+  cursor: pointer; user-select: none; position: relative;
+  border-radius: 0 !important;
+  /* VS Code-style indent guides: one faint vertical line per ancestor level */
+  background-image: repeating-linear-gradient(to right, var(--tree-guide) 0 1px, transparent 1px 8px);
+  background-repeat: no-repeat;
+  background-position: 15px 0;
+  background-size: calc(var(--d, 0) * 8px) 100%;
+}
+.treeRow:hover { background-color: var(--bg-hover); }
+.treeFile.selected { background-color: var(--accent-soft); }
+.treeFile.selected .treeName { color: var(--accent-hover); }
+
+/* SCM action slot (discard/stage/unstage), revealed on row hover / selection.
+   The actions span is tagged with `.rowActions` plus the consumer's own class
+   (Changes `.scmActions`), so the reveal keys off the module `.treeRow`. */
+.rowActions { opacity: 0; pointer-events: none; }
+.treeRow:hover .rowActions {
+  opacity: 1; pointer-events: auto; padding-left: 24px;
+  background: linear-gradient(to right, transparent, var(--bg-hover) 18px);
+}
+.treeFile.selected .rowActions {
+  opacity: 1; pointer-events: auto; padding-left: 24px;
+  background: linear-gradient(to right, transparent, var(--accent-soft) 18px);
+}
+
+.treeIco { width: 17px; height: 17px; flex-shrink: 0; color: var(--text-dim); display: grid; place-items: center; }
+.treeIco svg { width: 16px; height: 16px; }
+.treeFolder .treeIco { color: #8ca0b3; }
+/* Official VS Code "Seti" file icons (font registered globally in styles.css). */
+.treeFile .treeIco.setiIco {
+  font-family: "seti"; font-style: normal; font-weight: normal;
+  font-size: 18px; line-height: 1; overflow: visible;
+  -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+}
+
+.treeFolder .treeName { font-weight: 400; color: var(--text); }
+.treeName {
+  flex: 1; min-width: 0; display: block; font-size: 13px; font-family: var(--font); letter-spacing: -.15px; line-height: 1.3;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.treeFile .treeName { color: var(--text); }
+.treeFile .treeName .changeDir { color: var(--text-faint); }
+.treeCount { flex-shrink: 0; min-width: 20px; text-align: right; font-size: 11px; color: var(--text-faint); font-weight: 500; font-variant-numeric: tabular-nums; }
+
+/* VS Code-style status letter: a single colored glyph, no box */
+.changeStat {
+  flex-shrink: 0; margin-left: 8px; width: 20px; height: 20px; display: grid; place-items: center; text-align: center;
+  font-size: 12.5px; font-weight: 600; font-family: var(--font); line-height: 1;
+}
+.changeStat.new, .changeStat.untracked { color: var(--green); }
+.changeStat.modified { color: var(--amber); }
+.changeStat.deleted { color: var(--red); }
+.changeStat.renamed { color: var(--accent-hover); }
+.changeStat.conflicted { color: var(--red); }
+.changeStat.typechange { color: var(--text-dim); }

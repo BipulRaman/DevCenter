@@ -1,8 +1,10 @@
 // Custom hover tooltip — the Preact-app port of the Tooltip singleton in
 // app/ui/js/components.js. Replaces the OS `title` tooltip with a styled
 // floating card app-wide via event delegation, so existing `title="…"`
-// attributes need no changes. Uses the `.app-tooltip` styles already in
-// styles.css. Call `initTooltip()` once on startup.
+// attributes need no changes. Styles live in tooltip.module.css.
+// Call `initTooltip()` once on startup.
+
+import styles from "./tooltip.module.css";
 
 let el: HTMLDivElement | null = null;
 let showTimer: ReturnType<typeof setTimeout> | undefined;
@@ -12,7 +14,7 @@ let started = false;
 function ensureEl(): HTMLDivElement {
   if (!el) {
     el = document.createElement("div");
-    el.className = "app-tooltip";
+    el.className = styles.appTooltip;
     el.setAttribute("role", "tooltip");
     document.body.appendChild(el);
   }
@@ -46,13 +48,13 @@ function show(target: HTMLElement, text: string): void {
   current = target;
   position(target);
   void tip.offsetWidth; // force layout so the transition runs
-  tip.classList.add("visible");
+  tip.classList.add(styles.visible);
 }
 
 function hide(): void {
   clearTimeout(showTimer);
   current = null;
-  if (el) el.classList.remove("visible");
+  if (el) el.classList.remove(styles.visible);
 }
 
 function restore(t: HTMLElement): void {

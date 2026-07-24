@@ -1,9 +1,11 @@
 // Reusable multiselect filter dropdown — the Preact equivalent of the
 // account/tag filter menus in app/ui/js/git-board.js and tags.js. Reuses the
-// exact CSS classes (.multiselect / .multiselect-btn / .multiselect-menu / …).
+// component-owned, locally scoped styles.
 
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useRef, useState } from "preact/hooks";
 import { Raw } from "@/lib/ico";
+import { useOutsideClick } from "@/lib/floating";
+import styles from "./Multiselect.module.css";
 
 export interface MultiOption {
   value: string;
@@ -37,14 +39,7 @@ export function Multiselect({
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    const onDoc = (e: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, [open]);
+  useOutsideClick(wrapRef, () => setOpen(false), open);
 
   const toggle = (value: string, checked: boolean) => {
     const next = new Set(selected);
@@ -67,18 +62,18 @@ export function Multiselect({
     selected.size === 1 ? options.find((o) => o.value === [...selected][0])?.icon : undefined;
 
   return (
-    <div class={`multiselect${open ? " open" : ""}`} ref={wrapRef}>
+    <div class={`${styles.multiselect}${open ? ` ${styles.open}` : ""}`} ref={wrapRef}>
       <button
-        class="multiselect-btn"
+        class={styles.button}
         type="button"
         aria-haspopup="true"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
       >
-        {buttonIcon ? <span class="ms-ico">{<Raw html={singleIcon || buttonIcon} />}</span> : null}
+        {buttonIcon ? <span class={styles.icon}>{<Raw html={singleIcon || buttonIcon} />}</span> : null}
         <span>{label}</span>
         <svg
-          class="caret"
+          class={styles.caret}
           viewBox="0 0 24 24"
           width="15"
           height="15"
@@ -91,23 +86,23 @@ export function Multiselect({
           <polyline points="6 9 12 15 18 9" />
         </svg>
       </button>
-      <div class="multiselect-menu" role="group" aria-label={ariaLabel} hidden={!open}>
-        <label class="multiselect-opt all">
+      <div class={styles.menu} role="group" aria-label={ariaLabel} hidden={!open}>
+        <label class={`${styles.option} ${styles.all}`}>
           <input type="checkbox" checked={selected.size === 0} onChange={clearAll} />
           <span>{allLabel}</span>
         </label>
-        <div class="multiselect-sep" />
+        <div class={styles.separator} />
         {options.map((o) => (
-          <label class="multiselect-opt" key={o.value}>
+          <label class={styles.option} key={o.value}>
             <input
               type="checkbox"
               value={o.value}
               checked={selected.has(o.value)}
               onChange={(e) => toggle(o.value, (e.target as HTMLInputElement).checked)}
             />
-            {o.icon ? <span class="multiselect-ico">{<Raw html={o.icon} />}</span> : null}
+            {o.icon ? <span class={styles.optionIcon}>{<Raw html={o.icon} />}</span> : null}
             <span>{o.label}</span>
-            {o.count != null ? <span class="multiselect-count">{o.count}</span> : null}
+            {o.count != null ? <span class={styles.count}>{o.count}</span> : null}
           </label>
         ))}
       </div>

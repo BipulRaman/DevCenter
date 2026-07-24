@@ -9,11 +9,12 @@ import { hydratePulls } from "@/state/pulls";
 import { ICONS, Raw } from "@/lib/ico";
 import { modal } from "@/components/modal";
 import type { Account } from "@/types/models";
+import styles from "./Accounts.module.css";
 
 function providerMeta(p: string) {
   return p === "azure"
-    ? { icon: ICONS.azure, cls: "azure", name: "Azure DevOps" }
-    : { icon: ICONS.github, cls: "github", name: "GitHub" };
+    ? { icon: ICONS.azure, cls: styles.azure, name: "Azure DevOps" }
+    : { icon: ICONS.github, cls: styles.github, name: "GitHub" };
 }
 
 export function Accounts() {
@@ -32,7 +33,7 @@ export function Accounts() {
         </div>
       </header>
 
-      <div class="account-list">
+      <div class={styles.accountList}>
         {!ipc.hasBackend ? (
           <div class="account-empty">
             <Raw html={ICONS.key} />
@@ -63,7 +64,7 @@ export function Accounts() {
 function AccountRow({ account: a }: { account: Account }) {
   const testing = useSignal(false);
   const m = providerMeta(a.provider);
-  const stateCls = a.status === "connected" ? "connected" : a.status === "error" ? "error" : "unverified";
+  const stateCls = a.status === "connected" ? styles.connected : a.status === "error" ? styles.error : styles.unverified;
   const stateLabel = a.status === "connected" ? "Connected" : a.status === "error" ? "Error" : "Unverified";
 
   const test = async () => {
@@ -98,21 +99,21 @@ function AccountRow({ account: a }: { account: Account }) {
   };
 
   return (
-    <div class="account-row">
-      <div class={`account-icon ${m.cls}`}>
+    <div class={styles.accountRow}>
+      <div class={`${styles.accountIcon} ${m.cls}`}>
         <Raw html={m.icon} />
       </div>
-      <div class="account-main">
-        <div class="account-title-row">
-          <span class="account-name">{a.label || ""}</span>
-          <span class={`account-state ${stateCls}`}>{stateLabel}</span>
+      <div class={styles.accountMain}>
+        <div class={styles.titleRow}>
+          <span class={styles.accountName}>{a.label || ""}</span>
+          <span class={`${styles.accountState} ${stateCls}`}>{stateLabel}</span>
         </div>
-        <div class="account-sub">
+        <div class={styles.accountSub}>
           {m.name}
           {a.organization ? ` · ${a.organization}` : ""} · {a.username ? <code>{a.username}</code> : "Token"}
         </div>
       </div>
-      <div class="account-actions">
+      <div class={styles.accountActions}>
         <button class="btn btn-ghost btn-sm" disabled={testing.value} onClick={test}>
           <span class={testing.value ? "spin" : undefined}>
             <Raw html={ICONS.sync} />
@@ -242,10 +243,10 @@ function AddAccountForm({ close }: { close: (v: Account | null) => void }) {
     <>
       <div class="form-row">
         <label class="form-label">Provider</label>
-        <div class="form-choice">
+        <div class={styles.formChoice}>
           <button
             type="button"
-            class={`form-opt${provider === "github" ? " active" : ""}`}
+            class={`${styles.formOpt}${provider === "github" ? ` ${styles.active}` : ""}`}
             onClick={() => {
               setProvider("github");
               resetGit();
@@ -256,7 +257,7 @@ function AddAccountForm({ close }: { close: (v: Account | null) => void }) {
           </button>
           <button
             type="button"
-            class={`form-opt${provider === "azure" ? " active" : ""}`}
+            class={`${styles.formOpt}${provider === "azure" ? ` ${styles.active}` : ""}`}
             onClick={() => {
               setProvider("azure");
               resetGit();
@@ -292,7 +293,7 @@ function AddAccountForm({ close }: { close: (v: Account | null) => void }) {
       )}
       <div class="form-row">
         <label class="form-label">Authentication</label>
-        <button type="button" class="btn btn-primary" style={{ width: "100%", justifyContent: "center" }} disabled={authBusy} onClick={signIn}>
+        <button type="button" class={`btn btn-primary ${styles.authButton}`} disabled={authBusy} onClick={signIn}>
           {authBusy ? <span class="spin"><Raw html={ICONS.sync} /></span> : <Raw html={mode === "git" ? ICONS.check : ICONS.external} />}
           {authLabel}
         </button>
@@ -311,7 +312,7 @@ function AddAccountForm({ close }: { close: (v: Account | null) => void }) {
             if ((e.target as HTMLInputElement).value) resetGit();
           }}
         />
-        <button type="button" class="btn btn-ghost btn-sm" style={{ marginTop: "8px" }} onClick={openTokenPage}>
+        <button type="button" class={`btn btn-ghost btn-sm ${styles.tokenLink}`} onClick={openTokenPage}>
           <Raw html={ICONS.key} />
           Create a token…
         </button>

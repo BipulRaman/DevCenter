@@ -1,0 +1,57 @@
+.defaultCard {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 22px;
+}
+
+.defaultHead { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.defaultLabel { font-weight: 600; font-size: 14px; letter-spacing: -.2px; }
+.defaultDesc { font-size: 12.5px; color: var(--text-faint); margin-top: 3px; }
+.defaultBody { display: flex; flex-direction: column; gap: 12px; margin-top: 14px; }
+.keyValue { display: flex; flex-direction: column; gap: 4px; }
+.keyValue span { font-size: 11px; text-transform: uppercase; letter-spacing: .4px; color: var(--text-faint); font-weight: 600; }
+.keyValue strong { font-size: 13.5px; font-weight: 550; }
+.keyValue em { color: var(--text-faint); font-weight: 400; font-style: normal; }
+
+.sectionTitle { font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--text-faint); font-weight: 600; margin: 0 0 10px 2px; }
+.sectionHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.sectionHead .sectionTitle { margin: 0; }
+.identityList { display: flex; flex-direction: column; gap: 8px; }
+
+.identityCard {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
+
+.cardHead { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.cardTitle { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
+.identityFile { background: var(--bg-elev-2); border-radius: 5px; font-family: var(--mono); color: var(--text); font-size: 13px; font-weight: 700; padding: 3px 9px; }
+.cardActions { display: flex; gap: 8px; flex-shrink: 0; }
+.conditions { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
+.conditionLine { display: flex; align-items: center; gap: 8px; font-size: 12.5px; min-width: 0; }
+.conditionLine code { font-family: var(--mono); font-size: 12px; color: var(--text-dim); background: var(--bg-elev-2); padding: 2px 8px; border-radius: 5px; overflow-wrap: anywhere; min-width: 0; }
+.conditionKind { font-family: var(--font); font-size: 10px; text-transform: uppercase; letter-spacing: .3px; font-weight: 600; color: var(--accent-hover); }
+.organization { font-family: var(--mono); font-size: 11px; text-transform: none; letter-spacing: 0; }
+.warning { color: var(--text-faint); font-family: var(--font); font-style: italic; }
+.credentials { display: flex; flex-direction: column; gap: 7px; margin-top: 12px; }
+.credentialsLabel { display: inline-flex; align-items: center; gap: 6px; font-size: 10px; text-transform: uppercase; letter-spacing: .4px; font-weight: 600; color: var(--text-faint); }
+.credentialsLabel svg { width: 13px; height: 13px; }
+.credentialList { display: flex; flex-direction: column; gap: 6px; }
+
+.footer { display: flex; align-items: flex-start; gap: 9px; margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--border-soft); font-size: 12px; color: var(--text-faint); line-height: 1.6; }
+.footer svg { width: 15px; height: 15px; flex-shrink: 0; margin-top: 1px; }
+.footer code { background: var(--bg-elev-2); padding: 1px 5px; border-radius: 4px; font-family: var(--mono); font-size: 11px; color: var(--text-dim); }
+
+.formGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.rows { display: flex; flex-direction: column; gap: 8px; }
+.row { display: grid; grid-template-columns: 190px 1fr auto; gap: 8px; align-items: center; }
+.credentialRow { grid-template-columns: 1fr 1fr auto; }
+.addRowButton { margin-top: 8px; }
+.advanced { margin: 4px 0 14px; border-top: 1px solid var(--border-soft); padding-top: 12px; }
+.advanced summary { cursor: pointer; font-size: 12.5px; color: var(--text-dim); font-weight: 550; user-select: none; }
+.advanced summary::marker { color: var(--text-faint); }
+.advancedHint { margin: 8px 0; }

@@ -1,0 +1,165 @@
+.repoList {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.repoRow {
+  position: relative;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 9px 14px 9px 16px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  box-shadow: none;
+  transition: border-color .2s var(--ease-out), box-shadow .22s var(--ease-out), transform .18s var(--ease), background .18s var(--ease);
+  overflow: hidden;
+}
+
+.repoRow::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  background: var(--surface-hi);
+  pointer-events: none;
+}
+
+.repoRow:hover {
+  background: var(--card);
+  border-color: var(--border);
+  box-shadow: none;
+}
+
+.repoRow::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--text-faint);
+  opacity: .5;
+}
+
+.repoRow.running::before {
+  background: linear-gradient(180deg, var(--green), color-mix(in srgb, var(--green) 70%, transparent));
+  opacity: 1;
+}
+
+.repoRow.error::before {
+  background: linear-gradient(180deg, var(--amber), color-mix(in srgb, var(--amber) 70%, transparent));
+  opacity: 1;
+}
+
+.repoIcon {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent-hover);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.repoIcon svg {
+  width: 15px;
+  height: 15px;
+}
+
+.repoIcon.github {
+  background: color-mix(in srgb, #8b93a5 20%, transparent);
+  color: #5d6574;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #8b93a5 40%, transparent);
+}
+
+.repoIcon.azure {
+  background: color-mix(in srgb, #2f97f0 18%, transparent);
+  color: #2f97f0;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #2f97f0 36%, transparent);
+}
+
+.repoMain {
+  min-width: 0;
+}
+
+.repoTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+
+.repoName {
+  font-weight: 600;
+  font-size: 13.5px;
+  letter-spacing: -.2px;
+}
+
+.repoSub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-faint);
+  margin-top: 3px;
+}
+
+.repoSub > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.repoPath {
+  font-family: var(--mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 360px;
+}
+
+.repoFetch svg {
+  width: 13px;
+  height: 13px;
+}
+
+.repoFetch.fetching svg {
+  animation: repo-spin .8s linear infinite;
+  transform-origin: center;
+}
+
+.repoFetch[data-fetch-now] {
+  cursor: pointer;
+  transition: color .14s var(--ease);
+}
+
+.repoFetch[data-fetch-now]:hover {
+  color: var(--text-dim);
+}
+
+.repoActions {
+  display: flex;
+  gap: 8px;
+}
+
+.watching {
+  color: var(--accent-hover);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  background: var(--accent-soft);
+}
+
+@keyframes repo-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 760px) {
+  .repoRow { grid-template-columns: auto 1fr; }
+  .repoActions { grid-column: 1 / -1; justify-content: flex-start; }
+  .repoPath { max-width: 100%; }
+}

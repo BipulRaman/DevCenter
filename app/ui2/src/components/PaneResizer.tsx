@@ -4,6 +4,7 @@
 // variable on its parent, persisted to localStorage. Double-click resets.
 
 import { useLayoutEffect, useRef } from "preact/hooks";
+import styles from "./PaneResizer.module.css";
 
 export function PaneResizer({
   resize,
@@ -45,16 +46,16 @@ export function PaneResizer({
     const startX = e.clientX;
     const startW = parseFloat(getComputedStyle(layout).getPropertyValue(varName)) || def;
     rz.setPointerCapture(e.pointerId);
-    rz.classList.add("dragging");
-    document.body.classList.add("col-resizing");
+    rz.classList.add(styles.dragging);
+    document.body.classList.add(styles.colResizing);
     const move = (ev: PointerEvent) => {
       const w = Math.max(min, Math.min(Math.round(startW + (ev.clientX - startX)), max));
       layout.style.setProperty(varName, w + "px");
       rz.setAttribute("aria-valuenow", String(w));
     };
     const up = () => {
-      rz.classList.remove("dragging");
-      document.body.classList.remove("col-resizing");
+      rz.classList.remove(styles.dragging);
+      document.body.classList.remove(styles.colResizing);
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       window.removeEventListener("pointercancel", up);
@@ -104,7 +105,7 @@ export function PaneResizer({
   return (
     <div
       ref={ref}
-      class={`pane-resizer${extraClass ? " " + extraClass : ""}`}
+      class={`${styles.resizer}${extraClass ? " " + extraClass : ""}`}
       data-resize={resize}
       role="separator"
       aria-orientation="vertical"
