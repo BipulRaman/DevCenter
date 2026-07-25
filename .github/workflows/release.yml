@@ -165,7 +165,10 @@ jobs:
           # shared latest.json asset, which races when legs run in parallel and
           # can drop a platform. The "updater-manifest" job below assembles it
           # once, after all legs finish.
-          uploadUpdaterJson: false
+          # NOTE: the input is `includeUpdaterJson` on the released v0 tag
+          # (`uploadUpdaterJson` only exists on the unreleased dev branch, and
+          # an unknown input is silently ignored — leaving the default `true`).
+          includeUpdaterJson: false
           # Retry transient upload failures (and the rare concurrent find-or-
           # create of the release on a fresh workflow_dispatch tag).
           retryAttempts: 3
