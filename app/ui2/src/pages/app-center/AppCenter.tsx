@@ -132,7 +132,12 @@ function AppRow({ app: a }: { app: ManagedApp }) {
   const status = (["running", "building", "error", "stopped"] as const).includes(a.status) ? a.status : "stopped";
   const running = status === "running";
   const building = status === "building";
+  const errored = status === "error";
   const statusLabel = STATUS_LABEL[status] || "Stopped";
+  // The port actually in use wins over the configured one — they differ when
+  // the configured port was busy and a free one was picked instead.
+  const livePort = running ? (a.activePort ?? a.port) : a.port;
+  const portMoved = running && !!a.activePort && !!a.port && a.activePort !== a.port;
 
   const action = async (kind: "start" | "stop" | "restart") => {
     if (!ipc.hasBackend || busy.value) return;
@@ -142,7 +147,20 @@ function AppRow({ app: a }: { app: ManagedApp }) {
       else if (kind === "stop") await ipc.stopApp(a.id);
       else await ipc.restartApp(a.id);
     } catch (e) {
-      await modal.alert({ title: "Action failed", message: String(e) });
+      // A failed start must never leave the row stuck: offer a forced restart,
+      // which stops whatever is left over and starts again.
+      const retry = await modal.confirm({
+        title: "Couldn't start application",
+        message: `${String(e)}\n\nForce restart “${a.name}”?`,
+        confirmText: "Force restart",
+      });
+      if (retry) {
+        try {
+          await ipc.restartApp(a.id);
+        } catch (err) {
+          await modal.alert({ title: "Action failed", message: String(err) });
+        }
+      }
     } finally {
       busy.value = false;
     }
@@ -202,8 +220,6 @@ function AppRow({ app: a }: { app: ManagedApp }) {
     window.addEventListener("pointercancel", onUp, true);
   };
 
-  const spinning = busy.value || building;
-
   return (
     <div
       class={`${styles.appRow} ${styles[status]}`}
@@ -248,14 +264,19 @@ function AppRow({ app: a }: { app: ManagedApp }) {
         </div>
         <div class={styles.appSub}>
           {a.appType ? <span class={styles.appTypeLabel}>{a.appType}</span> : null}
-          {a.port ? (
+          {livePort ? (
             running ? (
-              <span class={`${styles.portBadge} ${styles.link}`} onClick={() => ipc.openUrl(`http://localhost:${a.port}`).catch(() => {})}>
-                Port <b>{a.port}</b>
+              <span
+                class={`${styles.portBadge} ${styles.link}${portMoved ? ` ${styles.portMoved}` : ""}`}
+                title={portMoved ? `Port ${a.port} was busy — running on ${livePort} instead` : undefined}
+                onClick={() => ipc.openUrl(`http://localhost:${livePort}`).catch(() => {})}
+              >
+                Port <b>{livePort}</b>
+                {portMoved ? <span class={styles.portWas}> (was {a.port})</span> : null}
               </span>
             ) : (
               <span class={styles.portBadge}>
-                Port <b>{a.port}</b>
+                Port <b>{livePort}</b>
               </span>
             )
           ) : null}
@@ -269,30 +290,51 @@ function AppRow({ app: a }: { app: ManagedApp }) {
             </>
           ) : null}
         </div>
+        {errored && a.error ? (
+          <div class={styles.appError} title={a.error}>
+            <Raw html={ICONS.warn} />
+            <span>{a.error}</span>
+            <button class={styles.errorLink} type="button" onClick={() => openAppLogs(a)}>
+              View logs
+            </button>
+          </div>
+        ) : null}
       </div>
       <div class={styles.appControls}>
         {building ? (
-          <button class="btn btn-ghost btn-sm" onClick={() => action("stop")}>
-            <span class="spin">
-              <Raw html={ICONS.sync} />
-            </span>
-            Building…
-          </button>
+          <>
+            <button class="btn btn-ghost btn-sm" disabled={busy.value} onClick={() => action("stop")}>
+              <span class="spin">
+                <Raw html={ICONS.sync} />
+              </span>
+              Building…
+            </button>
+            <button class="btn btn-icon btn-sm" title="Cancel" disabled={busy.value} onClick={() => action("stop")}>
+              <Raw html={ICONS.stop} />
+            </button>
+          </>
         ) : running ? (
           <>
-            <button class={`btn btn-sm ${styles.btnStop}`} disabled={spinning} onClick={() => action("stop")}>
+            <button class={`btn btn-sm ${styles.btnStop}`} disabled={busy.value} onClick={() => action("stop")}>
               <Raw html={ICONS.stop} />
               Stop
             </button>
-            <button class="btn btn-icon btn-sm" title="Restart" disabled={spinning} onClick={() => action("restart")}>
+            <button class="btn btn-icon btn-sm" title="Restart" disabled={busy.value} onClick={() => action("restart")}>
               <Raw html={ICONS.sync} />
             </button>
           </>
         ) : (
-          <button class={`btn btn-sm ${styles.btnStart}`} disabled={spinning} onClick={() => action("start")}>
-            <Raw html={ICONS.play} />
-            Start
-          </button>
+          <>
+            <button class={`btn btn-sm ${styles.btnStart}`} disabled={busy.value} onClick={() => action("start")}>
+              <Raw html={ICONS.play} />
+              {errored ? "Retry" : "Start"}
+            </button>
+            {errored ? (
+              <button class="btn btn-icon btn-sm" title="Reset to stopped" disabled={busy.value} onClick={() => action("stop")}>
+                <Raw html={ICONS.stop} />
+              </button>
+            ) : null}
+          </>
         )}
         <button class="btn btn-icon btn-sm" title="Logs" onClick={() => openAppLogs(a)}>
           <Raw html={ICONS.logs} />

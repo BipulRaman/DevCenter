@@ -103,8 +103,37 @@
 .portBadge b { font-weight: 600; color: var(--text); }
 .portBadge.link { cursor: pointer; color: var(--accent-hover); }
 .portBadge.link b { color: var(--accent-hover); }
+.portBadge.portMoved { background: var(--amber-soft); }
+.portWas { font-size: 10.5px; opacity: .75; }
 .appPath { font-family: var(--mono); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 420px; }
 .appDot { opacity: .5; }
+
+.appError {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 6px;
+  padding: 5px 9px;
+  border-radius: 6px;
+  background: var(--red-soft);
+  color: var(--red);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+.appError svg { flex-shrink: 0; width: 13px; height: 13px; }
+.appError > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.errorLink {
+  flex-shrink: 0;
+  margin-left: auto;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+}
 
 .btnStart { background: transparent; color: var(--green); border-color: color-mix(in srgb, var(--green) 45%, var(--border)); }
 .btnStart svg { color: var(--green); }

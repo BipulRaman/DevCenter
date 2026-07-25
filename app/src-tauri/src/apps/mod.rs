@@ -60,6 +60,11 @@ pub struct AppView {
     pub pid: Option<u32>,
     /// Humanized uptime (e.g. "1h 23m"), empty when not running.
     pub uptime: String,
+    /// Port the app is actually listening on — may differ from the configured
+    /// one when that port was busy and a free one was picked instead.
+    pub active_port: Option<u16>,
+    /// Reason for the last failure, kept so the UI can explain an error state.
+    pub error: Option<String>,
 }
 
 /// A single live log line emitted to the UI.
@@ -83,6 +88,22 @@ pub struct StatusEvent {
     pub status: String,
     pub pid: Option<u32>,
     pub uptime: String,
+    /// Port actually in use (see `AppView::active_port`).
+    pub port: Option<u16>,
+    /// Reason for an "error" status.
+    pub error: Option<String>,
+}
+
+/// An out-of-band message the UI should surface to the user (e.g. a port was
+/// busy and the app was moved to a different one).
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct NoticeEvent {
+    pub id: i64,
+    /// "portChanged" | "error".
+    pub kind: String,
+    pub title: String,
+    pub message: String,
 }
 
 /// A framework preset that pre-fills the New Application form.

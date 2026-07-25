@@ -4,6 +4,7 @@
 import { signal } from "@preact/signals";
 import { ipc } from "@/platform/ipc";
 import { events } from "@/platform/events";
+import { modal } from "@/components/modal";
 import type { AppPreset, ManagedApp } from "@/types/models";
 
 export const apps = signal<ManagedApp[]>([]);
@@ -20,9 +21,22 @@ export async function initApps(): Promise<void> {
     const at = apps.value.findIndex((a) => String(a.id) === String(s.id));
     if (at >= 0) {
       const next = apps.value.slice();
-      next[at] = { ...next[at], status: s.status, pid: s.pid, uptime: s.uptime };
+      next[at] = {
+        ...next[at],
+        status: s.status,
+        pid: s.pid,
+        uptime: s.uptime,
+        activePort: s.port ?? null,
+        error: s.error ?? null,
+      };
       apps.value = next;
     }
+  });
+
+  // Out-of-band messages the user must see (e.g. the configured port was busy
+  // so the app was moved to a free one). Modals queue, so bursts are safe.
+  events.onAppNotice((n) => {
+    void modal.alert({ title: n.title, message: n.message });
   });
 
   await refreshApps();

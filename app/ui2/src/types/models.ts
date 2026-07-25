@@ -221,6 +221,10 @@ export interface ManagedApp {
   status: AppStatus;
   pid?: number | null;
   uptime?: string;
+  /** Port actually in use — differs from `port` when that one was busy. */
+  activePort?: number | null;
+  /** Reason for an "error" status. */
+  error?: string | null;
   tags: string[];
 }
 
@@ -231,6 +235,16 @@ export interface AppStatusEvent {
   status: AppStatus;
   pid?: number | null;
   uptime?: string;
+  port?: number | null;
+  error?: string | null;
+}
+
+export interface AppNoticeEvent {
+  id: number | string;
+  /** "portChanged" | "error". */
+  kind: string;
+  title: string;
+  message: string;
 }
 
 export interface AppLogEvent {

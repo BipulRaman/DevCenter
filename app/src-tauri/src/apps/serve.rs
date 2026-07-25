@@ -2,7 +2,6 @@
 //! built on axum. Each runs until its shutdown signal fires.
 
 use std::collections::HashMap;
-use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -17,11 +16,11 @@ use serde_json::{json, Value};
 use tokio::sync::oneshot;
 use tower_http::services::{ServeDir, ServeFile};
 
-/// Serve a static build directory on `127.0.0.1:port` with SPA fallback to
-/// `index.html`. Resolves when the shutdown signal fires.
+/// Serve a static build directory on an already-bound listener, with SPA
+/// fallback to `index.html`. Resolves when the shutdown signal fires.
 pub async fn run_static(
     dir: PathBuf,
-    port: u16,
+    listener: tokio::net::TcpListener,
     shutdown: oneshot::Receiver<()>,
 ) -> Result<(), String> {
     if !dir.is_dir() {
@@ -31,10 +30,6 @@ pub async fn run_static(
     let service = ServeDir::new(&dir).fallback(ServeFile::new(index));
     let app = Router::new().fallback_service(service);
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], port));
-    let listener = tokio::net::TcpListener::bind(addr)
-        .await
-        .map_err(|e| format!("Cannot bind 127.0.0.1:{port} — {e}"))?;
     axum::serve(listener, app)
         .with_graceful_shutdown(async {
             let _ = shutdown.await;
@@ -51,12 +46,12 @@ struct MockSpec {
     ops: HashMap<(String, String), Value>,
 }
 
-/// Serve a Swagger 2.0 / OpenAPI 3.x mock on `127.0.0.1:port`. Routes:
+/// Serve a Swagger 2.0 / OpenAPI 3.x mock on an already-bound listener. Routes:
 /// `/` → Swagger UI, `/swagger.json` → the raw spec, everything else → a
 /// synthesized JSON response for the matching operation.
 pub async fn run_mock(
     spec_path: PathBuf,
-    port: u16,
+    listener: tokio::net::TcpListener,
     shutdown: oneshot::Receiver<()>,
 ) -> Result<(), String> {
     let text = std::fs::read_to_string(&spec_path)
@@ -85,10 +80,6 @@ pub async fn run_mock(
         .fallback(mock_handler)
         .with_state(spec);
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], port));
-    let listener = tokio::net::TcpListener::bind(addr)
-        .await
-        .map_err(|e| format!("Cannot bind 127.0.0.1:{port} — {e}"))?;
     axum::serve(listener, app)
         .with_graceful_shutdown(async {
             let _ = shutdown.await;

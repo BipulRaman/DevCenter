@@ -6,6 +6,7 @@
 import { listen } from "@/platform/tauri";
 import type {
   AppLogEvent,
+  AppNoticeEvent,
   AppStatusEvent,
   Repo,
 } from "@/types/models";
@@ -19,6 +20,8 @@ export const events = {
     listen<AppStatusEvent>("app_status_changed", cb),
   onAppLog: (cb: (e: AppLogEvent) => void) =>
     listen<AppLogEvent>("app_log", cb),
+  onAppNotice: (cb: (e: AppNoticeEvent) => void) =>
+    listen<AppNoticeEvent>("app_notice", cb),
 };
 
 export type Events = typeof events;

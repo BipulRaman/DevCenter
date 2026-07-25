@@ -7,8 +7,15 @@ use crate::{apps, store};
 
 /// Merge an app's stored config with its live runtime status.
 fn view_of(state: &AppState, def: AppDef) -> AppView {
-    let (status, pid, uptime) = state.runner.status_of(def.id);
-    AppView { def, status, pid, uptime }
+    let s = state.runner.status_of(def.id);
+    AppView {
+        def,
+        status: s.status,
+        pid: s.pid,
+        uptime: s.uptime,
+        active_port: s.port,
+        error: s.error,
+    }
 }
 
 /// The framework presets used by the New Application form.
@@ -126,18 +133,18 @@ pub async fn start_app(id: i64, state: State<'_, AppState>, app: AppHandle) -> A
     state.runner.start(&app, def).map_err(AppError::msg)
 }
 
-/// Stop a running app.
+/// Stop a running app (waits for its port to be released).
 #[tauri::command]
 pub async fn stop_app(id: i64, state: State<'_, AppState>, app: AppHandle) -> AppResult<()> {
-    state.runner.stop(&app, id).map_err(AppError::msg)
+    state.runner.stop_wait(&app, id).await.map_err(AppError::msg)
 }
 
 /// Restart an app: stop, then start again.
 #[tauri::command]
 pub async fn restart_app(id: i64, state: State<'_, AppState>, app: AppHandle) -> AppResult<()> {
-    let _ = state.runner.stop(&app, id);
-    // Brief delay so ports/handles are released before relaunch.
-    tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+    // Waits for the port to actually free up, so the app comes back on the same
+    // one instead of being pushed onto a different port by its own old process.
+    let _ = state.runner.stop_wait(&app, id).await;
     let def = def_for(state.inner(), id)?;
     state.runner.start(&app, def).map_err(AppError::msg)
 }

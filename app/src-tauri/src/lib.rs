@@ -314,7 +314,16 @@ pub fn run() {
             commands::apps::stop_all_apps,
             commands::apps::app_logs,
         ])
-        .run(context)
-        .expect("error while running the app");
+        .build(context)
+        .expect("error while running the app")
+        .run(|handle, event| {
+            // Managed apps are plain child processes, so they would outlive
+            // DevCenter and keep holding their ports. Kill them (and wait for
+            // the sockets to be released) as the event loop tears down.
+            if matches!(event, tauri::RunEvent::Exit) {
+                let state = handle.state::<AppState>();
+                state.runner.shutdown(handle);
+            }
+        });
 }
 
