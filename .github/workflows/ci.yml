@@ -38,7 +38,7 @@ jobs:
       CARGO_INCREMENTAL: "0"
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       # Tauri on Linux links against the system WebKitGTK/GTK stack at build
       # time, so those -dev packages must be present even for `cargo build`.

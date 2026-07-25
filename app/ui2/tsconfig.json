@@ -16,8 +16,8 @@
     "isolatedModules": true,
     "useDefineForClassFields": true,
     "verbatimModuleSyntax": false,
-    "baseUrl": ".",
     "types": ["vite/client"],
+    // TS7 removed `baseUrl`; `paths` now resolve relative to this file.
     "paths": {
       "@/*": ["./src/*"]
     }

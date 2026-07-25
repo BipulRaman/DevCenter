@@ -29,9 +29,11 @@ jobs:
 
     steps:
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: 20
+          # Tracks the newest LTS line automatically (24 "Krypton" today), so
+          # this never needs a manual bump.
+          node-version: lts/*
 
       - name: Install Tauri CLI
         run: npm install -g @tauri-apps/cli@2
@@ -63,7 +65,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Upload keypair artifact (1-day retention)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: tauri-signing-keypair
           path: out/
