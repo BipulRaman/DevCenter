@@ -3,19 +3,19 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>DevGitCenter — Track your repos, pull requests & local apps</title>
+    <title>DevGitCenter — Git client, PR reviewer & local app runner</title>
     <meta
       name="description"
-      content="DevGitCenter is a fast, native desktop app to track local Git repositories and their pull requests across GitHub & Azure DevOps, and to build, run and monitor your local apps with live logs. Built with Rust + Tauri, signed auto-updates, local-first."
+      content="DevGitCenter is a fast, native desktop app: a full Git client for your local repos, an in-app pull request reviewer for GitHub & Azure DevOps, and a runner that builds, serves and monitors your local apps with live logs. Built with Rust + Tauri, signed auto-updates, local-first."
     />
     <meta name="author" content="Bipul Raman" />
     <meta name="theme-color" content="#090b10" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#e8ecf3" media="(prefers-color-scheme: light)" />
 
-    <meta property="og:title" content="DevGitCenter — Track your repos, pull requests & local apps" />
+    <meta property="og:title" content="DevGitCenter — Git client, PR reviewer & local app runner" />
     <meta
       property="og:description"
-      content="One native desktop home for your local Git repos, their GitHub & Azure DevOps pull requests, and your local apps — with live logs, signed auto-updates, and local-first storage."
+      content="One native desktop home for your Git repos, in-app code review for GitHub & Azure DevOps pull requests, and your local apps — with live logs, signed auto-updates, and local-first storage."
     />
     <meta property="og:type" content="website" />
     <meta property="og:image" content="./icon.svg" />
@@ -293,9 +293,10 @@
           </h1>
 
           <p class="mt-6 max-w-2xl mx-auto text-base sm:text-lg leading-relaxed" style="color: var(--fg-muted)">
-            DevGitCenter is a fast, native desktop app that tracks your local Git
-            repositories and their pull requests across <strong>GitHub</strong> and
-            <strong>Azure DevOps</strong> — and builds, runs and monitors your
+            DevGitCenter is a fast, native desktop app: a complete <strong>Git
+            client</strong> for your local repos, an in-app <strong>pull request
+            reviewer</strong> for <strong>GitHub</strong> and <strong>Azure
+            DevOps</strong>, and a runner that builds, serves and monitors your
             local apps with live logs. All in one window.
           </p>
 
@@ -332,6 +333,7 @@
                 <div class="ic" title="Pull Requests"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M6 9v6"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><path d="m15 8-2-2 2-2"/><circle cx="18" cy="18" r="3"/></svg></div>
                 <div class="ic" title="App Center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="6" rx="1"/><rect x="3" y="14" width="18" height="6" rx="1"/><path d="M7 7h.01M7 17h.01"/></svg></div>
                 <div class="ic" title="Accounts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></div>
+                <div class="ic" title="Git Identities"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M6 16a3 3 0 0 1 6 0"/><path d="M15 10h4"/><path d="M15 14h4"/></svg></div>
               </div>
               <div class="panel">
                 <div class="panel-head"><h4>Git Board</h4><span>4 watched repositories</span></div>
@@ -378,6 +380,8 @@
           <span class="stack-pill"><span class="dot"></span>Angular</span>
           <span class="stack-pill"><span class="dot"></span>Vue</span>
           <span class="stack-pill"><span class="dot"></span>Express</span>
+          <span class="stack-pill"><span class="dot"></span>Static sites</span>
+          <span class="stack-pill"><span class="dot"></span>OpenAPI mocks</span>
         </div>
       </section>
 
@@ -385,24 +389,36 @@
       <section id="domains" class="reveal max-w-7xl mx-auto px-6 py-20 md:py-28">
         <div class="max-w-3xl">
           <p class="eyebrow">How it works</p>
-          <h2 class="mt-3 text-3xl md:text-4xl font-bold tracking-tight">Three workspaces, one window.</h2>
+          <h2 class="mt-3 text-3xl md:text-4xl font-bold tracking-tight">Six workspaces, one window.</h2>
           <p class="mt-4 leading-relaxed" style="color: var(--fg-muted)">
-            DevGitCenter is organised around the three things you juggle every day —
-            your repositories, their pull requests, and the apps you run locally.
+            DevGitCenter is organised around everything you juggle every day —
+            your repositories, your day-to-day Git work, the pull requests you
+            open and review, and the apps you run locally.
           </p>
         </div>
 
-        <div class="mt-12 grid gap-5 lg:grid-cols-3">
+        <div class="mt-12 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
           <article class="surface shadow-card rounded-xl p-7">
             <div class="h-11 w-11 rounded-lg grid place-items-center mb-5" style="background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent)">
               <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M6 9v6"/><path d="M18 9a9 9 0 0 1-9 9"/><circle cx="18" cy="6" r="3"/></svg>
             </div>
             <h3 class="text-lg font-semibold">Git Board</h3>
             <p class="mt-2 text-sm leading-relaxed" style="color: var(--fg-muted)">
-              Discover, watch, fetch and clone your local repos. See branch,
-              ahead/behind and dirty status at a glance — then stage, diff,
-              commit, push, pull and browse history in a GitHub&nbsp;Desktop-style
-              Changes view.
+              Scan your drives to auto-discover repos, or clone a new one. Watch,
+              tag, search and filter them by account or provider — with branch,
+              ahead/behind, dirty state and last-fetch time on every row.
+            </p>
+          </article>
+
+          <article class="surface shadow-card rounded-xl p-7">
+            <div class="h-11 w-11 rounded-lg grid place-items-center mb-5" style="background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent)">
+              <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M3 12h6"/><path d="M15 12h6"/></svg>
+            </div>
+            <h3 class="text-lg font-semibold">Changes</h3>
+            <p class="mt-2 text-sm leading-relaxed" style="color: var(--fg-muted)">
+              A GitHub&nbsp;Desktop-style commit view with a file tree, syntax-highlighted
+              diffs and selective staging — plus history, branches, stashes,
+              tags, worktrees and remotes in the same place.
             </p>
           </article>
 
@@ -412,10 +428,21 @@
             </div>
             <h3 class="text-lg font-semibold">Pull Requests</h3>
             <p class="mt-2 text-sm leading-relaxed" style="color: var(--fg-muted)">
-              Pull open PRs from every watched repo across GitHub and Azure
-              DevOps into one searchable list — with review state, comment
-              counts and additions/deletions. One click deep-links to the
-              provider for review.
+              Every open and draft PR from your watched repos across GitHub and
+              Azure DevOps in one searchable list — with author, review state,
+              base/head branches and last activity. Filter by repo or account.
+            </p>
+          </article>
+
+          <article class="surface shadow-card rounded-xl p-7">
+            <div class="h-11 w-11 rounded-lg grid place-items-center mb-5" style="background: color-mix(in srgb, var(--violet) 14%, transparent); color: var(--violet)">
+              <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="m9 15 2 2 4-4"/></svg>
+            </div>
+            <h3 class="text-lg font-semibold">PR Reviewer</h3>
+            <p class="mt-2 text-sm leading-relaxed" style="color: var(--fg-muted)">
+              Review without leaving the app: browse changed files, read the
+              diff, follow inline and conversation threads, reply, then approve
+              or request changes — right from your desktop.
             </p>
           </article>
 
@@ -427,7 +454,20 @@
             <p class="mt-2 text-sm leading-relaxed" style="color: var(--fg-muted)">
               Build, run, stop and restart your local apps — each on its own
               port — and watch their logs stream live. Framework presets, static
-              folder serving and an OpenAPI mock get any project up in seconds.
+              folder serving, scripts and an OpenAPI mock get any project up in
+              seconds.
+            </p>
+          </article>
+
+          <article class="surface shadow-card rounded-xl p-7">
+            <div class="h-11 w-11 rounded-lg grid place-items-center mb-5" style="background: color-mix(in srgb, var(--green) 14%, transparent); color: var(--green)">
+              <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+            </div>
+            <h3 class="text-lg font-semibold">Accounts &amp; Identities</h3>
+            <p class="mt-2 text-sm leading-relaxed" style="color: var(--fg-muted)">
+              Connect multiple GitHub users and Azure DevOps organisations, then
+              set a default Git identity plus per-repo conditional ones — so
+              work and personal commits are always signed with the right email.
             </p>
           </article>
         </div>
@@ -463,8 +503,45 @@
             <h3 class="font-semibold">Commit like a pro</h3>
             <p class="mt-2 text-sm leading-relaxed" style="color: var(--fg-muted)">
               A GitHub&nbsp;Desktop-style Changes page with a file tree,
-              hunk-level diffs, selective staging, and a three-pane history
-              browser — plus push, pull and sync.
+              syntax-highlighted diffs, selective staging, discard and undo — plus
+              a commit history browser with per-commit file diffs.
+            </p>
+          </article>
+
+          <article class="surface shadow-card rounded-xl p-6">
+            <div class="h-10 w-10 rounded-lg grid place-items-center mb-5" style="background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent)">
+              <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+            </div>
+            <h3 class="font-semibold">The whole Git toolbox</h3>
+            <p class="mt-2 text-sm leading-relaxed" style="color: var(--fg-muted)">
+              Branches, merge &amp; rebase, stashes, tags, worktrees, multiple
+              remotes, fetch&nbsp;+&nbsp;prune and push/pull to any ref — no
+              dropping to a terminal for the everyday stuff.
+            </p>
+          </article>
+
+          <article class="surface shadow-card rounded-xl p-6">
+            <div class="h-10 w-10 rounded-lg grid place-items-center mb-5" style="background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent)">
+              <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v6"/><path d="M12 15v6"/><path d="m8 12 4-3 4 3"/><circle cx="12" cy="12" r="1"/><path d="M4 12h3"/><path d="M17 12h3"/></svg>
+            </div>
+            <h3 class="font-semibold">Conflicts, solved visually</h3>
+            <p class="mt-2 text-sm leading-relaxed" style="color: var(--fg-muted)">
+              When a merge, rebase, cherry-pick or revert stops, a dedicated
+              resolver lists the conflicted files and lets you take
+              <em>current</em>, <em>incoming</em> or <em>both</em> per hunk —
+              then continue or abort.
+            </p>
+          </article>
+
+          <article class="surface shadow-card rounded-xl p-6">
+            <div class="h-10 w-10 rounded-lg grid place-items-center mb-5" style="background: color-mix(in srgb, var(--violet) 14%, transparent); color: var(--violet)">
+              <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="m9 15 2 2 4-4"/></svg>
+            </div>
+            <h3 class="font-semibold">Review PRs in the app</h3>
+            <p class="mt-2 text-sm leading-relaxed" style="color: var(--fg-muted)">
+              File tree, diffs, inline and conversation threads, replies, and
+              approve / request&nbsp;changes for both GitHub and Azure DevOps —
+              plus thread resolution on Azure DevOps.
             </p>
           </article>
 
@@ -472,23 +549,35 @@
             <div class="h-10 w-10 rounded-lg grid place-items-center mb-5" style="background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent)">
               <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="m8 21 4-4 4 4"/><path d="M8 9l2 2 4-4"/></svg>
             </div>
-            <h3 class="font-semibold">Framework presets</h3>
+            <h3 class="font-semibold">Nine app presets</h3>
             <p class="mt-2 text-sm leading-relaxed" style="color: var(--fg-muted)">
               One-click build &amp; run for .NET, Node, React, Next, Angular, Vue
-              and Express — or serve a static folder, or stand up a Swagger /
-              OpenAPI <span class="kbd">API mock</span>.
+              and Express — or serve a static folder with SPA fallback, run a
+              script, or stand up a Swagger / OpenAPI <span class="kbd">API mock</span>.
+            </p>
+          </article>
+
+          <article class="surface shadow-card rounded-xl p-6">
+            <div class="h-10 w-10 rounded-lg grid place-items-center mb-5" style="background: color-mix(in srgb, var(--green) 14%, transparent); color: var(--green)">
+              <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 17 6-6-6-6"/><path d="M12 19h8"/></svg>
+            </div>
+            <h3 class="font-semibold">Live streamed logs</h3>
+            <p class="mt-2 text-sm leading-relaxed" style="color: var(--fg-muted)">
+              Every running app streams build and run output straight into the
+              UI with colour-coded levels, so you spot a crash the moment it
+              happens. Busy ports are reassigned automatically.
             </p>
           </article>
 
           <article class="surface shadow-card rounded-xl p-6">
             <div class="h-10 w-10 rounded-lg grid place-items-center mb-5" style="background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent)">
-              <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 17 6-6-6-6"/><path d="M12 19h8"/></svg>
+              <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M6 16a3 3 0 0 1 6 0"/><path d="M15 10h4"/><path d="M15 14h4"/></svg>
             </div>
-            <h3 class="font-semibold">Live streamed logs</h3>
+            <h3 class="font-semibold">Right identity, every commit</h3>
             <p class="mt-2 text-sm leading-relaxed" style="color: var(--fg-muted)">
-              Every running app streams stdout/stderr straight into the UI, so
-              you can spot a crash or a port clash the moment it happens. Start
-              All / Stop All from the system tray.
+              Define a default Git identity plus conditional ones that switch by
+              remote URL or folder — with Azure DevOps credential-helper mappings
+              for org-scoped sign-in.
             </p>
           </article>
 
@@ -498,9 +587,9 @@
             </div>
             <h3 class="font-semibold">Secure by default</h3>
             <p class="mt-2 text-sm leading-relaxed" style="color: var(--fg-muted)">
-              Provider tokens are stored in your OS keychain — never in plain
-              text. Repos, settings and app state live locally in SQLite on your
-              machine.
+              Tokens for every connected GitHub user and Azure DevOps org live in
+              your OS keychain — never in plain text. Repos, settings and app
+              state stay in local SQLite on your machine.
             </p>
           </article>
 
@@ -525,25 +614,26 @@
             <p class="eyebrow">Native &amp; local-first</p>
             <h2 class="mt-3 text-2xl md:text-3xl font-bold tracking-tight">A real desktop app, not a browser tab.</h2>
             <p class="mt-4 leading-relaxed" style="color: var(--fg-muted)">
-              DevGitCenter is built in <strong>Rust</strong> with <strong>Tauri</strong>,
-              rendering through your OS WebView — so there's no bundled Chromium,
-              the install is small, and it starts fast. Your data stays on your
-              machine.
+              DevGitCenter is built in <strong>Rust</strong> with <strong>Tauri&nbsp;2</strong>,
+              rendering a Preact&nbsp;+&nbsp;TypeScript UI through your OS WebView —
+              so there's no bundled Chromium, the install is small, and it starts
+              fast. Your data stays on your machine.
             </p>
             <ul class="mt-6 space-y-3 text-sm">
               <li class="check-row"><svg class="h-4 w-4 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="color: var(--green)"><path d="M20 6 9 17l-5-5"/></svg><span style="color: var(--fg-muted)">Tiny footprint — uses WebView2 / WKWebView / WebKitGTK</span></li>
-              <li class="check-row"><svg class="h-4 w-4 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="color: var(--green)"><path d="M20 6 9 17l-5-5"/></svg><span style="color: var(--fg-muted)">Repos &amp; apps work fully offline; tokens only for PRs</span></li>
+              <li class="check-row"><svg class="h-4 w-4 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="color: var(--green)"><path d="M20 6 9 17l-5-5"/></svg><span style="color: var(--fg-muted)">Native Git via libgit2 — repos &amp; apps work fully offline</span></li>
+              <li class="check-row"><svg class="h-4 w-4 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="color: var(--green)"><path d="M20 6 9 17l-5-5"/></svg><span style="color: var(--fg-muted)">Open a repo in VS Code, your terminal or the file manager in one click</span></li>
               <li class="check-row"><svg class="h-4 w-4 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="color: var(--green)"><path d="M20 6 9 17l-5-5"/></svg><span style="color: var(--fg-muted)">Polished light &amp; dark themes, keyboard-friendly UI</span></li>
             </ul>
           </div>
           <div class="grid grid-cols-2 gap-4">
             <div class="surface-soft rounded-xl p-5 border hairline">
-              <div class="text-3xl font-extrabold tracking-tight" style="color: var(--accent)">2</div>
-              <div class="mt-1 text-sm" style="color: var(--fg-muted)">PR providers — GitHub &amp; Azure DevOps</div>
+              <div class="text-3xl font-extrabold tracking-tight" style="color: var(--accent)">6</div>
+              <div class="mt-1 text-sm" style="color: var(--fg-muted)">Workspaces — repos, changes, PRs, review, apps, accounts</div>
             </div>
             <div class="surface-soft rounded-xl p-5 border hairline">
-              <div class="text-3xl font-extrabold tracking-tight" style="color: var(--accent)">7+</div>
-              <div class="mt-1 text-sm" style="color: var(--fg-muted)">App framework presets, plus static &amp; API mock</div>
+              <div class="text-3xl font-extrabold tracking-tight" style="color: var(--accent)">9</div>
+              <div class="mt-1 text-sm" style="color: var(--fg-muted)">App presets, including static folders &amp; API mocks</div>
             </div>
             <div class="surface-soft rounded-xl p-5 border hairline">
               <div class="text-3xl font-extrabold tracking-tight" style="color: var(--accent)">100%</div>
@@ -571,11 +661,39 @@
               <svg class="h-4 w-4 chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
             </summary>
             <p class="mt-3 text-sm leading-relaxed" style="color: var(--fg-muted)">
-              It's a single desktop dashboard for your local development: track
-              and operate your Git repositories, watch their pull requests across
-              GitHub and Azure DevOps, and build / run / monitor your local apps
-              with live logs — without juggling a terminal, a browser and three
-              other tools.
+              It's a single desktop dashboard for your local development: a full
+              Git client for your repositories (commit, branch, stash, tag,
+              merge, resolve conflicts), an in-app reviewer for pull requests on
+              GitHub and Azure DevOps, and a runner that builds, serves and
+              monitors your local apps with live logs — without juggling a
+              terminal, a browser and three other tools.
+            </p>
+          </details>
+
+          <details class="py-5 group">
+            <summary class="flex items-center justify-between gap-4">
+              <span class="font-medium">Can I actually review pull requests inside the app?</span>
+              <svg class="h-4 w-4 chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+            </summary>
+            <p class="mt-3 text-sm leading-relaxed" style="color: var(--fg-muted)">
+              Yes. The PR Reviewer shows the changed-file tree and diffs, plus
+              inline and conversation threads. You can reply to comments, and
+              approve or request changes on both GitHub and Azure DevOps
+              (thread resolve/unresolve is Azure DevOps only). Merging and
+              administrative actions deep-link to the provider.
+            </p>
+          </details>
+
+          <details class="py-5 group">
+            <summary class="flex items-center justify-between gap-4">
+              <span class="font-medium">Can I use work and personal accounts together?</span>
+              <svg class="h-4 w-4 chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+            </summary>
+            <p class="mt-3 text-sm leading-relaxed" style="color: var(--fg-muted)">
+              Yes. Connect several GitHub users and Azure DevOps organisations at
+              once, and filter repos and PRs by account. The Git Identities page
+              writes a default identity plus conditional ones that switch by
+              remote URL or folder, so every commit uses the right name and email.
             </p>
           </details>
 
@@ -614,9 +732,10 @@
               <svg class="h-4 w-4 chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
             </summary>
             <p class="mt-3 text-sm leading-relaxed" style="color: var(--fg-muted)">
-              Only for pull requests. Add a personal access token to pull PRs
-              from GitHub or Azure DevOps. Everything else — tracking repos,
-              committing, and running local apps — works without any account.
+              Only for pull requests. Add a personal access token — or use Git
+              Credential Manager for Azure DevOps — to pull and review PRs.
+              Everything else — tracking repos, the full Git workflow, and
+              running local apps — works without any account.
             </p>
           </details>
 
@@ -626,10 +745,10 @@
               <svg class="h-4 w-4 chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
             </summary>
             <p class="mt-3 text-sm leading-relaxed" style="color: var(--fg-muted)">
-              DevGitCenter checks for updates on launch and from
-              <em>Settings → Check for updates</em>. Releases are minisign-signed
-              in CI; the app verifies the signature before installing and
-              relaunching. See the
+              DevGitCenter checks for updates on launch, and any time you pick
+              <em>Check for updates</em> from the app menu. Releases are
+              minisign-signed in CI; the app verifies the signature before
+              installing and relaunching. See the
               <a href="./auto-update-setup.md" class="font-medium hover:underline" style="color: var(--accent)">auto-update setup guide</a>.
             </p>
           </details>

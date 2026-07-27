@@ -1,7 +1,19 @@
 # DevGitCenter
 
-DevGitCenter is a cross-platform Tauri desktop app for tracking Git repositories,
-pull requests and local apps.
+DevGitCenter is a cross-platform Tauri desktop app that brings your local Git
+repositories, your GitHub / Azure DevOps pull requests and your local apps into
+one window.
+
+- **Git Board** — discover, clone, watch, tag and fetch local repositories.
+- **Changes** — stage, diff, commit, push/pull, plus branches, history, stashes,
+  tags, worktrees and remotes.
+- **Conflict resolver** — resolve merge / rebase / cherry-pick conflicts per hunk.
+- **Pull Requests + PR Reviewer** — list PRs across GitHub and Azure DevOps, then
+  read diffs, reply to threads and approve or request changes in-app.
+- **App Center** — build and run local apps (.NET, Node, React, Next.js, Angular,
+  Vue, Express, static folders, scripts, OpenAPI mocks) with live streamed logs.
+- **Accounts & Git Identities** — multiple provider accounts with tokens in the OS
+  keychain, and default plus conditional Git identities.
 
 ## Platforms
 
@@ -13,14 +25,20 @@ CI builds and releases native bundles for:
 
 ## Building locally
 
-The frontend is static (vanilla JS in `app/ui`), so only the Rust toolchain and
-the Tauri CLI are needed:
+The frontend is a Preact + TypeScript app in `app/ui2`, built with Vite via
+[Bun](https://bun.sh). You need the Rust toolchain, the Tauri CLI and Bun:
 
 ```sh
-cd app
+cd app/ui2
+bun install          # once, to install frontend dependencies
+
+cd ../
 cargo tauri dev      # run with hot reload
 cargo tauri build    # build the installer for the current OS
 ```
+
+`cargo tauri dev` / `build` start the Vite dev server and production build for
+you (see `build.beforeDevCommand` in `app/src-tauri/tauri.conf.json`).
 
 On **Linux** install the WebKitGTK build dependencies first:
 
