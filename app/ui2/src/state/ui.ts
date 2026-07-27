@@ -12,10 +12,36 @@ export type PageId =
   | "git-identities"
   | "accounts";
 
-export const activePage = signal<PageId>("git-board");
+const PAGES: readonly PageId[] = [
+  "git-board",
+  "changes",
+  "pull-requests",
+  "app-center",
+  "git-identities",
+  "accounts",
+];
+
+const PAGE_KEY = "dc.ui.page";
+
+function initialPage(): PageId {
+  try {
+    const saved = localStorage.getItem(PAGE_KEY) as PageId | null;
+    if (saved && PAGES.includes(saved)) return saved;
+  } catch {
+    /* storage disabled */
+  }
+  return "git-board";
+}
+
+export const activePage = signal<PageId>(initialPage());
 
 export function showPage(page: PageId): void {
   activePage.value = page;
+  try {
+    localStorage.setItem(PAGE_KEY, page);
+  } catch {
+    /* storage disabled */
+  }
 }
 
 // --- Theme ------------------------------------------------------------------
