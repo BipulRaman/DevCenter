@@ -38,15 +38,17 @@
 
 /* SCM action slot (discard/stage/unstage), revealed on row hover / selection.
    The actions span is tagged with `.rowActions` plus the consumer's own class
-   (Changes `.scmActions`), so the reveal keys off the module `.treeRow`. */
-.rowActions { opacity: 0; pointer-events: none; }
-.treeRow:hover .rowActions {
-  opacity: 1; pointer-events: auto; padding-left: 24px;
-  background: linear-gradient(to right, transparent, var(--bg-hover) 18px);
-}
+   (Changes `.scmActions`), so the reveal keys off the module `.treeRow`.
+   When shown, the actions sit IN the row's flex flow (not overlaid), so the
+   name shrinks and ellipsizes before them — an overlay let the name show
+   through (the selected row's background is translucent). The `.treeRow`
+   prefix keeps these rules above the consumer's absolutely-positioned class. */
+.treeRow .rowActions { display: none; }
+.treeRow:hover .rowActions,
 .treeFile.selected .rowActions {
-  opacity: 1; pointer-events: auto; padding-left: 24px;
-  background: linear-gradient(to right, transparent, var(--accent-soft) 18px);
+  display: flex; align-items: center; gap: 1px; flex-shrink: 0;
+  position: static; opacity: 1; pointer-events: auto;
+  padding: 0; background: none;
 }
 
 .treeIco { width: 17px; height: 17px; flex-shrink: 0; color: var(--text-dim); display: grid; place-items: center; }

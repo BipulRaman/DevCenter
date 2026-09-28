@@ -59,11 +59,12 @@
    thickness (a hardcoded px would drift half a pixel on HiDPI). */
 .commitDiffView { --prr-head-h: calc(46px + var(--hairline)); }
 .commitTab {
-  flex: 1; height: 34px; border: none; border-radius: 0; background: transparent;
+  flex: 1; min-width: 0; height: 34px; border: none; border-radius: 0; background: transparent;
   display: inline-flex; align-items: center; justify-content: center; gap: 7px;
   color: var(--text-dim); font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer;
   transition: background .14s, color .14s;
 }
+.commitTab .ctLabel { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .commitTab .ctIco { display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px; flex-shrink: 0; }
 .commitTab .ctIco svg { width: 15px; height: 15px; }
 .commitTab:hover { background: var(--bg-hover); color: var(--text); }
@@ -72,6 +73,12 @@
 @container (max-width: 340px) {
   .commitTab .ctFull { display: none; }
   .commitTab .ctShort { display: inline; }
+}
+/* Very narrow side pane: labels no longer fit three abreast — keep the active
+   tab's label and collapse the others to icons (each tab has a title/aria-label). */
+@container (max-width: 240px) {
+  .commitTab:not(.active) { flex: 0 0 auto; padding: 0 10px; }
+  .commitTab:not(.active) .ctLabel { display: none; }
 }
 
 .commitFilter {

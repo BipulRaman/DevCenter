@@ -196,6 +196,8 @@ export function Changes() {
                 class={`${styles.commitTab}${changesTab.value === "changes" ? ` ${styles.active}` : ""}`}
                 type="button"
                 role="tab"
+                title="Changes"
+                aria-selected={changesTab.value === "changes"}
                 onClick={() => {
                   changesTab.value = "changes";
                   // The working tree may have changed while another tab was active.
@@ -205,12 +207,14 @@ export function Changes() {
                 <span class={styles.ctIco}>
                   <Raw html={ICONS.changes} />
                 </span>
-                <span>Changes</span>
+                <span class={styles.ctLabel}>Changes</span>
               </button>
               <button
                 class={`${styles.commitTab}${changesTab.value === "history" ? ` ${styles.active}` : ""}`}
                 type="button"
                 role="tab"
+                title="Commits"
+                aria-selected={changesTab.value === "history"}
                 onClick={() => {
                   changesTab.value = "history";
                   if (repoId) void loadHistory(repoId);
@@ -219,12 +223,14 @@ export function Changes() {
                 <span class={styles.ctIco}>
                   <Raw html={ICONS.clock} />
                 </span>
-                <span>Commits</span>
+                <span class={styles.ctLabel}>Commits</span>
               </button>
               <button
                 class={`${styles.commitTab}${changesTab.value === "pulls" ? ` ${styles.active}` : ""}`}
                 type="button"
                 role="tab"
+                title="Pull Requests"
+                aria-selected={changesTab.value === "pulls"}
                 onClick={() => {
                   changesTab.value = "pulls";
                   if (repoId) void loadRepoPulls(repoId);
@@ -233,8 +239,8 @@ export function Changes() {
                 <span class={styles.ctIco}>
                   <Raw html={ICONS.pr} />
                 </span>
-                <span class={styles.ctFull}>Pull Requests</span>
-                <span class={styles.ctShort}>PRs</span>
+                <span class={`${styles.ctLabel} ${styles.ctFull}`}>Pull Requests</span>
+                <span class={`${styles.ctLabel} ${styles.ctShort}`}>PRs</span>
               </button>
             </div>
 
