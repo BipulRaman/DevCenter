@@ -120,7 +120,7 @@ pub async fn git_fetch(id: String, state: State<'_, AppState>) -> AppResult<Repo
     let st = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || -> AppResult<Repo> {
         let path = PathBuf::from(&id);
-        git::fetch(&path)?;
+        git::with_repo_lock(&path, || git::fetch(&path))?;
         let (watched, tags) = meta_for(&st, &id);
         git::repo_info(&path, watched, tags)
     })
@@ -186,7 +186,7 @@ pub async fn git_checkout(
     let st = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || -> AppResult<Repo> {
         let path = PathBuf::from(&id);
-        git::checkout(&path, &branch, stash)?;
+        git::with_repo_lock(&path, || git::checkout(&path, &branch, stash))?;
         let (watched, tags) = meta_for(&st, &id);
         git::repo_info(&path, watched, tags)
     })
@@ -206,7 +206,7 @@ pub async fn git_create_branch(
     let st = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || -> AppResult<Repo> {
         let path = PathBuf::from(&id);
-        git::create_branch(&path, &name, &base)?;
+        git::with_repo_lock(&path, || git::create_branch(&path, &name, &base))?;
         let (watched, tags) = meta_for(&st, &id);
         git::repo_info(&path, watched, tags)
     })
@@ -225,7 +225,7 @@ pub async fn git_rename_branch(
     let st = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || -> AppResult<Repo> {
         let path = PathBuf::from(&id);
-        git::rename_branch(&path, &name, &new_name)?;
+        git::with_repo_lock(&path, || git::rename_branch(&path, &name, &new_name))?;
         let (watched, tags) = meta_for(&st, &id);
         git::repo_info(&path, watched, tags)
     })
@@ -245,7 +245,7 @@ pub async fn git_delete_branch(
     let st = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || -> AppResult<Repo> {
         let path = PathBuf::from(&id);
-        git::delete_branch(&path, &name, force)?;
+        git::with_repo_lock(&path, || git::delete_branch(&path, &name, force))?;
         let (watched, tags) = meta_for(&st, &id);
         git::repo_info(&path, watched, tags)
     })
@@ -510,8 +510,10 @@ where
     let result = tauri::async_runtime::spawn_blocking(
         move || -> AppResult<(ChangeSet, Vec<Repo>)> {
             let p = Path::new(&id);
-            op(p)?;
-            let changes = git::working_changes(p)?;
+            let changes = git::with_repo_lock(p, || -> AppResult<ChangeSet> {
+                op(p)?;
+                git::working_changes(p)
+            })?;
             let repos = collect_repos(&st)?;
             Ok((changes, repos))
         },
@@ -704,12 +706,14 @@ pub async fn git_resolve_conflict(
     let (info, repos) = tauri::async_runtime::spawn_blocking(
         move || -> AppResult<(ConflictInfo, Vec<Repo>)> {
             let p = Path::new(&id);
-            if let Some(c) = content {
-                git::resolve_conflict_content(p, &path, &c)?;
-            } else {
-                git::resolve_conflict_side(p, &path, side.as_deref().unwrap_or("ours"))?;
-            }
-            let info = git::conflict_state(p)?;
+            let info = git::with_repo_lock(p, || -> AppResult<ConflictInfo> {
+                if let Some(c) = content {
+                    git::resolve_conflict_content(p, &path, &c)?;
+                } else {
+                    git::resolve_conflict_side(p, &path, side.as_deref().unwrap_or("ours"))?;
+                }
+                git::conflict_state(p)
+            })?;
             let repos = collect_repos(&st)?;
             Ok((info, repos))
         },
@@ -732,9 +736,11 @@ pub async fn git_conflict_abort(
     let (changes, repos) = tauri::async_runtime::spawn_blocking(
         move || -> AppResult<(ChangeSet, Vec<Repo>)> {
             let p = Path::new(&id);
-            let kind = git::conflict_state(p)?.kind;
-            git::conflict_abort(p, &kind)?;
-            let changes = git::working_changes(p)?;
+            let changes = git::with_repo_lock(p, || -> AppResult<ChangeSet> {
+                let kind = git::conflict_state(p)?.kind;
+                git::conflict_abort(p, &kind)?;
+                git::working_changes(p)
+            })?;
             let repos = collect_repos(&st)?;
             Ok((changes, repos))
         },
@@ -757,9 +763,11 @@ pub async fn git_conflict_continue(
     let (changes, repos) = tauri::async_runtime::spawn_blocking(
         move || -> AppResult<(ChangeSet, Vec<Repo>)> {
             let p = Path::new(&id);
-            let kind = git::conflict_state(p)?.kind;
-            git::conflict_continue(p, &kind)?;
-            let changes = git::working_changes(p)?;
+            let changes = git::with_repo_lock(p, || -> AppResult<ChangeSet> {
+                let kind = git::conflict_state(p)?.kind;
+                git::conflict_continue(p, &kind)?;
+                git::working_changes(p)
+            })?;
             let repos = collect_repos(&st)?;
             Ok((changes, repos))
         },
@@ -803,7 +811,7 @@ pub async fn git_set_remote_url(
     let log_id = id.clone();
     let result = tauri::async_runtime::spawn_blocking(move || -> AppResult<(Repo, Vec<Repo>)> {
         let path = PathBuf::from(&id);
-        git::set_remote_url(&path, &url)?;
+        git::with_repo_lock(&path, || git::set_remote_url(&path, &url))?;
         let (watched, tags) = meta_for(&st, &id);
         let repo = git::repo_info(&path, watched, tags)?;
         let repos = collect_repos(&st)?;

@@ -36,6 +36,63 @@ fn norm(path: &Path) -> String {
     path.to_string_lossy().replace('\\', "/")
 }
 
+// ---------- Per-repository operation lock ----------
+//
+// Two git processes writing to the same repository at once corrupt each other's
+// work: a `fetch` racing a `pull` rewrites FETCH_HEAD mid-pull ("fatal: Cannot
+// fast-forward to multiple branches"), both fight over ref locks ("cannot lock
+// ref 'refs/remotes/origin/main'"), or loose-object writes fail ("fatal: failed
+// to write object"). The UI can legitimately fire overlapping operations — e.g.
+// Fetch All while a row's Pull is running, or a Git Board fetch while the
+// Changes page pulls — so every write/network operation takes this lock and
+// operations on the same repository run one after another, while different
+// repositories still run fully in parallel.
+
+type RepoLockMap = HashMap<String, std::sync::Arc<Mutex<()>>>;
+static REPO_LOCKS: OnceLock<Mutex<RepoLockMap>> = OnceLock::new();
+
+/// Lock key for `path`: the repository's *common* git dir, so linked worktrees
+/// (which share refs and objects with their main checkout) serialize together.
+/// Lower-cased on Windows, where paths are case-insensitive.
+fn repo_lock_key(path: &Path) -> String {
+    // A linked worktree's git dir (`.git/worktrees/<name>`) holds a `commondir`
+    // file pointing (usually relatively) at the shared main `.git`.
+    let dir = match Repository::open(path) {
+        Ok(r) => {
+            let gd = r.path().to_path_buf();
+            match std::fs::read_to_string(gd.join("commondir")) {
+                Ok(s) if !s.trim().is_empty() => gd.join(s.trim()),
+                _ => gd,
+            }
+        }
+        Err(_) => path.to_path_buf(),
+    };
+    let dir = std::fs::canonicalize(&dir).unwrap_or(dir);
+    let key = norm(&dir);
+    if cfg!(windows) {
+        key.to_lowercase()
+    } else {
+        key
+    }
+}
+
+/// Run `f` while holding the operation lock for the repository at `path`.
+/// Blocks (on the calling blocking-pool thread) until any other operation on the
+/// same repository has finished.
+pub fn with_repo_lock<T>(path: &Path, f: impl FnOnce() -> T) -> T {
+    let lock = {
+        let mut map = REPO_LOCKS
+            .get_or_init(|| Mutex::new(HashMap::new()))
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        map.entry(repo_lock_key(path)).or_default().clone()
+    };
+    // A panic inside a previous holder only poisons the guard; the repository
+    // itself is fine, so keep going rather than wedging every later operation.
+    let _guard = lock.lock().unwrap_or_else(|e| e.into_inner());
+    f()
+}
+
 fn short_oid(oid: git2::Oid) -> String {
     let s = oid.to_string();
     s.chars().take(7).collect()
