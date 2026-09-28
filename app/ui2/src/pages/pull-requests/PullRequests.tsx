@@ -32,7 +32,8 @@ function setAcct(next: Set<string>) {
 }
 
 function prAccountKey(p: PullRequest): string | null {
-  const r = repos.value.find((x) => x.name === p.repo);
+  // Match by id, not name: two repos can share a name across owners/orgs.
+  const r = repos.value.find((x) => x.id === p.repoId) || repos.value.find((x) => x.name === p.repo);
   const a = r ? repoAccount(r) : null;
   return a ? a.key : null;
 }
@@ -61,9 +62,9 @@ export function PullRequests() {
 
   const list = useComputed(() => {
     const f = search.value.toLowerCase();
-    const names = watched.value;
+    const watchedIds = new Set(repos.value.filter((r) => r.watched).map((r) => r.id));
     return pulls.value.filter((p) => {
-      if (!names.includes(p.repo)) return false;
+      if (!watchedIds.has(p.repoId)) return false;
       const matchRepo = repoSelected.value.size === 0 || repoSelected.value.has(p.repo);
       const acctKey = prAccountKey(p);
       const matchAccount = acctFilter.value.size === 0 || (acctKey != null && acctFilter.value.has(acctKey));

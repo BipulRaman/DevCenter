@@ -42,6 +42,7 @@ import {
   loadHistory,
   loadRepoPulls,
   refreshActiveChangesTab,
+  setChangesAutoSelectFilter,
   selectFile,
   stageFiles,
   unstageFiles,
@@ -88,6 +89,12 @@ function setViewMode(m: "tree" | "list") {
 
 // Filter for the staged/unstaged file lists (Changes tab).
 const changeFilter = signal("");
+interface CommitDraft {
+  summary: string;
+  desc: string;
+}
+const EMPTY_DRAFT: CommitDraft = { summary: "", desc: "" };
+const commitDrafts = signal<Record<string, CommitDraft>>({});
 // Shared "a git action is running" flag — drives the commit-box gear spin and
 // disables the commit button (mirrors vanilla `busy` + gitMenuBtn.classList busy).
 const gitBusy = signal(false);
@@ -108,6 +115,7 @@ function matchesChgAccount(r: { provider: string; remote: string }): boolean {
   const a = repoAccount(r as never);
   return a != null && chgAcct.value.has(a.key);
 }
+setChangesAutoSelectFilter(matchesChgAccount);
 function setChgAcct(next: Set<string>) {
   chgAcct.value = next;
   saveFilterSet(CHG_ACCT_KEY, next);
@@ -301,7 +309,7 @@ function ChangesPane() {
           value={changeFilter.value}
           onInput={(e) => (changeFilter.value = (e.target as HTMLInputElement).value)}
         />
-        <button class={styles.iconMini} type="button" title="Refresh changes" onClick={() => changesRepoId.value && loadChanges(changesRepoId.value)}>
+        <button class={styles.iconMini} type="button" title="Refresh changes" onClick={() => void refreshActiveChangesTab()}>
           <Raw html={ICONS.sync} />
         </button>
       </div>
@@ -590,8 +598,18 @@ async function confirmDiscardMany(paths: string[]) {
 }
 
 function CommitBox({ stagedCount, unstagedCount }: { stagedCount: number; unstagedCount: number }) {
-  const [summary, setSummary] = useState("");
-  const [desc, setDesc] = useState("");
+  // Draft message lives outside the component (keyed by repo) so it survives
+  // switching to the Commits/PRs tab and never leaks into another repo.
+  const draftRepo = changesRepoId.value || "";
+  const draft = commitDrafts.value[draftRepo] || EMPTY_DRAFT;
+  const summary = draft.summary;
+  const desc = draft.desc;
+  const setDraft = (patch: Partial<CommitDraft>) => {
+    const cur = commitDrafts.value[draftRepo] || EMPTY_DRAFT;
+    commitDrafts.value = { ...commitDrafts.value, [draftRepo]: { ...cur, ...patch } };
+  };
+  const setSummary = (summary: string) => setDraft({ summary });
+  const setDesc = (desc: string) => setDraft({ desc });
   const busy = gitBusy;
   const cs = changeSet.value;
   const branch = cs?.branch || "";
@@ -642,11 +660,16 @@ function CommitBox({ stagedCount, unstagedCount }: { stagedCount: number; unstag
 
   const runSync = async (kind: "fetch" | "sync" | "push" | "pull") => {
     const repoId = changesRepoId.value;
-    if (!repoId) return;
+    if (!repoId || busy.value) return;
     busy.value = true;
     try {
-      if (kind === "fetch") await ipc.fetchRepo(repoId);
-      else if (kind === "push") await doPush();
+      if (kind === "fetch") {
+        // git_fetch returns the refreshed Repo but emits no event, so sync the
+        // Git Board card and the header's ahead/behind counts ourselves.
+        const updated = await ipc.fetchRepo(repoId);
+        if (updated) upsertRepo(updated);
+        await loadChanges(repoId);
+      } else if (kind === "push") await doPush();
       else if (kind === "pull") await doPull();
       else {
         await doPull();

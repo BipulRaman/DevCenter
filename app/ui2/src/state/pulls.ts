@@ -29,6 +29,8 @@ export async function hydratePulls(): Promise<void> {
   const gen = ++loadGen;
   if (!watchedRepoNames().length) {
     pulls.value = [];
+    // An earlier in-flight load was superseded by this one; clear its spinner.
+    pullsLoading.value = false;
     return;
   }
   pullsLoading.value = true;

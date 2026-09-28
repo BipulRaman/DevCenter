@@ -44,23 +44,29 @@ export async function completeConflict(): Promise<void> {
   const repoId = conflictRepoId.value;
   if (!repoId) return;
   await ipc.conflictContinue(repoId);
-  finishBack(repoId);
+  leaveConflict();
 }
 
 export async function abortConflict(): Promise<void> {
   const repoId = conflictRepoId.value;
   if (!repoId) return;
   await ipc.conflictAbort(repoId);
-  finishBack(repoId);
+  leaveConflict();
 }
 
+/** Hide the overlay without touching the page underneath (nav rail uses this). */
 export function closeConflict(): void {
   conflictOpen.value = false;
 }
 
-function finishBack(repoId: string): void {
+/**
+ * Back to the Changes page for the conflicted repo, re-reading its working
+ * tree — files resolved here would otherwise still show as conflicted.
+ */
+export function leaveConflict(): void {
+  const repoId = conflictRepoId.value;
   conflictOpen.value = false;
-  openRepoById(repoId);
+  if (repoId) openRepoById(repoId);
 }
 
 // --- Conflict marker parsing ------------------------------------------------

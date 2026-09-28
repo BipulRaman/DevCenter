@@ -74,11 +74,21 @@ export function prReviewChip(pr: Pick<PullRequest, "reviews" | "approvals" | "ap
 // app/ui/js/helpers.js — enough for comment display.
 
 function mdInline(s: string): string {
+  // Stash code spans and link tags first so emphasis markers inside them
+  // (e.g. `snake_case` or https://host/a_b_c) aren't turned into <em>.
+  const keep: string[] = [];
+  const stash = (html: string) => `\u0001${keep.push(html) - 1}\u0001`;
   return s
-    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_, t, u) => `<a href="${u}" target="_blank" rel="noopener noreferrer">${t}</a>`)
-    .replace(/`([^`]+)`/g, (_, c) => `<code>${c}</code>`)
-    .replace(/\*\*([^*]+)\*\*|__([^_]+)__/g, (_, a, b) => `<strong>${a || b}</strong>`)
-    .replace(/\*([^*]+)\*|_([^_]+)_/g, (_, a, b) => `<em>${a || b}</em>`);
+    .replace(/`([^`]+)`/g, (_, c) => stash(`<code>${c}</code>`))
+    .replace(
+      /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
+      (_, t, u) => stash(`<a href="${u}" target="_blank" rel="noopener noreferrer">`) + t + stash("</a>"),
+    )
+    .replace(/\*\*([^*]+)\*\*/g, (_, a) => `<strong>${a}</strong>`)
+    .replace(/(^|[^\w])__([^_]+)__(?=[^\w]|$)/g, (_, pre, b) => `${pre}<strong>${b}</strong>`)
+    .replace(/\*([^*]+)\*/g, (_, a) => `<em>${a}</em>`)
+    .replace(/(^|[^\w])_([^_]+)_(?=[^\w]|$)/g, (_, pre, b) => `${pre}<em>${b}</em>`)
+    .replace(/\u0001(\d+)\u0001/g, (_, i) => keep[Number(i)]);
 }
 
 export function mdLite(raw: string, codeBlockClass = "prr-md-pre"): string {

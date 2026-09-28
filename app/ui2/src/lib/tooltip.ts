@@ -59,7 +59,9 @@ function hide(): void {
 
 function restore(t: HTMLElement): void {
   if (t.dataset.tip !== undefined) {
-    t.setAttribute("title", t.dataset.tip);
+    // If the component re-rendered with a new title while hovered, Preact has
+    // already set it — don't clobber it with the stale text we stashed.
+    if (!t.hasAttribute("title")) t.setAttribute("title", t.dataset.tip);
     delete t.dataset.tip;
   }
 }

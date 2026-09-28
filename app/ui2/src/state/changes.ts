@@ -6,8 +6,8 @@
 import { effect, signal } from "@preact/signals";
 import { ipc } from "@/platform/ipc";
 import { activePage, showPage } from "@/state/ui";
-import { repos, upsertRepo } from "@/state/repos";
-import type { ChangeSet, CommitInfo, FileChange, FileDiff, PullRequest } from "@/types/models";
+import { repos, reposLoaded, upsertRepo } from "@/state/repos";
+import type { ChangeSet, CommitInfo, FileChange, FileDiff, PullRequest, Repo } from "@/types/models";
 
 export type ChangesTab = "changes" | "history" | "pulls";
 
@@ -47,6 +47,23 @@ export const pullActiveFile = signal<string | null>(null);
 export const pullDiff = signal<FileDiff | null>(null);
 export const pullDiffLoading = signal(false);
 
+/** Drop all per-repo Changes state (selection, diffs, history, PRs). */
+function resetRepoState(): void {
+  changeSet.value = null;
+  selectedFile.value = null;
+  fileDiff.value = null;
+  selectedCommit.value = null;
+  commits.value = [];
+  commitFiles.value = [];
+  commitActiveFile.value = null;
+  commitDiff.value = null;
+  repoPulls.value = [];
+  selectedPull.value = null;
+  pullFiles.value = [];
+  pullActiveFile.value = null;
+  pullDiff.value = null;
+}
+
 /** Open a repo in the Changes page (used by Git Board / PR list). */
 export function openRepoById(repoId: string, tab: ChangesTab = "changes"): void {
   // This function loads the page's data itself, so skip the generic show hook.
@@ -59,18 +76,7 @@ export function openRepoById(repoId: string, tab: ChangesTab = "changes"): void 
     } catch {
       /* ignore */
     }
-    selectedFile.value = null;
-    fileDiff.value = null;
-    selectedCommit.value = null;
-    commits.value = [];
-    commitFiles.value = [];
-    commitActiveFile.value = null;
-    commitDiff.value = null;
-    repoPulls.value = [];
-    selectedPull.value = null;
-    pullFiles.value = [];
-    pullActiveFile.value = null;
-    pullDiff.value = null;
+    resetRepoState();
     void loadChanges(repoId);
     if (tab === "history") void loadHistory(repoId);
     if (tab === "pulls") void loadRepoPulls(repoId);
@@ -101,14 +107,33 @@ export async function refreshActiveChangesTab(includeRemote = true): Promise<voi
 
 // Auto-select a repo when the Changes page is shown with none chosen: restore
 // the last-used repo across restarts, else the first available. Mirrors the
-// vanilla changes.js onShow() behaviour.
+// vanilla changes.js onShow() behaviour. `autoSelectFilter` scopes the choice
+// to the Changes page's account filter (registered by the page).
+let autoSelectFilter: (r: Repo) => boolean = () => true;
+export function setChangesAutoSelectFilter(fn: (r: Repo) => boolean): void {
+  autoSelectFilter = fn;
+}
 let autoSelectStarted = false;
 export function startChangesAutoSelect(): void {
   if (autoSelectStarted) return;
   autoSelectStarted = true;
+  // The selected repo was removed from the list (Git Board "Remove", or it
+  // vanished from disk) — forget it instead of operating on a stale repo.
+  effect(() => {
+    const id = changesRepoId.value;
+    if (!id || !reposLoaded.value) return;
+    if (repos.value.some((r) => r.id === id)) return;
+    changesRepoId.value = null;
+    resetRepoState();
+    try {
+      if (localStorage.getItem(SEL_KEY) === id) localStorage.removeItem(SEL_KEY);
+    } catch {
+      /* ignore */
+    }
+  });
   effect(() => {
     const onChanges = activePage.value === "changes";
-    const list = repos.value;
+    const list = repos.value.filter((r) => autoSelectFilter(r));
     if (!onChanges || changesRepoId.value || !list.length) return;
     let saved: string | null = null;
     try {

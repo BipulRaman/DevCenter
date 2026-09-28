@@ -35,6 +35,15 @@ export function generalThreads(): PrThread[] {
   return reviewerThreads.value.filter((t) => t.path == null);
 }
 
+/**
+ * Guard for write actions. Throws (rather than silently returning) while
+ * another request is in flight, so callers keep the user's text and show an
+ * error instead of clearing the composer / reporting success for a no-op.
+ */
+function assertIdle(): void {
+  if (reviewerBusy.value) throw new Error("Another request is still in progress — please try again in a moment.");
+}
+
 export async function openReviewer(repoId: string, pr: PullRequest, opts?: { returnTo?: string }): Promise<void> {
   const g = ++gen;
   reviewerRepoId.value = repoId;
@@ -140,7 +149,8 @@ export function toggleWholeFile(): void {
 export async function postComment(opts: { body: string; threadId?: string; path?: string; line?: number }): Promise<void> {
   const repoId = reviewerRepoId.value;
   const pr = reviewerPr.value;
-  if (!repoId || !pr || reviewerBusy.value) return;
+  if (!repoId || !pr) return;
+  assertIdle();
   const g = gen;
   reviewerBusy.value = true;
   try {
@@ -158,7 +168,8 @@ export async function postComment(opts: { body: string; threadId?: string; path?
 export async function resolveThread(threadId: string, resolved: boolean): Promise<void> {
   const repoId = reviewerRepoId.value;
   const pr = reviewerPr.value;
-  if (!repoId || !pr || reviewerBusy.value) return;
+  if (!repoId || !pr) return;
+  assertIdle();
   const g = gen;
   reviewerBusy.value = true;
   try {
@@ -176,7 +187,8 @@ export async function resolveThread(threadId: string, resolved: boolean): Promis
 export async function publishDraft(): Promise<void> {
   const repoId = reviewerRepoId.value;
   const pr = reviewerPr.value;
-  if (!repoId || !pr || reviewerBusy.value) return;
+  if (!repoId || !pr) return;
+  assertIdle();
   const g = gen;
   reviewerBusy.value = true;
   try {
@@ -192,7 +204,8 @@ export async function publishDraft(): Promise<void> {
 export async function submitReview(type: string, body: string): Promise<void> {
   const repoId = reviewerRepoId.value;
   const pr = reviewerPr.value;
-  if (!repoId || !pr || reviewerBusy.value) return;
+  if (!repoId || !pr) return;
+  assertIdle();
   const g = gen;
   reviewerBusy.value = true;
   try {
@@ -203,7 +216,10 @@ export async function submitReview(type: string, body: string): Promise<void> {
       const v = await ipc.prMyVote(repoId, pr.id);
       if (g === gen) {
         myVote.value = v || 0;
-        patchPull(repoId, pr.id, { reviews: v >= 5 ? "approved" : v <= -5 ? "changes" : "pending", approvedByMe: v >= 5 });
+        const partial = { reviews: v >= 5 ? "approved" : v <= -5 ? "changes" : "pending", approvedByMe: v >= 5 } as const;
+        patchPull(repoId, pr.id, partial);
+        // Keep the reviewer header's status pill in sync with the new vote.
+        if (reviewerPr.value?.id === pr.id) reviewerPr.value = { ...reviewerPr.value, ...partial };
       }
     } catch {
       /* ignore */

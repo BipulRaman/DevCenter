@@ -347,7 +347,7 @@ function ReviewerDiff() {
       onToggleWholeFile={toggleWholeFile}
       viewClass={styles.reviewerDiffView}
     >
-      {reviewerActiveFile.value && diff ? <ReviewerDiffBody diff={diff} /> : null}
+      {reviewerActiveFile.value && diff ? <ReviewerDiffBody key={diff.path} diff={diff} /> : null}
     </DiffView>
   );
 }
@@ -420,7 +420,18 @@ function Comment({ author, body, created }: { author: string; body: string; crea
         <span class={styles.commentAuthor}>{author}</span>
         <span>{created}</span>
       </div>
-      <div class={styles.commentBody} dangerouslySetInnerHTML={{ __html: mdLite(body, styles.mdPre) }} />
+      <div
+        class={styles.commentBody}
+        dangerouslySetInnerHTML={{ __html: mdLite(body, styles.mdPre) }}
+        onClick={(e) => {
+          // Open markdown links in the system browser, not inside the app window.
+          const a = (e.target as HTMLElement).closest("a[href]") as HTMLAnchorElement | null;
+          if (!a) return;
+          e.preventDefault();
+          if (ipc.hasBackend) ipc.openUrl(a.href).catch(() => {});
+          else window.open(a.href, "_blank");
+        }}
+      />
     </div>
   );
 }

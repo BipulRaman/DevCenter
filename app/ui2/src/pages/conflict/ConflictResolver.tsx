@@ -13,7 +13,7 @@ import {
   resolveConflictFile,
   completeConflict,
   abortConflict,
-  closeConflict,
+  leaveConflict,
   parseConflicts,
   buildContent,
   type ConflictSegment,
@@ -62,7 +62,7 @@ export function ConflictResolver() {
     <section class="page active" id="page-conflicts">
       <header class="page-head">
         <div class={styles.conflictHeadMain}>
-          <button class="btn btn-icon btn-sm" type="button" title="Back to Changes" onClick={closeConflict}>
+          <button class="btn btn-icon btn-sm" type="button" title="Back to Changes" onClick={leaveConflict}>
             <Raw html={ICONS.arrowLeft} />
           </button>
           <div>

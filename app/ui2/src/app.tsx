@@ -16,7 +16,7 @@ import { refreshActiveChangesTab, startChangesAutoSelect } from "@/state/changes
 import { PrReviewer } from "@/pages/pr-reviewer/PrReviewer";
 import { reviewerOpen } from "@/state/reviewer";
 import { ConflictResolver } from "@/pages/conflict/ConflictResolver";
-import { conflictOpen } from "@/state/conflict";
+import { conflictActiveFile, conflictInfo, conflictOpen, refreshConflict } from "@/state/conflict";
 import { openContextMenu } from "@/components/menu";
 import { ICONS } from "@/lib/ico";
 import { initTooltip } from "@/lib/tooltip";
@@ -61,10 +61,20 @@ function registerPageRefresh(): () => void {
   // focus + visibilitychange can both fire when the window is restored.
   let lastFocus = 0;
   const onFocus = () => {
-    if (reviewerOpen.value || conflictOpen.value) return;
     const now = Date.now();
     if (now - lastFocus < 1000) return;
     lastFocus = now;
+    if (reviewerOpen.value) return;
+    if (conflictOpen.value) {
+      // Files may have been resolved (and `git add`-ed) in VS Code meanwhile.
+      void refreshConflict().then(() => {
+        const files = conflictInfo.value.files;
+        if (conflictActiveFile.value && !files.includes(conflictActiveFile.value)) {
+          conflictActiveFile.value = files[0] || null;
+        }
+      });
+      return;
+    }
     firePageShow(activePage.value, "focus");
   };
   const onVisible = () => {

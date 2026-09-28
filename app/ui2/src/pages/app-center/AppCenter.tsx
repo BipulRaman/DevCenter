@@ -210,8 +210,14 @@ function AppRow({ app: a }: { app: ManagedApp }) {
       row.classList.remove(styles.dragging);
       if (moved) {
         const orderedIds = [...listEl.querySelectorAll(`.${styles.appRow}`)].map((r) => Number((r as HTMLElement).dataset.row));
+        // Only the visible (filtered) rows were dragged. Put them back into the
+        // slots visible rows occupied in the full list so apps hidden by the
+        // search/status/tag filter keep their place instead of being dropped.
+        const visible = new Set(orderedIds);
         const byId = new Map(apps.value.map((x) => [x.id, x]));
-        const ordered = orderedIds.map((id) => byId.get(id)).filter((x): x is ManagedApp => !!x);
+        const reordered = orderedIds.map((id) => byId.get(id)).filter((x): x is ManagedApp => !!x);
+        let k = 0;
+        const ordered = apps.value.map((x) => (visible.has(x.id) ? reordered[k++] || x : x));
         await reorderApps(ordered);
       }
     };
@@ -419,6 +425,12 @@ function AppForm({ existing, close }: { existing: ManagedApp | null; close: (v: 
   const [err, setErr] = useState("");
   const [saving, setSaving] = useState(false);
   const set = (patch: Partial<ManagedApp>) => setF((prev) => ({ ...prev, ...patch }));
+  // Raw textarea text is kept separately and only parsed on save — parsing on
+  // every keystroke (trim + drop blank lines) fed a different value back into
+  // the controlled textarea, eating trailing spaces and new lines as you typed.
+  const [commandsText, setCommandsText] = useState(() => (f.commands || []).join("\n"));
+  const [envText, setEnvText] = useState(() => (f.env || []).map(([k, v]) => `${k}=${v}`).join("\n"));
+  const parseLines = (s: string) => s.split("\n").map((l) => l.trim()).filter(Boolean);
 
   const mode = f.serveMode;
   const showCmds = mode !== "apimock" && mode !== "script";
@@ -427,29 +439,35 @@ function AppForm({ existing, close }: { existing: ManagedApp | null; close: (v: 
     const p = appPresets.value.find((x) => x.value === value);
     set({ appType: value });
     if (!p) return;
+    const commands = parseLines(p.commands || "");
+    const env = parseLines(p.env || "").map(envPair);
     set({
       appType: value,
       serveMode: (p.serveMode as ServeMode) || "command",
       port: p.port ?? null,
-      commands: (p.commands || "").split("\n").map((s) => s.trim()).filter(Boolean),
-      env: (p.env || "").split("\n").map((l) => l.trim()).filter(Boolean).map(envPair),
+      commands,
+      env,
       staticDir: p.staticDir || "",
       name: f.name.trim() || p.label,
     });
+    setCommandsText(commands.join("\n"));
+    setEnvText(env.map(([k, v]) => `${k}=${v}`).join("\n"));
   };
 
   const save = async () => {
+    const commands = parseLines(commandsText);
+    const env = parseLines(envText).map(envPair);
     const def: Record<string, unknown> = {
       id: f.id || 0,
       name: f.name.trim(),
       appType: f.appType,
       serveMode: mode,
       projectDir: f.projectDir.trim(),
-      commands: f.commands,
+      commands,
       staticDir: (f.staticDir || "").trim() || null,
       scriptFile: (f.scriptFile || "").trim() || null,
       specFile: (f.specFile || "").trim() || null,
-      env: f.env,
+      env,
       port: f.port ? Number(f.port) : null,
       autostart: f.autostart,
       order: f.order || 0,
@@ -547,8 +565,8 @@ function AppForm({ existing, close }: { existing: ManagedApp | null; close: (v: 
             rows={4}
             spellcheck={false}
             placeholder={"npm install\nnpm run dev"}
-            value={(f.commands || []).join("\n")}
-            onInput={(e) => set({ commands: (e.target as HTMLTextAreaElement).value.split("\n").map((s) => s.trim()).filter(Boolean) })}
+            value={commandsText}
+            onInput={(e) => setCommandsText((e.target as HTMLTextAreaElement).value)}
           />
           <div class="form-hint">
             {mode === "command" ? "Run in order; the last line is the long-running run command." : "Optional build steps, run in order before serving."}
@@ -604,8 +622,8 @@ function AppForm({ existing, close }: { existing: ManagedApp | null; close: (v: 
           rows={2}
           spellcheck={false}
           placeholder="NODE_ENV=development"
-          value={(f.env || []).map(([k, v]) => `${k}=${v}`).join("\n")}
-          onInput={(e) => set({ env: (e.target as HTMLTextAreaElement).value.split("\n").map((l) => l.trim()).filter(Boolean).map(envPair) })}
+          value={envText}
+          onInput={(e) => setEnvText((e.target as HTMLTextAreaElement).value)}
         />
       </div>
       <label class="form-check">
@@ -678,10 +696,12 @@ function LogsViewer({ app: a, close }: { app: ManagedApp; close: (v: boolean) =>
 
   const visible = filter ? lines.filter((l) => l.line.toLowerCase().includes(filter.toLowerCase())) : lines;
 
+  // Depend on the array itself, not its length: once the 2000-line cap is hit
+  // the length stops changing and auto-follow would silently stop.
   useEffect(() => {
     const el = viewRef.current;
     if (el && followingRef.current) el.scrollTop = el.scrollHeight;
-  }, [visible.length]);
+  }, [lines, filter]);
 
   const asText = () => lines.map((l) => `${l.ts ? "[" + l.ts + "] " : ""}${l.line}`).join("\n");
 

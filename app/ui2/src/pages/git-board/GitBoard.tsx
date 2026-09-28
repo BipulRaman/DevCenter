@@ -19,6 +19,7 @@ import {
   hasVscodeInsiders,
 } from "@/state/repos";
 import { openRepoById } from "@/state/changes";
+import { hydratePulls } from "@/state/pulls";
 import { loadFilterSet, saveFilterSet } from "@/lib/helpers";
 import { ICONS, providerIconHtml, Raw, EmptyState } from "@/lib/ico";
 import { openMenu, openContextMenu, type MenuItem } from "@/components/menu";
@@ -205,7 +206,17 @@ function RepoRow({ repo: r }: { repo: Repo }) {
   const toggleWatch = async () => {
     const next = !r.watched;
     upsertRepo({ ...r, watched: next });
-    if (ipc.hasBackend) ipc.setWatched(r.id, next).catch((e) => console.error("setWatched failed", e));
+    if (!ipc.hasBackend) return;
+    try {
+      await ipc.setWatched(r.id, next);
+      // The PR list is filtered by watched repos — load the newly watched
+      // repo's PRs now instead of waiting for the next page visit.
+      void hydratePulls();
+    } catch (e) {
+      const cur = repos.value.find((x) => x.id === r.id);
+      if (cur) upsertRepo({ ...cur, watched: !next });
+      await modal.alert({ title: "Couldn't update watch setting", message: String(e) });
+    }
   };
 
   const openBranchMenu = async (anchor: HTMLElement) => {
