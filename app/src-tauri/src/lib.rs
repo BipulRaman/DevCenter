@@ -289,6 +289,7 @@ pub fn run() {
             commands::accounts::test_account,
             commands::accounts::remove_account,
             commands::accounts::git_token,
+            commands::accounts::git_signin_available,
             commands::gitconfig::read_git_identity,
             commands::gitconfig::save_git_identity,
             commands::pr::list_pull_requests,

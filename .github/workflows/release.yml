@@ -67,7 +67,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev build-essential
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev libdbus-1-dev pkg-config build-essential
 
       # The tag is the single source of truth for the version. Strip the leading
       # "v" (v1.0.2 -> 1.0.2) and stamp it into tauri.conf.json for this build

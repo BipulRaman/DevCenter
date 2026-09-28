@@ -228,6 +228,28 @@ pub struct GitCred {
     pub token: String,
 }
 
+/// Whether browser sign-in via Git is possible for `host` — i.e. Git has a
+/// credential helper configured. Lets the UI disable the sign-in button and
+/// point at the token flow instead of letting the user click into a guaranteed
+/// failure. Common on Linux, where no helper is configured out of the box.
+#[tauri::command]
+pub async fn git_signin_available(host: String) -> AppResult<bool> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let host = host.trim();
+        if host.is_empty() {
+            return false;
+        }
+        let url = if host.starts_with("http://") || host.starts_with("https://") {
+            host.to_string()
+        } else {
+            format!("https://{host}")
+        };
+        crate::git::has_credential_helper(&url)
+    })
+    .await
+    .map_err(|e| AppError::msg(e.to_string()))
+}
+
 /// Obtain a credential for `host` via Git Credential Manager — the same browser
 /// sign-in Git uses for clone/fetch. Returns a cached credential instantly when
 /// available, or triggers GCM's interactive sign-in. The token is returned to

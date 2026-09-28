@@ -2,7 +2,7 @@
 // Ported from the account UI in app/ui/js/backend.js.
 
 import { useSignal } from "@preact/signals";
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import { ipc } from "@/platform/ipc";
 import { accounts, accountsLoaded, upsertAccount, removeAccountLocal } from "@/state/accounts";
 import { hydratePulls } from "@/state/pulls";
@@ -160,6 +160,26 @@ function AddAccountForm({ close }: { close: (v: Account | null) => void }) {
   const [authBusy, setAuthBusy] = useState(false);
   const [err, setErr] = useState("");
   const [saving, setSaving] = useState(false);
+  // null while the probe is in flight; false when Git has no credential helper
+  // and browser sign-in therefore cannot work (the default on Linux).
+  const [signinOk, setSigninOk] = useState<boolean | null>(null);
+
+  // Ask the backend whether browser sign-in is possible for this provider's
+  // host, so the button isn't offered when it is guaranteed to fail. Skipped
+  // without a backend (browser preview), where clicking already explains that
+  // sign-in is desktop-only.
+  useEffect(() => {
+    if (!ipc.hasBackend) return;
+    let live = true;
+    setSigninOk(null);
+    ipc
+      .gitSigninAvailable(provider === "azure" ? "dev.azure.com" : "github.com")
+      .then((ok) => live && setSigninOk(ok))
+      .catch(() => live && setSigninOk(false));
+    return () => {
+      live = false;
+    };
+  }, [provider]);
 
   const resetGit = () => {
     setMode("token");
@@ -167,10 +187,11 @@ function AddAccountForm({ close }: { close: (v: Account | null) => void }) {
     setAuthLabel("Sign in with Git in browser");
   };
 
+  const providerName = provider === "azure" ? "Microsoft" : "GitHub";
   const hint =
-    provider === "azure"
-      ? "Reuses Git Credential Manager — the same Microsoft sign-in you saw when cloning. Or paste a token below."
-      : "Reuses Git Credential Manager — the same GitHub sign-in you saw when cloning. Or paste a token below.";
+    signinOk === false
+      ? "Browser sign-in needs a Git credential helper, and none is configured on this machine. Install Git Credential Manager (aka.ms/gcm), or just paste a token below."
+      : `Reuses Git Credential Manager — the same ${providerName} sign-in you saw when cloning. Or paste a token below.`;
 
   const signIn = async () => {
     setErr("");
@@ -219,7 +240,8 @@ function AddAccountForm({ close }: { close: (v: Account | null) => void }) {
 
   const save = async () => {
     if (provider === "azure" && !org.trim()) return setErr("Enter your Azure DevOps organization.");
-    if (mode !== "git" && !token) return setErr("Sign in with Git, or paste a token.");
+    if (mode !== "git" && !token)
+      return setErr(signinOk === false ? "Paste a token to continue." : "Sign in with Git, or paste a token.");
     setErr("");
     setSaving(true);
     try {
@@ -293,9 +315,14 @@ function AddAccountForm({ close }: { close: (v: Account | null) => void }) {
       )}
       <div class="form-row">
         <label class="form-label">Authentication</label>
-        <button type="button" class={`btn btn-primary ${styles.authButton}`} disabled={authBusy} onClick={signIn}>
+        <button
+          type="button"
+          class={`btn btn-primary ${styles.authButton}`}
+          disabled={authBusy || signinOk === false}
+          onClick={signIn}
+        >
           {authBusy ? <span class="spin"><Raw html={ICONS.sync} /></span> : <Raw html={mode === "git" ? ICONS.check : ICONS.external} />}
-          {authLabel}
+          {signinOk === false ? "Browser sign-in unavailable" : authLabel}
         </button>
         <div class="form-hint">{hint}</div>
       </div>

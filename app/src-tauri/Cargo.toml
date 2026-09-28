@@ -31,7 +31,19 @@ thiserror = "2"
 # system OpenSSL on Linux. No-op on Windows (libssh2 uses WinCNG, not OpenSSL).
 git2 = { version = "0.19", features = ["vendored-openssl"] }
 rusqlite = { version = "0.32", features = ["bundled"] }
-keyring = { version = "3", features = ["windows-native", "apple-native", "linux-native"] }
+# On Linux, `linux-native` alone selects the kernel keyutils store, whose keys
+# live in the session keyring and are destroyed on logout/reboot — a saved PAT
+# silently disappeared and the account could no longer sign in.
+# `linux-native-sync-persistent` keeps keyutils as the fast in-memory cache but
+# backs it with the D-Bus Secret Service (gnome-keyring/KWallet) so tokens
+# survive a restart. `crypto-rust` picks the pure-Rust session encryption for
+# the Secret Service transport (no OpenSSL dependency).
+keyring = { version = "3", features = [
+    "windows-native",
+    "apple-native",
+    "linux-native-sync-persistent",
+    "crypto-rust",
+] }
 ureq = { version = "2", features = ["json"] }
 base64 = "0.22"
 tokio = { version = "1", features = ["rt-multi-thread", "process", "io-util", "macros", "sync", "time", "net"] }

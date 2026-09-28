@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -968,6 +968,41 @@ fn prune_local_tracking_refs(path: &Path, name: &str) {
     }
 }
 
+/// Whether Git has a credential helper configured for `url`.
+///
+/// `git credential fill` only performs a browser sign-in when a helper (Git
+/// Credential Manager, `osxkeychain`, `libsecret`, …) is configured. With no
+/// helper, Git falls back to an interactive terminal prompt, which in a GUI app
+/// either blocks until the timeout or dies with an opaque error. Checking first
+/// lets us fail immediately with an explanation instead.
+pub fn has_credential_helper(url: &str) -> bool {
+    let out = git_cmd()
+        .args(["config", "--get-urlmatch", "credential.helper", url])
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output();
+    match out {
+        // A helper explicitly set to the empty string resets the list, meaning
+        // "no helper" — treat that the same as unconfigured.
+        Ok(o) => o.status.success() && !String::from_utf8_lossy(&o.stdout).trim().is_empty(),
+        Err(_) => false,
+    }
+}
+
+/// The platform-specific advice shown when no credential helper is available.
+/// Git Credential Manager ships with Git for Windows and is a common install on
+/// macOS, but on Linux nothing is configured out of the box.
+#[cfg(target_os = "linux")]
+const NO_HELPER_HINT: &str = "Git has no credential helper configured, so browser sign-in isn't \
+     available. Install Git Credential Manager (https://aka.ms/gcm) and run \
+     `git-credential-manager configure`, or install `git-credential-libsecret` and run \
+     `git config --global credential.helper libsecret`. Otherwise paste a token below.";
+
+/// The platform-specific advice shown when no credential helper is available.
+#[cfg(not(target_os = "linux"))]
+const NO_HELPER_HINT: &str = "Git has no credential helper configured, so browser sign-in isn't \
+     available. Install Git Credential Manager (https://aka.ms/gcm), or paste a token below.";
+
 /// Retrieve a credential for `url` from Git Credential Manager via
 /// `git credential fill` — the same mechanism Git uses for clone/fetch. If GCM
 /// has a cached credential (e.g. from a previous clone) it returns immediately;
@@ -981,7 +1016,6 @@ fn prune_local_tracking_refs(path: &Path, name: &str) {
 /// credentials.
 pub fn credential_fill(url: &str) -> AppResult<(String, String)> {
     use std::io::Write;
-    use std::process::Stdio;
     use std::sync::mpsc;
     use std::time::Duration;
 
@@ -995,11 +1029,26 @@ pub fn credential_fill(url: &str) -> AppResult<(String, String)> {
         None => (rest.to_string(), String::new()),
     };
 
+    // Bail out before spawning anything if there's nothing that can sign us in.
+    // This is the common case on Linux, where GCM isn't installed by default.
+    let probe_url = if path.is_empty() {
+        format!("https://{host}")
+    } else {
+        format!("https://{host}/{path}")
+    };
+    if !has_credential_helper(&probe_url) {
+        return Err(AppError::msg(NO_HELPER_HINT));
+    }
+
     let mut child = git_cmd()
         .args(["-c", "credential.useHttpPath=true", "credential", "fill"])
+        // Never let Git fall back to its own terminal prompt: there is no
+        // console attached to the app, so a prompt would block until the
+        // timeout below (or read EOF and fail with a cryptic message).
+        .env("GIT_TERMINAL_PROMPT", "0")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()?;
 
     if let Some(mut stdin) = child.stdin.take() {
@@ -1012,6 +1061,17 @@ pub fn credential_fill(url: &str) -> AppResult<(String, String)> {
         let _ = stdin.write_all(req.as_bytes());
         // stdin is dropped here, closing the pipe so git proceeds.
     }
+
+    // Drain stderr on its own thread: the helper can be chatty and a full pipe
+    // would deadlock the child. The text is kept for the error message.
+    let stderr_handle = child.stderr.take().map(|mut se| {
+        std::thread::spawn(move || {
+            use std::io::Read;
+            let mut buf = Vec::new();
+            let _ = se.read_to_end(&mut buf);
+            buf
+        })
+    });
 
     // Share the child so the waiter thread can read output while we retain the
     // ability to kill it on timeout.
@@ -1044,9 +1104,42 @@ pub fn credential_fill(url: &str) -> AppResult<(String, String)> {
     };
 
     if !ok {
-        return Err(AppError::msg(format!(
-            "Git couldn't sign in to {host}. Try cloning a repo from there first, or paste a token."
-        )));
+        let stderr = stderr_handle
+            .and_then(|h| h.join().ok())
+            .map(|b| String::from_utf8_lossy(&b).trim().to_string())
+            .unwrap_or_default();
+        // Git reports a helper binary it can't launch as "... is not a git
+        // command" or a shell "command not found" — the same dead end as having
+        // no helper at all. Match narrowly so ordinary provider errors (e.g.
+        // "repository not found") don't get the wrong advice.
+        let missing_helper = stderr.contains("is not a git command")
+            || stderr.contains("command not found")
+            || (stderr.contains("credential-") && stderr.contains("No such file or directory"));
+        if missing_helper {
+            return Err(AppError::msg(NO_HELPER_HINT));
+        }
+        // Git only asks the user directly once every helper declined to supply a
+        // credential; with no terminal attached (GIT_TERMINAL_PROMPT=0) that is
+        // reported as "unable to get password from user". The helper exists but
+        // couldn't complete the sign-in, so the raw text would only confuse.
+        if stderr.contains("unable to get password")
+            || stderr.contains("terminal prompts disabled")
+        {
+            return Err(AppError::msg(format!(
+                "Git's credential helper couldn't complete the sign-in for {host}. \
+                 Finish any browser prompt it opened and retry, or paste a token below."
+            )));
+        }
+        // Keep the tail of the helper's own output — it usually names the real
+        // problem (locked keyring, cancelled sign-in, network failure).
+        let mut tail: Vec<&str> = stderr.lines().rev().take(3).collect();
+        tail.reverse();
+        let detail = tail.join(" ");
+        return Err(AppError::msg(if detail.is_empty() {
+            format!("Git couldn't sign in to {host}. Try cloning a repo from there first, or paste a token.")
+        } else {
+            format!("Git couldn't sign in to {host}: {detail} — try cloning a repo from there first, or paste a token.")
+        }));
     }
 
     let mut username = String::new();

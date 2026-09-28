@@ -316,6 +316,13 @@ export const ipc = {
   removeAccount: (id: string) => invoke<void>("remove_account", { id }),
   gitToken: (host: string) =>
     invoke<{ username?: string; token?: string }>("git_token", { host }),
+  // Whether Git can do a browser sign-in for this host (i.e. a credential
+  // helper is configured). False on a stock Linux install, where the UI then
+  // steers the user to the token flow instead.
+  gitSigninAvailable: (host: string) =>
+    hasBackend
+      ? invoke<boolean>("git_signin_available", { host })
+      : Promise.resolve(false),
 
   // --- Git Identities ------------------------------------------------------
   readGitIdentity: () =>
