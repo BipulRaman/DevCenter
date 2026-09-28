@@ -41,6 +41,7 @@ import {
   loadChanges,
   loadHistory,
   loadRepoPulls,
+  refreshActiveChangesTab,
   selectFile,
   stageFiles,
   unstageFiles,
@@ -187,7 +188,11 @@ export function Changes() {
                 class={`${styles.commitTab}${changesTab.value === "changes" ? ` ${styles.active}` : ""}`}
                 type="button"
                 role="tab"
-                onClick={() => (changesTab.value = "changes")}
+                onClick={() => {
+                  changesTab.value = "changes";
+                  // The working tree may have changed while another tab was active.
+                  void refreshActiveChangesTab();
+                }}
               >
                 <span class={styles.ctIco}>
                   <Raw html={ICONS.changes} />

@@ -21,6 +21,11 @@ const COND: Record<IdentityCondKind, { label: string; short: string; placeholder
 export async function initIdentity(): Promise<void> {
   if (started) return;
   started = true;
+  await refreshIdentity();
+}
+
+/** Re-read the Git config (it can be edited outside the app). */
+export async function refreshIdentity(): Promise<void> {
   if (!ipc.hasBackend) {
     loaded.value = true;
     return;

@@ -38,15 +38,37 @@ export async function initRepos(): Promise<void> {
   await refreshRepos();
 }
 
-export async function refreshRepos(): Promise<void> {
-  try {
-    const list = await ipc.listRepos();
-    if (Array.isArray(list)) repos.value = list;
-  } catch (e) {
-    console.error("listRepos failed", e);
-  } finally {
-    reposLoaded.value = true;
+let reposInflight: Promise<void> | null = null;
+let reposQueued = false;
+
+/**
+ * Re-read every repo's live status. Concurrent calls coalesce: while one is in
+ * flight, further calls schedule a single follow-up run so the final state is
+ * never older than the latest request.
+ */
+export function refreshRepos(): Promise<void> {
+  if (reposInflight) {
+    reposQueued = true;
+    return reposInflight;
   }
+  reposInflight = (async () => {
+    try {
+      do {
+        reposQueued = false;
+        try {
+          const list = await ipc.listRepos();
+          if (Array.isArray(list)) repos.value = list;
+        } catch (e) {
+          console.error("listRepos failed", e);
+        } finally {
+          reposLoaded.value = true;
+        }
+      } while (reposQueued);
+    } finally {
+      reposInflight = null;
+    }
+  })();
+  return reposInflight;
 }
 
 /** Replace a single repo in the list by id (immutably). */

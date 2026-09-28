@@ -49,7 +49,8 @@ export const pullDiffLoading = signal(false);
 
 /** Open a repo in the Changes page (used by Git Board / PR list). */
 export function openRepoById(repoId: string, tab: ChangesTab = "changes"): void {
-  showPage("changes");
+  // This function loads the page's data itself, so skip the generic show hook.
+  showPage("changes", false);
   changesTab.value = tab;
   if (changesRepoId.value !== repoId) {
     changesRepoId.value = repoId;
@@ -61,12 +62,41 @@ export function openRepoById(repoId: string, tab: ChangesTab = "changes"): void 
     selectedFile.value = null;
     fileDiff.value = null;
     selectedCommit.value = null;
+    commits.value = [];
     commitFiles.value = [];
+    commitActiveFile.value = null;
     commitDiff.value = null;
+    repoPulls.value = [];
+    selectedPull.value = null;
+    pullFiles.value = [];
+    pullActiveFile.value = null;
+    pullDiff.value = null;
     void loadChanges(repoId);
+    if (tab === "history") void loadHistory(repoId);
+    if (tab === "pulls") void loadRepoPulls(repoId);
+  } else {
+    // Same repo re-opened (e.g. from the Git Board or after resolving a
+    // conflict): the working tree may have changed since it was last loaded.
+    void refreshActiveChangesTab();
   }
-  if (tab === "history") void loadHistory(repoId);
-  if (tab === "pulls") void loadRepoPulls(repoId);
+}
+
+/**
+ * Re-fetch the active Changes tab for the selected repo without resetting the
+ * user's selection. Called on page show, window focus and tab switch so edits
+ * made outside the app (VS Code, terminal, …) always appear. `includeRemote`
+ * gates the PR tab, which hits the GitHub/Azure APIs.
+ */
+export async function refreshActiveChangesTab(includeRemote = true): Promise<void> {
+  const repoId = changesRepoId.value;
+  if (!repoId || !ipc.hasBackend) return;
+  const tab = changesTab.value;
+  // The header (branch, push/pull counts, stash) comes from the working-tree
+  // change set, so refresh it on every tab.
+  const jobs: Promise<void>[] = [refresh()];
+  if (tab === "history") jobs.push(loadHistory(repoId));
+  else if (tab === "pulls" && includeRemote) jobs.push(loadRepoPulls(repoId));
+  await Promise.all(jobs);
 }
 
 // Auto-select a repo when the Changes page is shown with none chosen: restore
@@ -96,6 +126,8 @@ export async function loadChanges(repoId: string): Promise<void> {
   changesLoading.value = true;
   try {
     const cs = await ipc.gitChanges(repoId);
+    // A different repo was opened while this was in flight — drop the result.
+    if (changesRepoId.value !== repoId) return;
     changeSet.value = cs;
     // Match the vanilla Changes tab: do NOT auto-select a file — the diff pane
     // shows "Select a file to view its diff." until the user picks one. Only
@@ -118,10 +150,20 @@ export async function loadChanges(repoId: string): Promise<void> {
 export async function loadHistory(repoId: string): Promise<void> {
   if (!ipc.hasBackend) return;
   try {
-    commits.value = await ipc.gitLog(repoId, 100);
+    const list = await ipc.gitLog(repoId, 100);
+    if (changesRepoId.value !== repoId) return;
+    commits.value = list;
     // Auto-select the newest commit so the detail + diff panes aren't empty.
-    if (commits.value.length && !selectedCommit.value) {
-      void selectCommit(commits.value[0].hash);
+    // Also re-select when the previous selection vanished (amended, reset or
+    // rebased outside the app since the last load).
+    const sel = selectedCommit.value;
+    if (list.length && (!sel || !list.some((c) => c.hash === sel))) {
+      void selectCommit(list[0].hash);
+    } else if (!list.length) {
+      selectedCommit.value = null;
+      commitFiles.value = [];
+      commitActiveFile.value = null;
+      commitDiff.value = null;
     }
   } catch (e) {
     console.error("gitLog failed", e);
@@ -194,12 +236,14 @@ export async function loadRepoPulls(repoId: string): Promise<void> {
   repoPullsLoading.value = true;
   try {
     const data = await ipc.listRepoPullRequests(repoId);
+    if (changesRepoId.value !== repoId) return;
     repoPulls.value = Array.isArray(data) ? data : [];
     // Auto-select the first PR so the detail + diff panes aren't left empty
-    // (mirrors vanilla selectPull(repoPulls[0].id)).
+    // (mirrors vanilla selectPull(repoPulls[0].id)). A PR that's still open
+    // keeps its selection and active file, refreshed in place.
     if (repoPulls.value.length) {
       const keep = selectedPull.value && repoPulls.value.find((p) => p.id === selectedPull.value!.id);
-      void selectPull(keep ? keep.id : repoPulls.value[0].id);
+      void selectPull(keep ? keep.id : repoPulls.value[0].id, !!keep);
     } else {
       selectedPull.value = null;
       pullFiles.value = [];
@@ -214,56 +258,76 @@ export async function loadRepoPulls(repoId: string): Promise<void> {
   }
 }
 
-/** Select a PR in the Changes PR tab: load its files + first file diff inline. */
-export async function selectPull(id: number): Promise<void> {
+/**
+ * Select a PR in the Changes PR tab: load its files + first file diff inline.
+ * With `preserve`, the current file list/diff stay visible while reloading and
+ * the active file is kept if it's still part of the PR.
+ */
+export async function selectPull(id: number, preserve = false): Promise<void> {
   const repoId = changesRepoId.value;
   const pr = repoPulls.value.find((p) => p.id === id);
   if (!repoId || !pr) return;
+  const prevFile = preserve ? pullActiveFile.value : null;
   selectedPull.value = pr;
-  pullActiveFile.value = null;
-  pullDiff.value = null;
-  pullFiles.value = [];
+  if (!preserve) {
+    pullActiveFile.value = null;
+    pullDiff.value = null;
+    pullFiles.value = [];
+  }
   try {
     const cs = await ipc.prChanges(repoId, pr.base, pr.branch);
     if (selectedPull.value?.id !== id) return;
     pullFiles.value = cs.files || [];
-    if (pullFiles.value.length) void selectPullFile(pullFiles.value[0].path);
+    const next = prevFile && pullFiles.value.some((f) => f.path === prevFile) ? prevFile : pullFiles.value[0]?.path;
+    if (next) void selectPullFile(next, preserve && next === prevFile);
+    else {
+      pullActiveFile.value = null;
+      pullDiff.value = null;
+    }
   } catch (e) {
     console.error("prChanges failed", e);
-    pullFiles.value = [];
+    if (!preserve) pullFiles.value = [];
   }
 }
 
-export async function selectPullFile(path: string): Promise<void> {
+export async function selectPullFile(path: string, silent = false): Promise<void> {
   const repoId = changesRepoId.value;
   const pr = selectedPull.value;
   if (!repoId || !pr) return;
   pullActiveFile.value = path;
-  pullDiffLoading.value = true;
+  if (!silent) pullDiffLoading.value = true;
   try {
     const d = await ipc.prFileDiff(repoId, pr.base, pr.branch, path, wholeFile.value ? 100000 : null);
     if (pullActiveFile.value !== path) return;
     pullDiff.value = d;
   } catch (e) {
     console.error("prFileDiff failed", e);
-    pullDiff.value = null;
+    if (pullActiveFile.value === path && !silent) pullDiff.value = null;
   } finally {
     if (pullActiveFile.value === path) pullDiffLoading.value = false;
   }
 }
 
-export async function selectFile(path: string, staged: boolean): Promise<void> {
+/**
+ * Show a working-tree file's diff. `silent` refreshes the current diff in
+ * place (no loading placeholder) — used by background refreshes so the view
+ * doesn't flash or lose its scroll position.
+ */
+export async function selectFile(path: string, staged: boolean, silent = false): Promise<void> {
   const repoId = changesRepoId.value;
   if (!repoId) return;
-  selectedFile.value = { path, staged };
-  diffLoading.value = true;
+  const sel = { path, staged };
+  selectedFile.value = sel;
+  if (!silent) diffLoading.value = true;
   try {
-    fileDiff.value = await ipc.gitDiff(repoId, path, null, staged, wholeFile.value ? 100000 : null);
+    const d = await ipc.gitDiff(repoId, path, null, staged, wholeFile.value ? 100000 : null);
+    if (selectedFile.value !== sel) return;
+    fileDiff.value = d;
   } catch (e) {
     console.error("gitDiff failed", e);
-    fileDiff.value = null;
+    if (selectedFile.value === sel && !silent) fileDiff.value = null;
   } finally {
-    diffLoading.value = false;
+    if (selectedFile.value === sel) diffLoading.value = false;
   }
 }
 
@@ -272,7 +336,14 @@ async function refresh(): Promise<void> {
   if (!repoId) return;
   await loadChanges(repoId);
   const sel = selectedFile.value;
-  if (sel) await selectFile(sel.path, sel.staged);
+  if (!sel || changesRepoId.value !== repoId) return;
+  // The file may have moved between staged/unstaged (e.g. `git add` in a
+  // terminal) — follow it to whichever group it's in now.
+  const cs = changeSet.value;
+  const inStaged = (cs?.staged || []).some((f) => f.path === sel.path);
+  const inUnstaged = (cs?.unstaged || []).some((f) => f.path === sel.path);
+  const staged = inStaged && inUnstaged ? sel.staged : inStaged ? true : inUnstaged ? false : sel.staged;
+  await selectFile(sel.path, staged, true);
 }
 
 export async function stageFiles(paths: string[]): Promise<void> {
