@@ -335,9 +335,11 @@ pub fn default_scan_roots() -> Vec<PathBuf> {
 
 // ---------- Network operations (system git) ----------
 
-/// Fetch the current branch's remote (plain `git fetch`, no pruning).
+/// Fetch the current branch's remote. Prunes remote-tracking branches that were
+/// deleted on the server (like GitHub Desktop) so branch lists don't keep
+/// offering branches that no longer exist. Local branches are never touched.
 pub fn fetch(path: &Path) -> AppResult<()> {
-    run_git(path, &["fetch"])
+    run_git(path, &["fetch", "--prune"])
 }
 
 /// Fetch the current branch's remote, pruning stale remote-tracking branches.
@@ -345,9 +347,9 @@ pub fn fetch_prune(path: &Path) -> AppResult<()> {
     run_git(path, &["fetch", "--prune"])
 }
 
-/// Fetch every configured remote.
+/// Fetch every configured remote (pruning deleted branches, see `fetch`).
 pub fn fetch_all(path: &Path) -> AppResult<()> {
-    run_git(path, &["fetch", "--all"])
+    run_git(path, &["fetch", "--all", "--prune"])
 }
 
 /// Push the current branch to its upstream. When the branch has no upstream
@@ -384,7 +386,9 @@ pub fn push(path: &Path) -> AppResult<()> {
 /// leave a rebase in progress on conflicts (handled by the conflict resolver).
 pub fn pull(path: &Path, rebase: bool) -> AppResult<()> {
     let mut cmd = git_cmd();
-    cmd.arg("-C").arg(path).arg("pull");
+    // `--prune` is passed through to the fetch step so deleted remote branches
+    // drop out of branch lists here too (see `fetch`).
+    cmd.arg("-C").arg(path).args(["pull", "--prune"]);
     if rebase {
         cmd.arg("--rebase");
     } else {

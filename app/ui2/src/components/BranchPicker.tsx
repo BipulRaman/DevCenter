@@ -7,6 +7,7 @@
 import { signal } from "@preact/signals";
 import { useRef, useState, useEffect } from "preact/hooks";
 import { ipc } from "@/platform/ipc";
+import { upsertRepo } from "@/state/repos";
 import { Raw, ICONS } from "@/lib/ico";
 import { modal } from "@/components/modal";
 import { openContextMenu } from "@/components/menu";
@@ -267,12 +268,42 @@ export interface BranchPickerOpts {
 
 interface PickerState extends BranchPickerOpts {
   anchor: DOMRect;
+  /** True while the list is being refreshed from the remote. */
+  refreshing?: boolean;
 }
 
 const pickerState = signal<PickerState | null>(null);
 
+// Opening the picker fetches (with prune) in the background so branches
+// created or deleted on the server show up without a manual Fetch. Throttled
+// per repo so reopening the picker doesn't refetch every time.
+const REFRESH_TTL_MS = 30_000;
+const lastRefresh = new Map<string, number>();
+
+async function refreshPickerBranches(repoId: string): Promise<void> {
+  const now = Date.now();
+  if (now - (lastRefresh.get(repoId) || 0) < REFRESH_TTL_MS) return;
+  lastRefresh.set(repoId, now);
+  const patch = (p: Partial<PickerState>) => {
+    const st = pickerState.value;
+    if (st && st.repoId === repoId) pickerState.value = { ...st, ...p };
+  };
+  patch({ refreshing: true });
+  try {
+    const repo = await ipc.fetchRepo(repoId);
+    if (repo) upsertRepo(repo);
+    patch({ branches: await ipc.listBranches(repoId) });
+  } catch {
+    // Offline / auth failure: keep showing the local list, retry on next open.
+    lastRefresh.delete(repoId);
+  } finally {
+    patch({ refreshing: false });
+  }
+}
+
 export function openBranchPicker(anchor: HTMLElement, opts: BranchPickerOpts): void {
   pickerState.value = { ...opts, anchor: anchor.getBoundingClientRect() };
+  if (ipc.hasBackend) void refreshPickerBranches(opts.repoId);
 }
 export function closeBranchPicker(): void {
   pickerState.value = null;
@@ -364,7 +395,14 @@ function BranchPanel({ state }: { state: PickerState }) {
   return (
     <div ref={ref} class={styles.dropdownMenu} style={{ ...style, minWidth: "260px" }}>
       <div class={styles.dropdownHead}>
-        <span class={styles.dropdownHeadTitle}>Switch branch</span>
+        <span class={styles.dropdownHeadTitle}>
+          Switch branch
+          {state.refreshing ? (
+            <span class={`spin ${styles.refreshing}`} title="Updating branches from the remote…">
+              <Raw html={ICONS.sync} />
+            </span>
+          ) : null}
+        </span>
         <button class={styles.dropdownHeadAction} type="button" title="Create a new branch" onClick={newBranch}>
           <Raw html={ICONS.plus} />
           <span>New branch</span>
