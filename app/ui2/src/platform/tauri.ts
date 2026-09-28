@@ -3,6 +3,8 @@
 // Vitest) there is no backend, so `hasBackend` is false and callers fall back to
 // mock/seed data — mirroring the behavior of app/ui/js/api.js.
 
+import { trackProgress } from "@/state/progress";
+
 export interface TauriCore {
   invoke<T = unknown>(cmd: string, args?: Record<string, unknown>): Promise<T>;
 }
@@ -57,7 +59,8 @@ export function invoke<T = unknown>(
       new Error(`Tauri backend unavailable; cannot invoke "${cmd}"`),
     );
   }
-  return T.core.invoke<T>(cmd, args);
+  // Every backend call feeds the global top-bar loader (state/progress.ts).
+  return trackProgress(T.core.invoke<T>(cmd, args), cmd);
 }
 
 /** Subscribe to a backend event. No-op unsubscribe in the browser. */

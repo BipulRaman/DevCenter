@@ -7,13 +7,16 @@ import { Navigation } from "@/components/Navigation";
 import { ModalHost } from "@/components/modal";
 import { MenuHost } from "@/components/menu";
 import { BranchPickerHost } from "@/components/BranchPicker";
+import { busy } from "@/state/progress";
 import styles from "./Layout.module.css";
 
 export function Layout({ children }: { children?: ComponentChildren }) {
   return (
     <div class={styles.app}>
       <Navigation />
-      <main class={styles.main}>{children}</main>
+      <main class={styles.main} aria-busy={busy.value}>
+        {children}
+      </main>
       <ModalHost />
       <MenuHost />
       <BranchPickerHost />
